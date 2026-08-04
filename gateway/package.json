@@ -1,0 +1,25 @@
+{
+  "name": "nutrigraph-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "NutriGraph gateway: the session, the turn identifier, and the event stream.",
+  "scripts": {
+    "dev": "node --env-file-if-exists=../.env --watch src/index.ts",
+    "start": "node --env-file-if-exists=../.env src/index.ts",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "gen:types": "openapi-typescript ../agent/openapi.json -o src/generated/agent.ts"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.9",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.10.1",
+    "openapi-typescript": "^7.9.1",
+    "typescript": "^5.9.3"
+  }
+}

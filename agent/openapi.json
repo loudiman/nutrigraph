@@ -1,0 +1,331 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "NutriGraph agent",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "summary": "Healthz",
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Healthz Healthz Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/turn": {
+      "post": {
+        "summary": "Turn",
+        "operationId": "turn_turn_post",
+        "parameters": [
+          {
+            "name": "x-turn-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "The one identifier that ties a Turn together",
+              "title": "X-Turn-Id"
+            },
+            "description": "The one identifier that ties a Turn together"
+          },
+          {
+            "name": "x-dev-auth",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dev-Auth"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TurnRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TurnEventEnvelope"
+                }
+              },
+              "application/x-ndjson": {}
+            }
+          },
+          "401": {
+            "description": "internal caller not recognised"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnswerEvent": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "answer",
+            "title": "Type",
+            "default": "answer"
+          },
+          "turn_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Turn Id"
+          },
+          "reply": {
+            "$ref": "#/components/schemas/CoachReply"
+          }
+        },
+        "type": "object",
+        "required": [
+          "turn_id",
+          "reply"
+        ],
+        "title": "AnswerEvent",
+        "description": "The answer text, held back and sent as one event at the end.\n\nA later slice inserts the guardrail text scan immediately before this event\nis emitted, and does not have to change this contract."
+      },
+      "CoachReply": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "parts": {
+            "items": {
+              "$ref": "#/components/schemas/ReplyPart"
+            },
+            "type": "array",
+            "title": "Parts"
+          },
+          "disclaimers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Disclaimers"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "CoachReply",
+        "description": "The Coach's complete answer to one User message."
+      },
+      "ErrorEvent": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "error",
+            "title": "Type",
+            "default": "error"
+          },
+          "turn_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Turn Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "turn_id",
+          "code",
+          "message"
+        ],
+        "title": "ErrorEvent",
+        "description": "A failure mid-Turn. The stream closes after this event."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "NodeEvent": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "node",
+            "title": "Type",
+            "default": "node"
+          },
+          "turn_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Turn Id"
+          },
+          "node": {
+            "type": "string",
+            "title": "Node"
+          }
+        },
+        "type": "object",
+        "required": [
+          "turn_id",
+          "node"
+        ],
+        "title": "NodeEvent",
+        "description": "A node of the graph finished. These go out while the Turn runs."
+      },
+      "ReplyPart": {
+        "properties": {
+          "intent": {
+            "type": "string",
+            "title": "Intent"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "intent",
+          "text"
+        ],
+        "title": "ReplyPart",
+        "description": "One part of a reply, one for each Intent the Turn ran."
+      },
+      "TurnEventEnvelope": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/NodeEvent"
+          },
+          {
+            "$ref": "#/components/schemas/AnswerEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ErrorEvent"
+          }
+        ],
+        "title": "TurnEventEnvelope",
+        "description": "One line of the `application/x-ndjson` turn stream.",
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "answer": "#/components/schemas/AnswerEvent",
+            "error": "#/components/schemas/ErrorEvent",
+            "node": "#/components/schemas/NodeEvent"
+          }
+        }
+      },
+      "TurnRequest": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "message"
+        ],
+        "title": "TurnRequest"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

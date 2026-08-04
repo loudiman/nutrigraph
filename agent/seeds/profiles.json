@@ -1,0 +1,30 @@
+[
+  {
+    "user_id": "demo-user-1",
+    "name": "Lou",
+    "sex": "M",
+    "age": 24,
+    "height_cm": 172,
+    "weight_kg": 78,
+    "target_weight_kg": 72,
+    "activity_level": "light",
+    "diet_pattern": "omnivore",
+    "units": "metric",
+    "allergies": ["peanut"],
+    "disliked_foods": ["bitter gourd"]
+  },
+  {
+    "user_id": "demo-user-2",
+    "name": "Ana",
+    "sex": "F",
+    "age": 31,
+    "height_cm": 160,
+    "weight_kg": 55,
+    "target_weight_kg": 58,
+    "activity_level": "moderate",
+    "diet_pattern": "pescatarian",
+    "units": "metric",
+    "allergies": ["shrimp"],
+    "disliked_foods": []
+  }
+]

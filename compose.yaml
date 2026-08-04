@@ -1,0 +1,21 @@
+# PostgreSQL with pgvector, and nothing else. Both services run natively with
+# file reloading, so a graph change is visible in about a second.
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: nutrigraph
+      POSTGRES_PASSWORD: nutrigraph
+      POSTGRES_DB: nutrigraph
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nutrigraph -d nutrigraph"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
