@@ -1,0 +1,97 @@
+# Observability & Eval for a LangGraph App (nutrigraph)
+
+Research date: 2026-08-01. All pricing/limits verified against primary sources on this date — check for drift if reading later.
+
+## 1. Tracing: LangSmith vs Langfuse vs plain OpenTelemetry
+
+### LangSmith
+
+- **Cost**: Developer plan $0/seat (1 seat max). Plus plan $39/seat/mo, unlimited seats. Enterprise custom. Usage above the included trace allotment bills in LangChain Storage Units (LSU, $1.00 each): 0.005 LSU per base trace = **$0.005/additional base trace ($5.00/1,000)**, plus 0.0025 LSU for upgrading a trace to extended retention. Compute-heavy add-ons (Engine, Fleet, Deployments, Sandboxes) bill in LangChain Compute Units (LCU, $1.50 each). [langchain.com/pricing-langsmith](https://www.langchain.com/pricing-langsmith)
+- **Free tier**: Developer plan includes **5,000 base traces/month**, 1 seat, 14-day retention on base traces (400-day "extended" retention available for an extra fee, opt-in per trace). [langchain.com/pricing-langsmith](https://www.langchain.com/pricing-langsmith)
+- **Self-host**: Offered only as an Enterprise add-on — "designed for our largest, most security-conscious customers," requires a license key obtained via sales@langchain.dev. Deployed via Kubernetes/Helm; Docker-based self-hosting is deprecated. No free/dev self-host option exists. [docs.langchain.com/langsmith/self-hosted](https://docs.langchain.com/langsmith/self-hosted), [docs.langchain.com/langsmith/kubernetes](https://docs.langchain.com/langsmith/kubernetes), [docs.langchain.com/langsmith/docker](https://docs.langchain.com/langsmith/docker)
+- **Native LangGraph support**: Zero/low code. Setting `LANGSMITH_TRACING=true` + `LANGSMITH_API_KEY` traces any LangGraph app built on LangChain modules automatically — no manual instrumentation needed. Dedicated docs page exists with a Messages view, full graph visualization, node-by-node state diffs. Non-LangChain code inside a node needs the `@traceable` decorator to show up. [docs.langchain.com/langsmith/trace-with-langgraph](https://docs.langchain.com/langsmith/trace-with-langgraph)
+- **OTel**: LangSmith SDK ships an official, first-party OTel exporter (`pip install "langsmith[otel]"`, needs `langsmith>=0.3.18`, `>=0.4.25` recommended for fixes) enabled via `LANGSMITH_OTEL_ENABLED=true`. This is native support inside the `langsmith` package itself (not `langchain-core`), and it can also route traces to any OTel-compatible backend via standard `OTEL_EXPORTER_OTLP_*` env vars. [docs.langchain.com/langsmith/trace-with-opentelemetry](https://docs.langchain.com/langsmith/trace-with-opentelemetry), [changelog.langchain.com — end-to-end native OpenTelemetry support](https://changelog.langchain.com/announcements/end-to-end-native-opentelemetry-support-for-langsmith-sdk)
+
+### Langfuse
+
+- **Cost**: Hobby (free), Core $29/mo, Pro $199/mo, Enterprise $2,499/mo (cloud). Overage beyond included units is graduated: $8.00/100k units (100k–1M), $7.00/100k (1M–10M), $6.50/100k (10M–50M), $6.00/100k (50M+). A "unit" is any billable item sent to the tracing API (trace, observation/span, or score). [langfuse.com/pricing](https://langfuse.com/pricing)
+- **Free tier**: Hobby plan includes **50,000 units/month**, 30-day data access/retention, 2 users, no credit card required. [langfuse.com/pricing](https://langfuse.com/pricing)
+- **Self-host**: Fully open-source, self-hostable for free. Docker Compose is the documented path for local/low-scale ("clone repo, `docker compose up`, sign up at `localhost:3000/auth/sign-up`"); Kubernetes (Helm)/Terraform (AWS/Azure/GCP) for production scale. OSS self-hosted build runs the same codebase as Langfuse Cloud with **no usage limits** and includes most product features (SSO, evals, OTel ingestion, prompt management, datasets). Only a few features are gated to the paid Enterprise Edition (EE) via license key — e.g. Organization Creators, Instance Management API, UI Customization. [langfuse.com/self-hosting](https://langfuse.com/self-hosting), [langfuse.com/self-hosting/deployment/docker-compose](https://langfuse.com/self-hosting/deployment/docker-compose), [github.com/langfuse/langfuse](https://github.com/langfuse/langfuse)
+- **Native LangGraph support**: Hooks in via the standard LangChain callback system — `from langfuse.langchain import CallbackHandler`, then pass `config={"callbacks": [langfuse_handler]}` into `.invoke()`/`.stream()` (or `.with_config()` at compile time for LangGraph Server). No custom per-node code required; every node/edge in the graph becomes a nested observation automatically. [langfuse.com/integrations/frameworks/langchain](https://langfuse.com/integrations/frameworks/langchain), [docs.langchain.com/oss/python/integrations/providers/langfuse](https://docs.langchain.com/oss/python/integrations/providers/langfuse)
+- **OTel**: Langfuse also exposes a native OTLP ingestion endpoint (`OpenTelemetry` listed as a first-class native integration), independent of the LangChain callback path — so you can point any OTel-instrumented app at it directly. [langfuse.com/integrations/native/opentelemetry](https://langfuse.com/integrations/native/opentelemetry)
+
+### Plain OpenTelemetry
+
+- **Cost**: OTel itself (spec + SDKs) is free/open-source (CNCF project); cost is entirely whatever backend you send spans to (self-hosted Jaeger/Tempo/Grafana = infra cost only; hosted backends like Honeycomb/Datadog have their own pricing, not evaluated here).
+- **Free tier**: N/A — depends on chosen backend.
+- **Self-host effort**: Backend-dependent; e.g. Jaeger all-in-one is a single `docker run`. No LLM-specific concepts (tokens, cost, prompts) exist in the OTel spec itself.
+- **Native LangGraph support**: **No first-party support from `langchain-core` or `langgraph`.** Neither package ships an OTel exporter or emits OTel spans natively. `langchain-core`'s callback/tracer system is its own abstraction (`BaseCallbackHandler`/`BaseTracer`); OTel is bolted on either by (a) LangSmith's SDK-level OTel exporter (see above, a LangSmith-specific bridge, not a general LangChain/LangGraph feature), (b) Langfuse's callback handler forwarding into Langfuse's OTel-backed ingestion, or (c) third-party/community OTel instrumentors that subscribe to the callback bus and translate callback events to spans — e.g. `openinference-instrumentation-langchain` (OpenInference semantic conventions) or `traceai-langchain`, or the broader OpenLLMetry project. None of these ship inside `langchain-core`/`langgraph`; all are separate pip packages. [docs.langchain.com/langsmith/trace-with-opentelemetry](https://docs.langchain.com/langsmith/trace-with-opentelemetry), [langfuse.com/integrations/native/opentelemetry](https://langfuse.com/integrations/native/opentelemetry), [github.com/orgs/langfuse/discussions/9136](https://github.com/orgs/langfuse/discussions/9136)
+
+### Comparison table
+
+| Tool | Cost | Free tier | Self-host effort | LangGraph support |
+|---|---|---|---|---|
+| LangSmith | $0 (Dev) / $39 seat/mo (Plus) / custom (Enterprise); overage $0.005/trace | 5k base traces/mo, 1 seat, 14-day retention | Enterprise-only add-on, license key + sales contact, Kubernetes/Helm (Docker deprecated) | Native, zero-code via env vars; dedicated docs page; LangChain-native OTel exporter |
+| Langfuse | Free (Hobby) / $29–$2,499/mo (cloud tiers); overage from $6–8/100k units | 50k units/mo, 2 users, 30-day retention | Free & open-source, `docker compose up` for local/dev, Helm/Terraform for prod; only 3 minor features gated behind paid EE license | Native via LangChain `CallbackHandler`, zero per-node code; also native OTel ingestion endpoint |
+| Plain OTel | Free (spec/SDK); cost = backend only | Backend-dependent | Backend-dependent (e.g. Jaeger = one `docker run`) | **No** first-party support in `langchain-core`/`langgraph`; requires a community instrumentor (openinference, traceai-langchain, OpenLLMetry) or routing through LangSmith's/Langfuse's OTel bridge |
+
+## 2. Eval: ragas
+
+- **Maintenance status**: Maintained but **currently quiet — last commit 2026-02-24, i.e. ~5 months before this research date**. Not archived; 15,065 stargazers. Release cadence was brisk through the v0.4 line (v0.4.0 2025-12-03, v0.4.1 2025-12-10, v0.4.2 2025-12-23, **v0.4.3 2026-01-13**) then stopped. Note the GitHub org was renamed — canonical repo is now **`github.com/vibrantlabsai/ragas`**, and the old `github.com/explodinggradients/ragas` URL 301-redirects to it. Treat "actively maintained" as qualified: usable and not abandoned, but don't assume a fix lands upstream on a short timeline. [github.com/vibrantlabsai/ragas/releases](https://github.com/vibrantlabsai/ragas/releases), verified via `gh api repos/explodinggradients/ragas` → `full_name: vibrantlabsai/ragas`, `pushed_at: 2026-02-24T07:47:19Z`, `archived: false`; `gh api repos/vibrantlabsai/ragas/commits` → latest commit 2026-02-24.
+- **Metric set / API churn**: `faithfulness`, `context_precision`, and `context_recall` still exist. `answer_relevancy` has been carrying two names in current docs — `ResponseRelevancy` (legacy `ragas.metrics` import) and `AnswerRelevancy` (new `ragas.metrics.collections` import) — same underlying metric, import path changed. Ragas shipped a **major restructuring in v0.4** (v0.4.0 released 2025-12-03): metrics moved from `ragas.metrics` to `ragas.metrics.collections`, scoring changed from `single_turn_ascore(sample)` to `ascore(**kwargs)`, and return type changed from a bare float to a `MetricResult` object (score via `.value`). Old v0.3 code using `ragas.metrics` imports or `single_turn_ascore` breaks outright — no compatibility shim beyond a deprecation-warning window on `LangchainLLMWrapper`/`LlamaIndexLLMWrapper`. [docs.ragas.io/en/stable/howtos/migrations/migrate_from_v03_to_v04](https://docs.ragas.io/en/stable/howtos/migrations/migrate_from_v03_to_v04/), [docs.ragas.io/en/stable/concepts/metrics/available_metrics](https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/)
+- **LLM/embedding providers**: Not hard-locked to OpenAI, but OpenAI is the documented quickstart default (`llm_factory("gpt-4o")` in `ragas init`). Pluggable via `ragas.llms.llm_factory(model, provider=..., client=...)`, which as of v0.4 auto-detects providers (OpenAI, Google, etc.) from a native client object, or via the (now-deprecated-but-functional) `LangchainLLMWrapper`, which accepts any LangChain chat-model object. [docs.ragas.io/en/stable/getstarted/evals](https://docs.ragas.io/en/stable/getstarted/evals/), [docs.ragas.io/en/latest/extra/components/choose_evaluator_llm](https://docs.ragas.io/en/latest/extra/components/choose_evaluator_llm/)
+  - **Gemini support — confirmed two paths**: (1) native — `ragas.llms.llm_factory("gemini-2.0-flash", provider="google", client=<google-genai Client>)`, requires `pip install ragas google-genai`; (2) via LangChain — `LangchainLLMWrapper(ChatGoogleGenerativeAI(model="gemini-1.5-pro", ...))`, requires `pip install langchain-google-genai`, `GOOGLE_API_KEY` env var. Both documented directly by ragas. [docs.ragas.io/en/stable/howtos/integrations/gemini](https://docs.ragas.io/en/stable/howtos/integrations/gemini/), [docs.ragas.io/en/latest/extra/components/choose_evaluator_llm](https://docs.ragas.io/en/latest/extra/components/choose_evaluator_llm/)
+- **Cost per eval run — concrete calc**: Ragas' own cost-tracking doc runs `evaluate()` with a single metric (`LLMContextRecall`) over the 20-row `amnesty_qa` eval set on GPT-4o, reporting `TokenUsage(input_tokens=25097, output_tokens=3757)` and pricing it at GPT-4o's $5/1M input, $15/1M output → **$0.182 total / $0.0091 per row for one metric**. [docs.ragas.io/en/stable/howtos/applications/_cost](https://docs.ragas.io/en/stable/howtos/applications/_cost/)
+  - Scaling that same token profile (≈1,255 in / 188 out tokens per row per metric) to a typical 4-metric suite (faithfulness, answer_relevancy, context_precision, context_recall) and to cheaper judge models, using current published pricing:
+    - **GPT-4o** ($5/$15 per 1M — [developers.openai.com/api/docs/pricing](https://developers.openai.com/api/docs/pricing)): ~$0.0091/row/metric → **~$0.036/row** for 4 metrics.
+    - **GPT-4o-mini** ($0.15/$0.60 per 1M — [developers.openai.com/api/docs/pricing](https://developers.openai.com/api/docs/pricing)): ~$0.0003/row/metric → **~$0.0012/row** for 4 metrics.
+    - **Gemini 2.5 Flash** ($0.30/$2.50 per 1M — [ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing)): ~$0.00085/row/metric → **~$0.0034/row** for 4 metrics.
+  - These are order-of-magnitude estimates — actual token counts scale with context length and answer length in your dataset, not just row count.
+
+## 3. Per-node latency + token-cost metrics for a LangGraph graph
+
+| | Out of the box | Hand-built |
+|---|---|---|
+| **LangSmith** | Every LangGraph node that runs LangChain-compatible code (chat model calls, retrievers, etc.) shows up as a nested run/span with automatic start/end timestamps (→ latency) once `LANGSMITH_TRACING=true` is set — no code change. Token usage is captured automatically for LLM calls because LangChain chat models attach `usage_metadata` to responses, which LangSmith reads. Cost is computed automatically **for models LangSmith recognizes** in its built-in pricing table; costs are viewable per-trace, aggregated per-project, or in dashboards. [docs.langchain.com/langsmith/trace-with-langgraph](https://docs.langchain.com/langsmith/trace-with-langgraph), [docs.langchain.com/langsmith/cost-tracking](https://docs.langchain.com/langsmith/cost-tracking) | Non-LangChain code inside a node (raw SDK calls, plain Python) needs the `@traceable` decorator to appear in the trace tree at all. Unrecognized/custom models need manually-submitted cost data. |
+| **Langfuse** | Same mechanism via the `CallbackHandler`: each node becomes a nested observation with automatic latency. Token usage/cost auto-computed for "supported models" (OpenAI, Anthropic, Google, etc.) matched by model name against Langfuse's built-in model+price table, including tiered pricing (e.g. long-context surcharges). [langfuse.com/docs/observability/features/token-and-cost-tracking](https://langfuse.com/docs/observability/features/token-and-cost-tracking), [langfuse.com/integrations/frameworks/langchain](https://langfuse.com/integrations/frameworks/langchain) | Custom/self-hosted/unrecognized models require manually adding a Model Definition (name + input/output price) in Settings, or explicitly passing usage/cost at ingestion time. |
+| **Plain OTel** | Latency is "free" — any span you create gets a start/end automatically. Nothing else is out of the box: raw OTel has no concept of tokens, cost, or LLM semantics. | Everything LLM-specific is hand-built unless you add a community instrumentor: wrap/decorate each node function to open a span, manually pull `usage_metadata`/token counts off the LLM response and set them as span attributes (commonly under `gen_ai.usage.*` semantic-convention keys), and manually multiply by a price table you maintain yourself for cost. A community instrumentor (openinference-instrumentation-langchain, traceai-langchain, OpenLLMetry) can automate the token-attribute part by subscribing to LangChain's callback bus, but cost computation and pricing tables generally still aren't included. |
+
+## 4. Setup-to-first-trace (no LangSmith account, prefers free tiers)
+
+### LangSmith (cloud, free Developer tier)
+
+1. Sign up at [smith.langchain.com](https://smith.langchain.com) (free Developer plan, no credit card required for 5k traces/mo). [langchain.com/pricing-langsmith](https://www.langchain.com/pricing-langsmith)
+2. Create an API key in Settings → API Keys.
+3. `pip install -U langsmith langgraph langchain` (base tracing needs no `[otel]` extra — see OTel path below if you want that route instead).
+4. Set env vars: `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY=<key>`, optionally `LANGSMITH_PROJECT=<name>`.
+5. Run your LangGraph app — traces appear in the LangSmith UI automatically, no code change if it's built on LangChain components. [docs.langchain.com/langsmith/trace-with-langgraph](https://docs.langchain.com/langsmith/trace-with-langgraph)
+
+### Langfuse — cloud free tier
+
+1. Sign up at [cloud.langfuse.com](https://cloud.langfuse.com) (Hobby plan, free, no card, 50k units/mo). [langfuse.com/pricing](https://langfuse.com/pricing)
+2. Create a project, copy the public key and secret key from Project Settings → API Keys.
+3. `pip install langfuse langgraph langchain`
+4. Set env vars: `LANGFUSE_PUBLIC_KEY=<pk>`, `LANGFUSE_SECRET_KEY=<sk>`, `LANGFUSE_HOST=https://cloud.langfuse.com` (US region alt: `https://us.cloud.langfuse.com`).
+5. In code: `from langfuse.langchain import CallbackHandler; handler = CallbackHandler()`, then pass `config={"callbacks": [handler]}` to `graph.invoke(...)`. First trace appears in the Langfuse UI. [langfuse.com/integrations/frameworks/langchain](https://langfuse.com/integrations/frameworks/langchain)
+
+### Langfuse — self-host (Docker Compose)
+
+1. `git clone https://github.com/langfuse/langfuse.git && cd langfuse`
+2. Edit `docker-compose.yml`: replace all `# CHANGEME` secrets with random values. [langfuse.com/self-hosting/deployment/docker-compose](https://langfuse.com/self-hosting/deployment/docker-compose)
+3. `docker compose up -d` (spins up Postgres, ClickHouse, Redis, MinIO, and the Langfuse web/worker containers).
+4. Visit `http://localhost:3000/auth/sign-up`, create an account (this is now your own local instance, no external signup).
+5. Create a project, get public/secret API keys as above.
+6. `pip install langfuse langgraph langchain`
+7. Set env vars: `LANGFUSE_PUBLIC_KEY=<pk>`, `LANGFUSE_SECRET_KEY=<sk>`, `LANGFUSE_HOST=http://localhost:3000`.
+8. Same `CallbackHandler` code as cloud — first trace lands in your local UI.
+
+### OTel + self-hosted backend (e.g. Jaeger)
+
+1. Stand up a backend: `docker run -d --name jaeger -p 16686:16686 -p 4317:4317 -p 4318:4318 jaegertracing/all-in-one:latest` (UI at `localhost:16686`, OTLP gRPC on 4317 / HTTP on 4318).
+2. `pip install "langsmith[otel]" langgraph langchain` (LangSmith's OTel exporter is the practical way to get LangChain/LangGraph-aware spans without hand-rolling instrumentation; alternatively `pip install openinference-instrumentation-langchain opentelemetry-sdk opentelemetry-exporter-otlp` for a LangSmith-independent path).
+3. Set env vars to point the exporter at Jaeger instead of LangSmith's own backend: `LANGSMITH_OTEL_ENABLED=true`, `LANGSMITH_TRACING=true`, `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`, `OTEL_SERVICE_NAME=nutrigraph`. (No `LANGSMITH_API_KEY`/LangSmith account needed if you only want local OTel export, though the LangSmith SDK is still the package doing the instrumenting.) [docs.langchain.com/langsmith/trace-with-opentelemetry](https://docs.langchain.com/langsmith/trace-with-opentelemetry)
+4. Run the app; open `localhost:16686` and search for the `nutrigraph` service to see the first trace.
+
+---
+
+For this project: Langfuse's free/self-host tier is the only option here with zero forced ceilings (OSS = full feature set, no seat cap) and it plugs into LangGraph with the same one-line `CallbackHandler` pattern as LangSmith — worth defaulting to Langfuse cloud free tier for now and keeping the self-host docker-compose path in reserve if trace volume grows past 50k units/mo.
