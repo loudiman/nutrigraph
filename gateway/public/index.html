@@ -1,0 +1,79 @@
+<!doctype html>
+<!--
+  The minimal test client. It exists for one reason beyond typing a message:
+  the demo-data-only warning has to reach a User before they type, and ADR 0002
+  rests on that warning rather than on the schema. Keep the banner above the box.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NutriGraph</title>
+    <style>
+      body { font: 16px/1.5 system-ui, sans-serif; margin: 0 auto; max-width: 42rem; padding: 1rem; }
+      .warning { background: #fff3cd; border: 1px solid #b8860b; border-radius: 6px; padding: .75rem 1rem; }
+      #thread p { margin: .5rem 0; }
+      .coach { color: #14532d; }
+      .node { color: #666; font-size: .85rem; }
+      form { display: flex; gap: .5rem; }
+      input { flex: 1; padding: .5rem; }
+    </style>
+  </head>
+  <body>
+    <h1>NutriGraph</h1>
+    <p class="warning" role="alert">
+      Demo data only. What you type is stored as written and kept for 90 days, so do
+      not enter real personal or health details, yours or anyone else's.
+    </p>
+    <div id="thread"></div>
+    <form id="ask">
+      <input id="message" name="message" autocomplete="off" placeholder="I ate two eggs and pandesal" />
+      <button>Send</button>
+    </form>
+    <script type="module">
+      const thread = document.getElementById("thread");
+      const box = document.getElementById("message");
+
+      const say = (text, cls) => {
+        const p = document.createElement("p");
+        p.className = cls;
+        p.textContent = text;
+        thread.append(p);
+      };
+
+      document.getElementById("ask").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const message = box.value.trim();
+        if (!message) return;
+        box.value = "";
+        say(message, "user");
+
+        const response = await fetch("/api/turn", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
+        });
+        // Server-sent events over a POST, so the body is read by hand: one event
+        // is a blank-line-separated block, and only its `data:` line matters.
+        const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+        let buffer = "";
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += value;
+          let end;
+          while ((end = buffer.indexOf("\n\n")) !== -1) {
+            const block = buffer.slice(0, end);
+            buffer = buffer.slice(end + 2);
+            const line = block.split("\n").find((l) => l.startsWith("data:"));
+            if (!line) continue;
+            const event = JSON.parse(line.slice(5));
+            if (event.type === "node") say(`… ${event.node}`, "node");
+            if (event.type === "answer") say(event.reply.text, "coach");
+            if (event.type === "error") say(event.message, "coach");
+          }
+        }
+      });
+    </script>
+  </body>
+</html>

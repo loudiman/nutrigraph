@@ -27,6 +27,7 @@ ner = ["spacy>=3.8"]
 [project.scripts]
 nutrigraph-migrate = "nutrigraph_agent.migrate:main"
 nutrigraph-seed = "nutrigraph_agent.seed:main"
+nutrigraph-purge = "nutrigraph_agent.retention:main"
 
 [build-system]
 requires = ["setuptools>=68"]
