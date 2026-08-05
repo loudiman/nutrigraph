@@ -9,12 +9,15 @@ A conversational nutrition coach built on LangGraph, with a Node.js/Express API 
 ```
 gateway/                  Node and Express: the session, the turn identifier, the event stream
 agent/                    Python and FastAPI: the graph, the nodes, the migrations
-agent/migrations/         numbered SQL files, owned by the agent service
+agent/migrations/         numbered SQL files, owned by the agent service — read its README first
 agent/seeds/              demo Profiles, and the Corpus manifest
 gateway/src/generated/    TypeScript types, generated from the agent's OpenAPI document
 docs/adr/                 the decision records
+docs/deploy.md            the deployed system, and how to roll it back
 prototypes/               throwaway code, never imported
 compose.yaml              PostgreSQL with pgvector, and nothing else
+cloudbuild.pr.yaml        every pull request: the tests
+cloudbuild.yaml           every merge to main: build, migrate, deploy
 ```
 
 ## Running it locally
@@ -124,6 +127,22 @@ LANGSMITH_API_KEY=...
 
 LangSmith is the reading tool; `interaction_event` is the record, because the free tier keeps traces for 14 days. The turn identifier is on the trace, on the `message` rows, and on the `interaction_event` rows.
 
+## The deployed system
+
+One environment: two Cloud Run services in `asia-southeast1`, both at minimum
+instances 0, in front of a Neon database. The gateway is public; the agent takes
+internal ingress only. A merge to `main` builds both images, applies the
+migrations, then deploys. A rollback is a redeployment of the previous image and
+**a migration is never reversed** — which is why a migration may only ever add,
+a rule that lives in [`agent/migrations/README.md`](agent/migrations/README.md).
+The whole of it is in [`docs/deploy.md`](docs/deploy.md).
+
+```sh
+curl -N -H 'Content-Type: application/json' \
+  -d '{"message":"I ate two eggs and pandesal"}' \
+  https://nutrigraph-gateway-713096458695.asia-southeast1.run.app/api/turn
+```
+
 ## The internal call
 
 In production the gateway calls the agent with a Google-signed Cloud Run identity token. That token does not exist on a laptop, so locally the agent binds to loopback and accepts `X-Dev-Auth` instead, behind `AGENT_DEV_AUTH`, which production never sets. **The agent refuses to start when `AGENT_DEV_AUTH` is set together with a non-loopback `AGENT_HOST`.**
@@ -154,5 +173,8 @@ The migration, seed, and checkpointer tests need a real PostgreSQL and are skipp
 NUTRIGRAPH_TEST_DATABASE_URL=postgresql://nutrigraph:nutrigraph@localhost:5432/nutrigraph_test .venv/bin/pytest
 GOOGLE_API_KEY=... .venv/bin/pytest tests/test_live_router.py
 ```
+
+The pull-request pipeline stands one of those up for itself, so nothing skips
+there. It is never Neon: the free tier is a ceiling, not a test fixture.
 
 A node is never tested on its own. A node that cannot be reached from a Turn is a node that should not exist.

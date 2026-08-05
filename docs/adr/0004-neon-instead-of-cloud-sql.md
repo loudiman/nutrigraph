@@ -13,4 +13,5 @@ NutriGraph must cost nothing while nobody is using it, which is why the model pr
 - **Cloud Run scales to zero and can open many short-lived instances,** so the pooled connection endpoint is required rather than optional.
 - **A cold database adds delay to the first query** after an idle period. That is acceptable for a demonstration; it would not be for a product.
 - **The free storage limit is a real ceiling.** The corpus, its 768-dimension vectors, and the food embeddings must fit inside it, and the exact limits must be confirmed at build time rather than assumed from this record.
+- **The pooled endpoint is a connection pooler, not PostgreSQL**, and what that costs the checkpointer is its own decision: [ADR 0005](0005-checkpointer-tables-live-in-public.md).
 - **The GCP story is now Cloud Run, Artifact Registry, Secret Manager, and Cloud Build** — not Cloud SQL. If the project ever needs the private-network story, moving to Cloud SQL is a data migration, not a configuration change.
