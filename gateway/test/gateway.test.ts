@@ -46,11 +46,11 @@ test("node events reach the client, and the answer arrives as one event at the e
 
   assert.deepEqual(
     events.map((e) => e.name),
-    ["node", "node", "answer"],
+    ["node", "node", "node", "answer"],
   );
   const answer = events.at(-1)!.data;
   assert.equal(answer.type, "answer");
-  assert.equal(answer.reply.text, "Lou, you said: I ate two eggs");
+  assert.equal(answer.reply.text, "Lou, I read that as: log_meal.");
 });
 
 test("the gateway creates one turn identifier and every event carries it", async () => {

@@ -26,6 +26,28 @@ class Profile(BaseModel):
     disliked_foods: list[str] = Field(default_factory=list)
 
 
+INTENTS = ("log_meal", "ask_question", "review_day", "recommend", "update_profile")
+
+Intent = Literal["log_meal", "ask_question", "review_day", "recommend", "update_profile"]
+
+
+class RouterDecision(BaseModel):
+    """What one router call decides about a User message. The router detects an
+    out-of-scope request; it never writes the Refusal, which is the guardrail's
+    wording to give."""
+
+    intents: list[Intent] = Field(
+        default_factory=list,
+        max_length=2,
+        description="The Intents the message carries, in the order they must run, "
+        "at most two. The second reads what the first produced.",
+    )
+    confidence: float = Field(ge=0.0, le=1.0, description="How sure the classification is.")
+    out_of_scope: bool = Field(
+        default=False, description="The request falls outside what a nutrition Coach does."
+    )
+
+
 class ReplyPart(BaseModel):
     """One part of a reply, one for each Intent the Turn ran."""
 

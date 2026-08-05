@@ -11,10 +11,18 @@ dependencies = [
     "python-dotenv>=1.2",
     "langgraph>=1.2",
     "langgraph-checkpoint-postgres>=3.1",
+    "langchain>=1.0",
+    # The provider is a configuration string. Swapping it is one line in `.env`
+    # and the matching package here; no code path names a vendor.
+    "langchain-google-genai>=3.0",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=9", "pytest-asyncio>=1.4", "httpx>=0.28"]
+# Open-ended entities — the names of other people, and street addresses no
+# regular expression catches. Without it, only names the Coach already holds
+# are redacted; see `redaction.entity_name_finder`.
+ner = ["spacy>=3.8"]
 
 [project.scripts]
 nutrigraph-migrate = "nutrigraph_agent.migrate:main"

@@ -28,6 +28,13 @@ async def run_turn(
         # One Thread for each User, and it never restarts. A Session ends; the
         # Thread continues, so the thread identifier is the user identifier.
         "configurable": {"thread_id": user_id, TURN_CONTEXT_KEY: ctx},
+        # LangSmith is switched on by LANGSMITH_TRACING and LANGSMITH_API_KEY
+        # and no code change. Each node becomes a nested run under this one, and
+        # the trace carries the same turn identifier as the `message` and
+        # `interaction_event` rows.
+        "run_name": f"turn {turn_id}",
+        "metadata": {"turn_id": str(turn_id), "user_id": user_id},
+        "tags": [f"turn:{turn_id}"],
     }
     inputs = {
         "user_id": user_id,
@@ -51,6 +58,9 @@ async def run_turn(
         await deps.db.store_message(
             user_id=user_id, turn_id=turn_id, role="coach", raw_text=ctx.reply.text
         )
+        # The private table that maps a placeholder back to what the User wrote.
+        if ctx.models is not None:
+            await deps.db.store_redaction_map(turn_id=turn_id, mapping=ctx.models.mapping)
         log.info("turn finished", extra={"turn_id": str(turn_id)})
         yield AnswerEvent(turn_id=turn_id, reply=ctx.reply)
     except Exception as exc:
