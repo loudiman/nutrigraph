@@ -2,7 +2,7 @@
 
 A conversational nutrition coach built on LangGraph, with a Node.js/Express API gateway in front of a Python/FastAPI agent service.
 
-**Status: walking skeleton.** One Turn runs end to end with no model call anywhere: the reply is an echo. The work is charted as a Wayfinder map: [Map: NutriGraph build spec](https://github.com/loudiman/nutrigraph/issues/1). The vocabulary is fixed by [`CONTEXT.md`](CONTEXT.md) and the hard-to-reverse choices by [`docs/adr/`](docs/adr/).
+**Status: routed.** One Gemini call classifies each message into Intents, and the Turn either dispatches to a stub or asks one clarifying question. The work is charted as a Wayfinder map: [Map: NutriGraph build spec](https://github.com/loudiman/nutrigraph/issues/1). The vocabulary is fixed by [`CONTEXT.md`](CONTEXT.md) and the hard-to-reverse choices by [`docs/adr/`](docs/adr/).
 
 ## Layout
 
@@ -25,7 +25,7 @@ cloudbuild.yaml           every merge to main: build, migrate, deploy
 One container. Both services run natively with file reloading, so a graph change is visible in about a second.
 
 ```sh
-cp .env.example .env          # change POSTGRES_PORT if 5432 is taken
+cp .env.example .env          # change POSTGRES_PORT if 5432 is taken, and set GOOGLE_API_KEY
 docker compose up -d
 
 cd agent
@@ -47,6 +47,61 @@ curl -N -c cookies.txt -H 'Content-Type: application/json' \
 ```
 
 The gateway issues a signed cookie carrying a seeded `user_id`, creates the one turn identifier, and streams the node events as they happen. The answer text is held back and arrives as one `answer` event at the end — a later slice inserts the guardrail text scan there without changing the contract. A failure mid-Turn arrives as a typed `error` event and the stream closes.
+
+## The router
+
+`load_profile` → `route` → either `dispatch` or `clarify`. `route` is one call to Gemini 3.5 Flash-Lite at temperature 0, filling a fixed `RouterDecision`: at most two Intents from the five, a confidence, and an out-of-scope flag. No keyword list is maintained for routing, and the router never writes a Refusal — it detects, and a later slice gives the guardrail the wording.
+
+Below a confidence of 0.6 the Turn goes to `clarify`, which asks one short question and ends. That question is `pending_clarification`, the only place the Coach stops and waits for the User. It survives until a Turn is classified at 0.6 or higher, and `route` clears it there. A second clarify Turn replaces the value rather than adding a second one.
+
+`dispatch` is a stub: no Intent path is built yet, so it says what the router decided and stops.
+
+## The model routing rule
+
+Not a list of nodes. Work that fills a fixed schema from text uses the schema tier; work that reasons or writes prose for the User uses the prose tier. A node picks `TurnModels.fill` or `TurnModels.write` and inherits its model from the rule — no node names a model.
+
+```
+MODEL_SCHEMA=gemini-3.5-flash-lite   # route, and every later schema filler
+MODEL_PROSE=gemini-3.5-flash         # clarify, and every later writer
+```
+
+**Swapping the provider is one line.** `MODEL_PROVIDER` in `.env`, plus that vendor's LangChain package and its key variable:
+
+```
+MODEL_PROVIDER=openai      MODEL_SCHEMA=gpt-5-mini          MODEL_PROSE=gpt-5
+MODEL_PROVIDER=anthropic   MODEL_SCHEMA=claude-haiku-4-5    MODEL_PROSE=claude-sonnet-5
+```
+
+Every call goes through `init_chat_model`, which is written on one line in `agent/src/nutrigraph_agent/providers.py` and nowhere else. Nothing in the codebase branches on the vendor, so there is no dead code behind the swap — and a test asserts both facts.
+
+## The redaction wrapper
+
+Gemini runs on the free tier, so Google uses submitted prompts to improve its products and a person may read them. Redaction is therefore a wrapper on every provider call, not a graph node ([ADR 0002](docs/adr/0002-redact-before-the-provider-not-before-storage.md)). It runs on the router call and on the retry after a schema failure.
+
+Replaced with placeholders: person names, email addresses, phone numbers, street addresses, exact dates of birth, government identity numbers. Sent unchanged: weight, height, allergies, diet pattern, goals, and the food — the Coach cannot work without them. A private `redaction_placeholder` table maps a placeholder back, so the answer still addresses the User by name. **The `message` row holds the raw, unredacted text**; redaction happens at the provider call and nowhere else.
+
+A node cannot opt out: it holds a `TurnModels`, which owns the Redactor, and there is no route to a chat model that skips it. `agent/tests/test_redaction_wrapper.py` is the guard — it drives every shape of Turn and asserts against the faked provider that no unredacted identifier ever arrived, and it fails if a second module reaches a provider.
+
+Open-ended entities — the names of other people, addresses no regular expression catches — need an entity library, which is optional and off by default:
+
+```sh
+.venv/bin/pip install -e ".[ner]" && .venv/bin/python -m spacy download en_core_web_sm
+```
+
+Without it, only names the Coach already holds are redacted.
+
+## The metric record
+
+Every node writes an `interaction_event` row: node, Intent, model, latency, input and output tokens, and cost. The wrapping happens in `build_graph`, so a new node cannot be added without one.
+
+LangSmith is switched on by two environment variables and no code change, and every node becomes a nested run under the Turn:
+
+```
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=...
+```
+
+LangSmith is the reading tool; `interaction_event` is the record, because the free tier keeps traces for 14 days. The turn identifier is on the trace, on the `message` rows, and on the `interaction_event` rows.
 
 ## The deployed system
 
@@ -86,10 +141,13 @@ cd agent   && .venv/bin/pytest                 # the agent turn seam; Gemini, Fo
 cd gateway && npm test && npm run typecheck    # the gateway seam; the agent service faked
 ```
 
-The migration, seed, and checkpointer tests need a real PostgreSQL and are skipped without one:
+The provider is faked one layer below the redaction wrapper, so every test runs the real wrapper and can read exactly what Google would have seen.
+
+The migration, seed, and checkpointer tests need a real PostgreSQL and are skipped without one. The one test that actually calls Gemini is skipped without a key:
 
 ```sh
 NUTRIGRAPH_TEST_DATABASE_URL=postgresql://nutrigraph:nutrigraph@localhost:5432/nutrigraph_test .venv/bin/pytest
+GOOGLE_API_KEY=... .venv/bin/pytest tests/test_live_router.py
 ```
 
 The pull-request pipeline stands one of those up for itself, so nothing skips

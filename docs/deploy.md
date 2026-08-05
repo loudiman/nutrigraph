@@ -50,9 +50,9 @@ console, written into a build file, or committed.
 | Secret | Service | Read as |
 |---|---|---|
 | `neon-connection-string` | agent | `DATABASE_URL` |
-| `gemini-api-key` | agent | `GEMINI_API_KEY` |
-| `fdc-api-key` | agent | `FDC_API_KEY` |
-| `langsmith-api-key` | agent | `LANGSMITH_API_KEY` |
+| `gemini-api-key` | agent | `GOOGLE_API_KEY` — the name `langchain-google-genai` reads on its own; `providers.py` never names a key |
+| `fdc-api-key` | agent | `FDC_API_KEY` — mounted; not read yet, `Deps.food` is unwired |
+| `langsmith-api-key` | agent | `LANGSMITH_API_KEY`, alongside the plain `LANGSMITH_TRACING=true` |
 | `cookie-signing-secret` | gateway | `SESSION_SECRET` |
 
 Each runtime service account may read only its own secrets:

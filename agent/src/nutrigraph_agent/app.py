@@ -19,6 +19,7 @@ from .db import PostgresDatabase
 from .deps import Deps
 from .graph import build_graph
 from .models import TurnEventEnvelope, TurnRequest
+from .providers import Models, langchain_factory
 from .turn import run_turn
 
 NDJSON = "application/x-ndjson"
@@ -62,7 +63,14 @@ def create_app(settings: Settings) -> FastAPI:
         )
         await pool.open()
         saver, saver_pool = await open_checkpointer(settings.database_url)
-        app.state.deps = Deps(db=PostgresDatabase(pool))
+        app.state.deps = Deps(
+            db=PostgresDatabase(pool),
+            models=Models(
+                factory=langchain_factory(settings.model_provider),
+                schema_model=settings.schema_model,
+                prose_model=settings.prose_model,
+            ),
+        )
         app.state.graph = build_graph(saver)
         try:
             yield

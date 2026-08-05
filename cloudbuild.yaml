@@ -87,7 +87,12 @@ steps:
       - --min-instances=0
       - --max-instances=3
       - --memory=512Mi
-      - --set-secrets=DATABASE_URL=neon-connection-string:latest,GEMINI_API_KEY=gemini-api-key:latest,FDC_API_KEY=fdc-api-key:latest,LANGSMITH_API_KEY=langsmith-api-key:latest
+      # GOOGLE_API_KEY, not GEMINI_API_KEY: that is the variable name
+      # langchain-google-genai reads on its own, by convention, with no code
+      # here naming it (providers.py, the one place that calls a provider,
+      # never mentions a key).
+      - --set-env-vars=LANGSMITH_TRACING=true
+      - --set-secrets=DATABASE_URL=neon-connection-string:latest,GOOGLE_API_KEY=gemini-api-key:latest,FDC_API_KEY=fdc-api-key:latest,LANGSMITH_API_KEY=langsmith-api-key:latest
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     id: deploy gateway

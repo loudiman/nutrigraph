@@ -17,7 +17,14 @@ from nutrigraph_agent.graph import build_graph
 from nutrigraph_agent.migrate import MIGRATIONS_DIR, migrate, pending
 from nutrigraph_agent.seed import seed_profiles
 
-OUR_TABLES = {"schema_migration", "user_profile", "message"}
+TABLES = (
+    "schema_migration",
+    "user_profile",
+    "message",
+    "interaction_event",
+    "redaction_placeholder",
+)
+OUR_TABLES = set(TABLES)
 
 
 @pytest.fixture
@@ -37,12 +44,12 @@ def test_no_migration_file_names_a_table_the_checkpointer_owns():
 def test_the_first_migration_creates_the_version_table_and_the_two_tables(empty_database):
     applied = migrate(empty_database)
 
-    assert applied == ["001_init.sql"]
+    assert applied == ["001_init.sql", "002_router.sql"]
     with psycopg.connect(empty_database) as conn:
-        for table in ("schema_migration", "user_profile", "message"):
+        for table in TABLES:
             assert conn.execute("select to_regclass(%s)", (f"public.{table}",)).fetchone()[0]
         recorded = conn.execute("select filename from schema_migration").fetchall()
-    assert recorded == [("001_init.sql",)]
+    assert recorded == [("001_init.sql",), ("002_router.sql",)]
 
 
 def test_re_running_the_migration_applies_nothing_and_fails_nothing(empty_database):

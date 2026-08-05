@@ -4,43 +4,63 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-import pytest
+from nutrigraph_agent.graph import CHECKPOINTED, CONFIDENCE_FLOOR
+from nutrigraph_agent.models import (
+    INTENTS,
+    AnswerEvent,
+    CoachReply,
+    ErrorEvent,
+    NodeEvent,
+    RouterDecision,
+)
 
-from nutrigraph_agent.graph import CHECKPOINTED
-from nutrigraph_agent.models import AnswerEvent, CoachReply, ErrorEvent, NodeEvent
+from .conftest import PROSE_MODEL, SCHEMA_MODEL, answer
 
-from .conftest import answer
+UNSURE = RouterDecision(intents=[], confidence=0.2)
+SURE = RouterDecision(intents=["log_meal"], confidence=0.95)
 
 
-async def test_turn_echoes_the_message(seam):
-    events = await seam.turn("I ate two eggs and pandesal")
+async def test_a_turn_calls_the_router_once_and_dispatches_what_it_decided(seam):
+    seam.provider.script(RouterDecision(intents=["log_meal", "ask_question"], confidence=0.9))
+
+    events = await seam.turn("I ate two eggs and pandesal — is that enough protein?")
 
     reply = answer(events).reply
     assert isinstance(reply, CoachReply)
-    assert "I ate two eggs and pandesal" in reply.text
-    assert "Lou" in reply.text
+    assert [p.intent for p in reply.parts] == ["log_meal", "ask_question"]
+    assert [c.model for c in seam.provider.seen] == [SCHEMA_MODEL]
 
 
-async def test_raw_message_is_stored_with_the_turn_identifier(seam):
-    turn_id = uuid4()
-    await seam.turn("I ate two eggs", turn_id=turn_id)
+async def test_the_intent_list_is_never_longer_than_two_and_holds_only_the_five(seam):
+    events = await seam.turn("I ate two eggs")
 
-    stored = seam.db.messages
-    assert [m.role for m in stored] == ["user", "coach"]
-    assert stored[0].raw_text == "I ate two eggs"
-    assert {m.turn_id for m in stored} == {turn_id}
+    parts = answer(events).reply.parts
+    assert len(parts) <= 2
+    assert all(p.intent in INTENTS for p in parts)
 
 
 async def test_node_events_arrive_before_one_answer_event(seam):
-    events = await seam.turn("hello")
+    events = await seam.turn("I ate two eggs")
 
-    kinds = [type(e) for e in events]
-    assert kinds == [NodeEvent, NodeEvent, AnswerEvent]
-    assert [e.node for e in events[:2]] == ["load_profile", "compose"]
+    assert [type(e) for e in events] == [NodeEvent, NodeEvent, NodeEvent, AnswerEvent]
+    assert [e.node for e in events[:3]] == ["load_profile", "route", "dispatch"]
+
+
+async def test_raw_message_is_stored_unredacted_with_the_turn_identifier(seam):
+    turn_id = uuid4()
+
+    await seam.turn("I'm Lou, lou@example.com, I ate two eggs", turn_id=turn_id)
+
+    stored = seam.db.messages
+    assert [m.role for m in stored] == ["user", "coach"]
+    # The database keeps the truth; the provider saw a cleaned copy.
+    assert stored[0].raw_text == "I'm Lou, lou@example.com, I ate two eggs"
+    assert {m.turn_id for m in stored} == {turn_id}
 
 
 async def test_every_event_carries_the_turn_identifier(seam):
     turn_id = uuid4()
+
     events = await seam.turn("hello", turn_id=turn_id)
 
     assert {e.turn_id for e in events} == {turn_id}
@@ -63,6 +83,8 @@ async def test_an_unknown_user_is_a_typed_error_not_a_crash(seam):
 
     assert isinstance(events[-1], ErrorEvent)
     assert events[-1].code == "unknown_user"
+    # No Profile, so no Redactor, so nothing may reach the provider.
+    assert seam.provider.seen == []
 
 
 async def test_the_checkpoint_holds_only_the_three_thread_keys(seam):
@@ -78,17 +100,113 @@ async def test_reconnecting_continues_the_same_thread(seam):
 
     texts = [m["text"] for m in seam.state()["messages"]]
     assert texts[0] == "first"
-    assert "second" in texts[-1]
+    assert texts[2] == "second"
     assert len(texts) == 4
 
 
-async def test_a_turn_reaches_no_provider(seam):
-    # Gemini and FoodData Central are faked by an object that raises on touch,
-    # so an answer event is proof that no node called a provider.
-    events = await seam.turn("hello")
+# --- the clarify path ---------------------------------------------------------
 
-    assert isinstance(events[-1], AnswerEvent)
-    with pytest.raises(RuntimeError):
-        seam.deps.models.invoke
-    with pytest.raises(RuntimeError):
-        seam.deps.food.search
+
+async def test_a_low_confidence_turn_ends_with_one_short_question(seam):
+    seam.provider.script(UNSURE)
+
+    events = await seam.turn("hmm")
+
+    assert [e.node for e in events[:3]] == ["load_profile", "route", "clarify"]
+    reply = answer(events).reply
+    assert reply.text.endswith("?")
+    assert [p.intent for p in reply.parts] == ["clarify"]
+    assert seam.state()["pending_clarification"] == reply.text
+
+
+async def test_the_clarifying_question_addresses_the_user_by_name(seam):
+    seam.provider.script(UNSURE)
+
+    events = await seam.turn("hmm")
+
+    # The provider saw a placeholder; the User is answered by name.
+    assert "Lou" not in seam.provider.seen[-1].sent
+    assert answer(events).reply.text.startswith("Lou,")
+
+
+async def test_the_prose_tier_writes_the_question_and_the_schema_tier_routes(seam):
+    seam.provider.script(UNSURE)
+
+    await seam.turn("hmm")
+
+    assert [c.model for c in seam.provider.seen] == [SCHEMA_MODEL, PROSE_MODEL]
+
+
+async def test_a_confident_turn_clears_the_pending_clarification(seam):
+    seam.provider.script(UNSURE, SURE)
+
+    await seam.turn("hmm")
+    assert seam.state()["pending_clarification"] is not None
+
+    await seam.turn("I ate two eggs")
+
+    assert seam.state()["pending_clarification"] is None
+
+
+async def test_a_second_clarify_turn_replaces_the_pending_value(seam):
+    seam.provider.script(UNSURE, UNSURE)
+
+    await seam.turn("hmm")
+    first_state = seam.state()
+    await seam.turn("still hmm")
+    second_state = seam.state()
+
+    # One value, overwritten. Not a list, and not a second key.
+    assert isinstance(second_state["pending_clarification"], str)
+    assert set(second_state) == set(first_state) == set(CHECKPOINTED)
+    assert len(second_state["messages"]) == 4
+
+
+async def test_the_floor_is_the_boundary_not_a_range(seam):
+    seam.provider.script(RouterDecision(intents=["recommend"], confidence=CONFIDENCE_FLOOR))
+
+    events = await seam.turn("what should I eat")
+
+    assert [e.node for e in events[:3]] == ["load_profile", "route", "dispatch"]
+
+
+# --- the metric record --------------------------------------------------------
+
+
+async def test_every_node_writes_an_interaction_event_row(seam):
+    turn_id = uuid4()
+    seam.provider.script(SURE)
+
+    await seam.turn("I ate two eggs", turn_id=turn_id)
+
+    rows = seam.db.events
+    assert [r.node for r in rows] == ["load_profile", "route", "dispatch"]
+    assert {r.turn_id for r in rows} == {turn_id}
+    assert all(r.latency_ms >= 0 for r in rows)
+
+    router = next(r for r in rows if r.node == "route")
+    assert router.model == SCHEMA_MODEL
+    assert router.intent == "log_meal"
+    assert (router.input_tokens, router.output_tokens) == (11, 7)
+    assert router.cost_usd > 0
+
+    reader = next(r for r in rows if r.node == "load_profile")
+    assert reader.model is None
+    assert reader.cost_usd == 0
+
+
+async def test_the_turn_identifier_ties_the_message_and_the_metric_rows_together(seam):
+    turn_id = uuid4()
+
+    await seam.turn("I ate two eggs", turn_id=turn_id)
+
+    assert {m.turn_id for m in seam.db.messages} == {turn_id}
+    assert {e.turn_id for e in seam.db.events} == {turn_id}
+
+
+async def test_the_placeholder_mapping_is_kept_in_its_own_table(seam):
+    turn_id = uuid4()
+
+    await seam.turn("I'm Lou and I ate two eggs", turn_id=turn_id)
+
+    assert seam.db.redaction_maps[turn_id] == {"[NAME_1]": "Lou"}
