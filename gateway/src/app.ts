@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import cookieParser from "cookie-parser";
 import express from "express";
 import type { AgentClient, ErrorEvent, TurnEvent } from "./contract.ts";
@@ -20,6 +21,9 @@ export function createApp(options: AppOptions): express.Express {
   app.use(express.json());
   app.use(cookieParser(options.sessionSecret));
   app.use(session(options.demoUserId));
+  // The minimal test client. It carries the demo-data-only warning that ADR 0002
+  // rests on, which is why it is served before a User can type anything.
+  app.use(express.static(path.join(import.meta.dirname, "..", "public")));
 
   app.get("/healthz", (_req, res) => {
     res.json({ status: "ok" });

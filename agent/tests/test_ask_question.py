@@ -80,7 +80,9 @@ async def test_a_question_the_corpus_does_not_cover_says_so_and_invents_nothing(
     seam.db.corpus = []
     seam.provider.script(ASKED)
 
-    events = await seam.turn("does creatine cure my knee pain?")
+    # A question the rule list permits, so the Corpus is what turns it down and
+    # not the guardrail.
+    events = await seam.turn("how many grams of creatine monohydrate before a workout?")
 
     reply = answer(events).reply
     assert reply.text == NOT_IN_THE_CORPUS
@@ -88,6 +90,31 @@ async def test_a_question_the_corpus_does_not_cover_says_so_and_invents_nothing(
     # Only the router was asked. With no passage to answer from there is no
     # provider call in which a claim could be invented.
     assert [c.model for c in seam.provider.seen] == [SCHEMA_MODEL]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="The guardrail's text scan and the cited Answer collide, and neither "
+    "ticket's suite caught it. `MEDICAL_CLAIM` matches a bare `\\d+ mg`, so the "
+    "Corpus answer to 'how much sodium should I have in a day?' — a Dietary "
+    "Guidelines figure with a Citation on it — is replaced whole by the safe "
+    "message. A milligram quoted from public dietary guidance is a nutrition "
+    "fact, not a dosage a clinician prescribes. Narrowing that one rule to "
+    "dosage phrasing belongs to whoever owns the guardrail, not to this merge, "
+    "so this records the defect instead of weakening the boundary. Remove the "
+    "marker when the rule is narrowed.",
+)
+async def test_a_cited_figure_from_public_guidance_is_not_a_dosage_claim(seam):
+    sodium = Answer(
+        text="The general population aged 14 and above should consume less than "
+        "2,300 mg of sodium per day.",
+        citations=[Citation(document=EGGS_CHUNK.document, locator="page 6")],
+    )
+    seam.provider.script(ASKED, sodium)
+
+    events = await seam.turn("how much sodium should I have in a day?")
+
+    assert answer(events).reply.text == sodium.text
 
 
 async def test_a_passage_below_the_relevance_floor_is_not_an_answer(seam):
@@ -107,8 +134,8 @@ async def test_the_retrieval_path_is_reachable_from_the_turn_seam(seam):
 
     events = await seam.turn("how much protein do I need?")
 
-    assert [e.node for e in events[:4]] == [
-        "load_profile", "route", "retrieve", "answer_question",
+    assert [e.node for e in events[:5]] == [
+        "load_profile", "guard", "route", "retrieve", "answer_question",
     ]
     assert len(seam.db.searched) == 1
 

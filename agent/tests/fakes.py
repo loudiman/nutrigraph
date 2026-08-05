@@ -134,6 +134,8 @@ class FakeProvider:
     seen: list[ProviderCall] = field(default_factory=list)
     # Every text that reached the embedding model, as it reached it.
     embedded: list[str] = field(default_factory=list)
+    # What the prose tier writes back, when a test needs to choose the words.
+    prose: str | None = None
 
     def script(self, *decisions: BaseModel | str) -> FakeProvider:
         self.decisions.extend(decisions)
@@ -181,6 +183,8 @@ class _FakeChat:
 
     async def ainvoke(self, messages: list[dict[str, str]]) -> SimpleNamespace:
         call = self._record(messages)
+        if self.provider.prose is not None:
+            return _message(self.provider.prose)
         # A Coach answering a redacted prompt writes the placeholder back, which
         # is what lets the reply address the User by name.
         found = NAME_PLACEHOLDER.search(call.sent)

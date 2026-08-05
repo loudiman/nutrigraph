@@ -32,6 +32,7 @@ nutrigraph-migrate = "nutrigraph_agent.migrate:main"
 nutrigraph-seed = "nutrigraph_agent.seed:main"
 # The slow step of the seed sequence, and therefore its own command.
 nutrigraph-ingest = "nutrigraph_agent.ingest:main"
+nutrigraph-purge = "nutrigraph_agent.retention:main"
 
 [build-system]
 requires = ["setuptools>=68"]
