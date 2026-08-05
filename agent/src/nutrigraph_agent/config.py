@@ -9,8 +9,14 @@ from dotenv import load_dotenv
 
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
-# The library owns every table in here. Our migrations never touch it.
-CHECKPOINT_SCHEMA = "langgraph"
+# The checkpointer's tables. The library owns every one of them and our
+# migrations never touch them. They sit in `public` beside ours rather than in
+# a schema of their own: putting them elsewhere means a `search_path` in the
+# connection's startup packet, and Neon's pooled endpoint — which ADR 0004
+# makes mandatory — rejects that parameter outright.
+CHECKPOINT_TABLES = frozenset(
+    {"checkpoints", "checkpoint_blobs", "checkpoint_writes", "checkpoint_migrations"}
+)
 
 
 class ConfigurationError(RuntimeError):

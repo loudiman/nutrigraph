@@ -2,22 +2,31 @@
 
 A conversational nutrition coach built on LangGraph, with a Node.js/Express API gateway in front of a Python/FastAPI agent service.
 
-**Status: the first Intent path.** One Gemini call classifies each message into Intents. `update_profile` is built: the User changes a Profile fact by saying it. Every other Intent dispatches to a stub, and a message the Coach cannot classify gets one clarifying question. The work is charted as a Wayfinder map: [Map: NutriGraph build spec](https://github.com/loudiman/nutrigraph/issues/1). The vocabulary is fixed by [`CONTEXT.md`](CONTEXT.md) and the hard-to-reverse choices by [`docs/adr/`](docs/adr/).
+**Status: guarded, and the first Intent path.** One Gemini call classifies each message into Intents. The Turn refuses what is outside the Coach's job, runs `update_profile` — the User changes a Profile fact by saying it — dispatches every other Intent to a stub, or asks one clarifying question. The work is charted as a Wayfinder map: [Map: NutriGraph build spec](https://github.com/loudiman/nutrigraph/issues/1). The vocabulary is fixed by [`CONTEXT.md`](CONTEXT.md) and the hard-to-reverse choices by [`docs/adr/`](docs/adr/).
 
 ## Layout
 
 ```
 gateway/                  Node and Express: the session, the turn identifier, the event stream
 agent/                    Python and FastAPI: the graph, the nodes, the migrations
-agent/migrations/         numbered SQL files, owned by the agent service
+agent/migrations/         numbered SQL files, owned by the agent service — read its README first
 agent/seeds/              demo Profiles
+gateway/public/           the minimal test client, and the demo-data-only warning above the box
 gateway/src/generated/    TypeScript types, generated from the agent's OpenAPI document
+deploy/                   the scheduled jobs the pipeline does not own
 docs/adr/                 the decision records
+docs/deploy.md            the deployed system, and how to roll it back
 prototypes/               throwaway code, never imported
 compose.yaml              PostgreSQL with pgvector, and nothing else
+cloudbuild.pr.yaml        every pull request: the tests
+cloudbuild.yaml           every merge to main: build, migrate, deploy
 ```
 
 ## Running it locally
+
+> **Demo data only. What you type is stored as written and kept for 90 days, so do not enter real personal or health details, yours or anyone else's.**
+>
+> The database holds the raw message unredacted on purpose ([ADR 0002](docs/adr/0002-redact-before-the-provider-not-before-storage.md)), so this warning, and not the schema, is what protects it. It is printed by `nutrigraph-migrate` and `nutrigraph-seed`, and it is on the page before a User can type.
 
 One container. Both services run natively with file reloading, so a graph change is visible in about a second.
 
@@ -36,34 +45,46 @@ npm install
 npm run dev
 ```
 
-Then:
+Then open `http://127.0.0.1:3000` for the minimal test client — the warning is above the box — or drive it by hand:
 
 ```sh
 curl -N -c cookies.txt -H 'Content-Type: application/json' \
   -d '{"message":"I ate two eggs and pandesal"}' http://127.0.0.1:3000/api/turn
 ```
 
-The gateway issues a signed cookie carrying a seeded `user_id`, creates the one turn identifier, and streams the node events as they happen. The answer text is held back and arrives as one `answer` event at the end — a later slice inserts the guardrail text scan there without changing the contract. A failure mid-Turn arrives as a typed `error` event and the stream closes.
+The gateway issues a signed cookie carrying a seeded `user_id`, creates the one turn identifier, and streams the node events as they happen. The answer text is held back and arrives as one `answer` event at the end, which is what lets the guardrail scan the finished text before it is sent. A failure mid-Turn arrives as a typed `error` event and the stream closes.
 
 ## The router
 
-`load_profile` → `route` → an Intent path, `dispatch`, or `clarify`. `route` is one call to Gemini 3.5 Flash-Lite at temperature 0, filling a fixed `RouterDecision`: at most two Intents from the five, a confidence, and an out-of-scope flag. No keyword list is maintained for routing, and the router never writes a Refusal — it detects, and a later slice gives the guardrail the wording.
+`load_profile` → `guard` → `route` → an Intent path, `dispatch`, `clarify`, or `refuse`. `route` is one call to Gemini 3.5 Flash-Lite at temperature 0, filling a fixed `RouterDecision`: at most two Intents from the five, a confidence, and an out-of-scope flag. No keyword list is maintained for routing, and the router never writes a Refusal — it detects, and the guardrail gives the wording.
 
-Below a confidence of 0.6 the Turn goes to `clarify`, which asks one short question and ends. That question is `pending_clarification`, the only place the Coach stops and waits for the User. It survives until a Turn is classified at 0.6 or higher, and `route` clears it there. A second clarify Turn replaces the value rather than adding a second one.
+Below a confidence of 0.6 the Turn goes to `clarify`, which asks one short question and ends. That question is `pending_clarification`, the only place the Coach stops and waits for the User. It survives until a Turn is classified at 0.6 or higher, and `route` clears it there. A second clarify Turn replaces the value rather than adding a second one, and a Refusal turn leaves it standing.
 
 `dispatch` is the stub the remaining Intent paths replace: it says what the router decided and stops.
+
+## The guardrail
+
+Four subjects sit outside the Coach's job: diagnosis, treatment, and dosage; eating-disorder content; nutrition for pregnancy, breastfeeding, and children; and the personal diet management of a chronic disease. A general factual question about a chronic disease is still answered from the Corpus — only a personal plan for it is refused, and a request framed as being about a friend is refused on the same terms as one in the first person.
+
+Two detectors, and either one produces a Refusal. `guard` runs a deterministic rule list — `agent/src/nutrigraph_agent/guardrail.py`, readable by a reviewer and provable by a test — before the router and with no model, so a message it catches never reaches an Intent path. The router's `out_of_scope` flag catches meaning no word list predicts. Both end at `refuse`, the only node that writes a Refusal.
+
+The Refusal is a template in code: it names the boundary, gives the disclaimer, points to a professional, and offers what the Coach can do instead. Eating-disorder content additionally carries a help-line. Because it is assembled from those strings, it cannot drift.
+
+After the composer, `scan_reply` reads the finished text for medical claims, before the answer event is sent. A text that fails ends the Turn with the fixed safe message, never with a partial answer. A Refusal is not scanned — it is the codebase's own words. The allergen half of the scan lands in that same function when the allergy-check slice arrives, and the stream contract does not change.
+
+The split this makes real: deterministic are the rule list, the redaction patterns, the final text scan, the schema validation, and the Refusal wording; the model does the Intent classification, the meaning-level scope flag, the name and address detection, and every answer. Nothing that decides safety is left to the model. It is checked by plain assertions at the agent turn seam in `agent/tests/test_guardrail.py`, never by a model judge — a judge can flake, an assertion cannot.
 
 ## `update_profile`
 
 The User changes a Profile fact by saying it — "I am allergic to shrimp", "my target is 70 kilograms". No settings page, no onboarding questionnaire. The Profile starts as seeded fixture data so the Coach works from the first message, and this is what lets the conversation change it.
 
-`route` → `update_profile` → either the confirmation or `clarify`. One schema call fills a `ProfileUpdate` — `field`, `old_value`, `new_value` — and the field name is a `Literal` over the ten Profile fields a User may change. `user_id` and `name` are not among them.
+`guard` → `route` → `update_profile` → either the confirmation or `clarify`. The Intent path sits after both guardrail detectors, so a message the rule list catches, or one the router flags out of scope, never reaches it. One schema call fills a `ProfileUpdate` — `field`, `old_value`, `new_value` — and the field name is a `Literal` over the ten Profile fields a User may change. `user_id` and `name` are not among them.
 
 **The Profile lives in PostgreSQL alone.** The change is written there and nowhere else, so no second copy can drift and the checkpoint never holds a Profile. `load_profile` reads it back on the next Turn, in this Session or in a new one. The cost is one small read on each Turn, and it is accepted. The prototype exposed the failure this rule prevents: a Profile change that lived only in the graph state did not survive to the next Turn.
 
 The confirmation is written, not generated — the three values are known, so nothing can hallucinate one into the sentence, and the old value reported is the Profile's own rather than the extractor's. A statement the extractor cannot pin to exactly one field, or a value the field cannot hold, goes to `clarify` instead of to a guessed field.
 
-**The allergy check must not run on this path.** It belongs to `recommend` and `log_meal`, which is what `ALLERGY_CHECKED_INTENTS` says. A correct confirmation of "I am allergic to shrimp" contains the word shrimp, and a check here reads the Coach's own answer as a violation and destroys it — the prototype showed exactly that. Four tests in `agent/tests/test_update_profile.py` fail if a later change puts it back.
+**The allergy check must not run on this path.** It belongs to `recommend` and `log_meal`, which is what `ALLERGY_CHECKED_INTENTS` says. A correct confirmation of "I am allergic to shrimp" contains the word shrimp, and a check here reads the Coach's own answer as a violation and destroys it — the prototype showed exactly that. There are two places it can arrive: a node on this path, and the allergen half of `scan_reply`. Tests in `agent/tests/test_update_profile.py` fail at both, and that was checked by adding each in turn and watching them go red.
 
 A column name cannot be a query parameter, so `Database.update_profile` whitelists the field against the same tuple the extractor's schema is built from, before it takes a connection.
 
@@ -101,6 +122,20 @@ Open-ended entities — the names of other people, addresses no regular expressi
 
 Without it, only names the Coach already holds are redacted.
 
+## Retention, and the warning it rests on
+
+The store of raw text ADR 0002 accepts is bounded by a scheduled job, not by a promise:
+
+```sh
+.venv/bin/nutrigraph-purge    # nulls message.raw_text after 90 days; safe to run twice
+```
+
+One statement nulls `message.raw_text` and stamps `purged_at` on every message older than 90 days. It writes those two columns of that one table, so the row, its identifiers, its timestamps, and every Meal, Item, Recommendation and `interaction_event` row survive — the day review still reports correct totals over a purged period, and a harvested eval case keeps everything except the words. A second run purges nothing, because a purged row has no `raw_text` left to match.
+
+In the deployed environment it is a Cloud Run job on the agent image, running at 03:00 Asia/Manila every day, created by [`deploy/retention-job.sh`](deploy/retention-job.sh). Running it is not a manual step.
+
+**The warning is the other half.** ADR 0002 says plainly that during those 90 days the warning, and not the schema, is what protects the raw text. So it is one sentence held in one constant, `retention.DEMO_WARNING`, and it appears in the three places that matter: above the box in the test client, on the way out of `nutrigraph-migrate`, and on the way out of `nutrigraph-seed`. A test fails if a copy drifts.
+
 ## The metric record
 
 Every node writes an `interaction_event` row: node, Intent, model, latency, input and output tokens, and cost. The wrapping happens in `build_graph`, so a new node cannot be added without one.
@@ -113,6 +148,22 @@ LANGSMITH_API_KEY=...
 ```
 
 LangSmith is the reading tool; `interaction_event` is the record, because the free tier keeps traces for 14 days. The turn identifier is on the trace, on the `message` rows, and on the `interaction_event` rows.
+
+## The deployed system
+
+One environment: two Cloud Run services in `asia-southeast1`, both at minimum
+instances 0, in front of a Neon database. The gateway is public; the agent takes
+internal ingress only. A merge to `main` builds both images, applies the
+migrations, then deploys. A rollback is a redeployment of the previous image and
+**a migration is never reversed** — which is why a migration may only ever add,
+a rule that lives in [`agent/migrations/README.md`](agent/migrations/README.md).
+The whole of it is in [`docs/deploy.md`](docs/deploy.md).
+
+```sh
+curl -N -H 'Content-Type: application/json' \
+  -d '{"message":"I ate two eggs and pandesal"}' \
+  https://nutrigraph-gateway-713096458695.asia-southeast1.run.app/api/turn
+```
 
 ## The internal call
 
@@ -144,5 +195,8 @@ The migration, seed, and checkpointer tests need a real PostgreSQL and are skipp
 NUTRIGRAPH_TEST_DATABASE_URL=postgresql://nutrigraph:nutrigraph@localhost:5432/nutrigraph_test .venv/bin/pytest
 GOOGLE_API_KEY=... .venv/bin/pytest tests/test_live_router.py
 ```
+
+The pull-request pipeline stands one of those up for itself, so nothing skips
+there. It is never Neon: the free tier is a ceiling, not a test fixture.
 
 A node is never tested on its own. A node that cannot be reached from a Turn is a node that should not exist.

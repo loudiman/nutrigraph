@@ -138,7 +138,7 @@ async def test_a_statement_the_extractor_cannot_pin_to_one_field_goes_to_clarify
     events = await seam.turn("I'm bigger these days")
 
     nodes = [e.node for e in events if isinstance(e, NodeEvent)]
-    assert nodes == ["load_profile", "route", "update_profile", "clarify"]
+    assert nodes == ["load_profile", "guard", "route", "update_profile", "clarify"]
     assert answer(events).reply.text.endswith("?")
     assert seam.state()["pending_clarification"] == answer(events).reply.text
 
@@ -161,6 +161,37 @@ async def test_a_value_the_field_cannot_hold_asks_rather_than_writing_it(seam):
 
     assert profile(seam).age == 24
     assert [e.node for e in events if isinstance(e, NodeEvent)][-1] == "clarify"
+
+
+# --- the guardrail comes first -------------------------------------------------
+
+
+async def test_a_rule_list_hit_refuses_and_never_reaches_the_intent_path(seam):
+    """`guard` runs before `route`, so a message the rule list catches is
+    refused and nothing is written — even when it also states a Profile fact."""
+    before = profile(seam)
+
+    events = await seam.turn("I have diabetes, so set my target weight to 70 kg")
+
+    nodes = [e.node for e in events if isinstance(e, NodeEvent)]
+    assert nodes == ["load_profile", "guard", "refuse"]
+    assert profile(seam) == before
+    # The rule list needs no model, so nothing reached the provider at all.
+    assert seam.provider.seen == []
+
+
+async def test_an_out_of_scope_flag_refuses_rather_than_updating_the_profile(seam):
+    """The router's own detector sits in front of the Intent path too."""
+    seam.provider.script(
+        RouterDecision(intents=["update_profile"], confidence=0.95, out_of_scope=True)
+    )
+    before = profile(seam)
+
+    events = await seam.turn("my nutritionist says to log my new weight")
+
+    nodes = [e.node for e in events if isinstance(e, NodeEvent)]
+    assert nodes == ["load_profile", "guard", "route", "refuse"]
+    assert profile(seam) == before
 
 
 # --- the seam, the models, and the metric row ---------------------------------
@@ -241,9 +272,11 @@ async def test_no_node_beyond_the_intent_path_runs_on_an_update_profile_turn(sea
     events = await seam.turn("I am allergic to shrimp")
 
     nodes = [e.node for e in events if isinstance(e, NodeEvent)]
-    assert nodes == ["load_profile", "route", "update_profile"], (
-        "a node was added to the update_profile path; if it is an allergy or "
-        "guardrail check, it must not be"
+    # `guard` belongs here: it is the deterministic detector, it runs before the
+    # router, and it reads the User's message, never the Coach's answer.
+    assert nodes == ["load_profile", "guard", "route", "update_profile"], (
+        "a node was added to the update_profile path; if it is an allergy "
+        "check, it must not be"
     )
 
 

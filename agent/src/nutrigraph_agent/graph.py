@@ -1,9 +1,15 @@
-"""The graph. `load_profile` reads the Profile, `route` classifies the message
-into Intents with one model call, and the Turn either runs an Intent path, asks
-one clarifying question, or dispatches to the stub.
+"""The graph. `load_profile` reads the Profile, `guard` runs the deterministic
+rule list with no model, `route` classifies the message into Intents with one
+model call, and the Turn refuses, runs an Intent path, dispatches, or asks one
+clarifying question.
 
-`update_profile` is the first Intent path. It writes the change to PostgreSQL
-and to nothing else, so the Profile the next Turn reads is the changed one.
+`guard` sits before `route` because a message the rule list catches must never
+reach an Intent path. `refuse` is the only node that writes a Refusal, and both
+detectors — the rule list and the router's `out_of_scope` flag — end there.
+
+`update_profile` is the first Intent path, and it sits after both detectors. It
+writes the change to PostgreSQL and to nothing else, so the Profile the next
+Turn reads is the changed one.
 
 The state holds only what survives the Turn. Everything rebuilt every Turn
 lives on the `TurnContext`, which travels in the config and therefore never
@@ -28,6 +34,7 @@ from pydantic import ValidationError
 
 from .db import InteractionEvent
 from .deps import Deps
+from .guardrail import OUT_OF_SCOPE, Subject, match_rule, refusal
 from .models import (
     INTENTS,
     LIST_FIELDS,
@@ -55,7 +62,11 @@ CONFIDENCE_FLOOR = 0.6
 # `update_profile` is absent, and must stay absent. A correct confirmation of
 # "I am allergic to shrimp" names shrimp, and an allergy check on that path
 # destroys the very answer the User asked for. The prototype found this.
-# `tests/test_update_profile.py` fails if a later change puts it back.
+#
+# There are two places the allergen check can arrive: a node on this path, and
+# the allergen half of `guardrail.scan_reply`, which `run_turn` runs on the
+# finished text of every answer that is not a Refusal. Neither may see an
+# `update_profile` confirmation. `tests/test_update_profile.py` fails at both.
 ALLERGY_CHECKED_INTENTS = ("recommend", "log_meal")
 
 ROUTER_SYSTEM = f"""You classify one message from a User to a nutrition Coach.
@@ -124,6 +135,10 @@ class TurnContext:
     models: TurnModels | None = None
     decision: RouterDecision | None = None
     reply: CoachReply | None = None
+    # What the rule list caught, if anything, and whether the Turn was refused.
+    # A Refusal is this codebase's own words, so the text scan does not read it.
+    subject: Subject | None = None
+    refused: bool = False
     nodes_run: list[str] = field(default_factory=list)
     # What the node currently running has to report on its metric row.
     call: ModelCall | None = None
@@ -163,6 +178,18 @@ async def load_profile(state: TurnState, config: RunnableConfig) -> dict[str, An
     return {}
 
 
+async def guard(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
+    """The deterministic detector, before the router and with no model. What it
+    catches goes straight to `refuse`, so no Intent path runs for it."""
+    ctx = turn_context(config)
+    ctx.subject = match_rule(ctx.raw_message)
+    return {}
+
+
+def after_guard(state: TurnState, config: RunnableConfig) -> str:
+    return "refuse" if turn_context(config).subject else "route"
+
+
 async def route(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     """One call, one schema. No keyword list is maintained for routing."""
     ctx = turn_context(config)
@@ -174,9 +201,9 @@ async def route(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     ctx.decision = decision
     ctx.record(call)
     ctx.intent = decision.intents[0] if decision.intents else None
-    if decision.confidence >= CONFIDENCE_FLOOR:
+    if decision.confidence >= CONFIDENCE_FLOOR and not decision.out_of_scope:
         # The Turn was understood, so the pending Clarification is answered. A
-        # Refusal turn never reaches here, so a Refusal does not clear it.
+        # Refusal turn takes neither branch, so a Refusal does not clear it.
         return {"pending_clarification": None}
     return {}
 
@@ -184,6 +211,12 @@ async def route(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
 def next_node(state: TurnState, config: RunnableConfig) -> str:
     decision = turn_context(config).decision
     assert decision is not None
+    # Out of scope beats an unsure classification: refusing is the safer answer
+    # to a request the Coach may not take either way. Both this and the rule
+    # list in `guard` are decided before any Intent path is chosen, so an
+    # out-of-scope message never reaches one.
+    if decision.out_of_scope:
+        return "refuse"
     if decision.confidence < CONFIDENCE_FLOOR:
         return "clarify"
     # The first Intent is the one that runs. Chaining a second one onto the
@@ -191,6 +224,17 @@ def next_node(state: TurnState, config: RunnableConfig) -> str:
     if decision.intents and decision.intents[0] == "update_profile":
         return "update_profile"
     return "dispatch"
+
+
+async def refuse(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
+    """The only node that writes a Refusal, and it writes a template. Whichever
+    detector fired, the wording comes from `guardrail`, never from a model."""
+    ctx = turn_context(config)
+    ctx.reply = refusal(ctx.subject or OUT_OF_SCOPE)
+    ctx.refused = True
+    ctx.intent = "refusal"
+    # `pending_clarification` is not returned, so a Refusal leaves it standing.
+    return {"messages": [{"role": "coach", "text": ctx.reply.text}]}
 
 
 async def clarify(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
@@ -347,18 +391,22 @@ def build_graph(checkpointer: Any):
     builder = StateGraph(TurnState)
     for name, node in (
         ("load_profile", load_profile),
+        ("guard", guard),
         ("route", route),
         ("clarify", clarify),
         ("update_profile", update_profile),
         ("dispatch", dispatch),
+        ("refuse", refuse),
     ):
         builder.add_node(name, measured(name, node))
     builder.add_edge(START, "load_profile")
-    builder.add_edge("load_profile", "route")
+    builder.add_edge("load_profile", "guard")
+    builder.add_conditional_edges("guard", after_guard, ["refuse", "route"])
     builder.add_conditional_edges(
-        "route", next_node, ["clarify", "update_profile", "dispatch"]
+        "route", next_node, ["clarify", "update_profile", "dispatch", "refuse"]
     )
     builder.add_conditional_edges("update_profile", after_update, ["clarify", END])
     builder.add_edge("clarify", END)
     builder.add_edge("dispatch", END)
+    builder.add_edge("refuse", END)
     return builder.compile(checkpointer=checkpointer)

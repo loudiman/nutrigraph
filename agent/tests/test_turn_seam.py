@@ -42,8 +42,8 @@ async def test_the_intent_list_is_never_longer_than_two_and_holds_only_the_five(
 async def test_node_events_arrive_before_one_answer_event(seam):
     events = await seam.turn("I ate two eggs")
 
-    assert [type(e) for e in events] == [NodeEvent, NodeEvent, NodeEvent, AnswerEvent]
-    assert [e.node for e in events[:3]] == ["load_profile", "route", "dispatch"]
+    assert [type(e) for e in events] == [NodeEvent] * 4 + [AnswerEvent]
+    assert [e.node for e in events[:4]] == ["load_profile", "guard", "route", "dispatch"]
 
 
 async def test_raw_message_is_stored_unredacted_with_the_turn_identifier(seam):
@@ -112,7 +112,7 @@ async def test_a_low_confidence_turn_ends_with_one_short_question(seam):
 
     events = await seam.turn("hmm")
 
-    assert [e.node for e in events[:3]] == ["load_profile", "route", "clarify"]
+    assert [e.node for e in events[:4]] == ["load_profile", "guard", "route", "clarify"]
     reply = answer(events).reply
     assert reply.text.endswith("?")
     assert [p.intent for p in reply.parts] == ["clarify"]
@@ -167,7 +167,7 @@ async def test_the_floor_is_the_boundary_not_a_range(seam):
 
     events = await seam.turn("what should I eat")
 
-    assert [e.node for e in events[:3]] == ["load_profile", "route", "dispatch"]
+    assert [e.node for e in events[:4]] == ["load_profile", "guard", "route", "dispatch"]
 
 
 # --- the metric record --------------------------------------------------------
@@ -180,7 +180,7 @@ async def test_every_node_writes_an_interaction_event_row(seam):
     await seam.turn("I ate two eggs", turn_id=turn_id)
 
     rows = seam.db.events
-    assert [r.node for r in rows] == ["load_profile", "route", "dispatch"]
+    assert [r.node for r in rows] == ["load_profile", "guard", "route", "dispatch"]
     assert {r.turn_id for r in rows} == {turn_id}
     assert all(r.latency_ms >= 0 for r in rows)
 

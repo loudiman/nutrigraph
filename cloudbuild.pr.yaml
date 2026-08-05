@@ -1,0 +1,46 @@
+# Every pull request. A failure here blocks the merge; nothing is deployed and
+# no pull request is ever verified against a deployed copy.
+steps:
+  # A throwaway PostgreSQL, so the migration, seed and checkpointer assertions
+  # run for real instead of skipping. Never Neon: its free tier is a ceiling.
+  - name: gcr.io/cloud-builders/docker
+    id: postgres
+    args:
+      - run
+      - -d
+      - --name=postgres
+      - --network=cloudbuild
+      - -e=POSTGRES_USER=nutrigraph
+      - -e=POSTGRES_PASSWORD=nutrigraph
+      - -e=POSTGRES_DB=nutrigraph_test
+      - pgvector/pgvector:pg17
+
+  - name: python:3.13-slim
+    id: agent
+    dir: agent
+    env:
+      - NUTRIGRAPH_TEST_DATABASE_URL=postgresql://nutrigraph:nutrigraph@postgres:5432/nutrigraph_test
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -eu
+        pip install --quiet -e ".[dev]"
+        for _ in $(seq 60); do (echo > /dev/tcp/postgres/5432) 2>/dev/null && break; sleep 1; done
+        pytest -q
+
+  - name: node:24-slim
+    id: gateway
+    dir: gateway
+    entrypoint: bash
+    args:
+      - -c
+      - npm ci && npm test && npm run typecheck
+
+  # The eval gate belongs here, after the two seams and before the merge: it
+  # runs the graph against the reference set and fails the build on a drop.
+
+serviceAccount: projects/nutrigraph-2026ldm/serviceAccounts/nutrigraph-build@nutrigraph-2026ldm.iam.gserviceaccount.com
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1200s

@@ -9,6 +9,7 @@ from pathlib import Path
 import psycopg
 
 from .config import Settings
+from .retention import DEMO_WARNING
 
 SEEDS_DIR = Path(__file__).resolve().parents[2] / "seeds"
 PROFILES_FILE = SEEDS_DIR / "profiles.json"
@@ -39,6 +40,8 @@ def main() -> int:
     settings = Settings.from_env()
     seeded = seed_profiles(settings.database_url)
     print(f"seeded {len(seeded)} demo Profiles: {', '.join(seeded)}")
+    # The warning, where a developer puts data in (ADR 0002).
+    print(DEMO_WARNING)
     return 0
 
 
