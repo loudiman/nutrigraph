@@ -1,0 +1,331 @@
+[
+  {
+    "slug": "dga-2025-2030",
+    "title": "Dietary Guidelines for Americans, 2025-2030",
+    "source_url": "https://cdn.realfood.gov/DGA_508.pdf",
+    "publisher": "U.S. Departments of Agriculture and Health and Human Services",
+    "published_on": "2026-01-07",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "who-healthy-diet-factsheet",
+    "title": "Healthy diet fact sheet",
+    "source_url": "https://www.who.int/publications/m/item/healthy-diet-factsheet394",
+    "publisher": "World Health Organization",
+    "published_on": "2020-04-29",
+    "licence_id": "cc-by-nc-sa-3.0-igo"
+  },
+  {
+    "slug": "who-healthy-diet-qa",
+    "title": "Healthy diet: keys to eating well",
+    "source_url": "https://www.who.int/news-room/questions-and-answers/item/healthy-diet-keys-to-eating-well",
+    "publisher": "World Health Organization",
+    "published_on": "2023-05-05",
+    "licence_id": "cc-by-nc-sa-3.0-igo"
+  },
+  {
+    "slug": "nhs-eatwell-guide",
+    "title": "The Eatwell Guide",
+    "source_url": "https://www.nhs.uk/live-well/eat-well/food-guidelines-and-food-labels/the-eatwell-guide/",
+    "publisher": "NHS",
+    "published_on": "2022-11-29",
+    "licence_id": "uk-crown-copyright"
+  },
+  {
+    "slug": "nhs-balanced-diet",
+    "title": "Eating a balanced diet",
+    "source_url": "https://www.nhs.uk/live-well/eat-well/how-to-eat-a-balanced-diet/eating-a-balanced-diet/",
+    "publisher": "NHS",
+    "licence_id": "uk-crown-copyright"
+  },
+  {
+    "slug": "nhs-starchy-foods",
+    "title": "Starchy foods and carbohydrates",
+    "source_url": "https://www.nhs.uk/live-well/eat-well/food-types/starchy-foods-and-carbohydrates/",
+    "publisher": "NHS",
+    "licence_id": "uk-crown-copyright"
+  },
+  {
+    "slug": "nhs-fat-facts",
+    "title": "Fat: the facts",
+    "source_url": "https://www.nhs.uk/live-well/eat-well/food-types/different-fats-nutrition/",
+    "publisher": "NHS",
+    "licence_id": "uk-crown-copyright"
+  },
+  {
+    "slug": "gov-uk-eatwell-guide",
+    "title": "The Eatwell Guide (publication page)",
+    "source_url": "https://www.gov.uk/government/publications/the-eatwell-guide",
+    "publisher": "Office for Health Improvement and Disparities",
+    "published_on": "2024-01-02",
+    "licence_id": "ogl-v3"
+  },
+  {
+    "slug": "fnri-pdri-2015",
+    "title": "Philippine Dietary Reference Intakes 2015",
+    "source_url": "https://fnri.dost.gov.ph/images/sources/SeminarSeries/41st/PHILIPPINE-DIETARY-REFERENCE-INTAKES-2015.pdf",
+    "publisher": "Food and Nutrition Research Institute, DOST",
+    "published_on": "2015-06-01",
+    "licence_id": "ph-gov-ra8293-s176"
+  },
+  {
+    "slug": "fnri-ngf-2012",
+    "title": "Nutritional Guidelines for Filipinos: a prescription to good nutrition",
+    "source_url": "https://www.fnri.dost.gov.ph/index.php/publications/writers-pool-corner/57-food-and-nutrition/204-nutritional-guidelines-for-filipinos-a-prescription-to-good-nutrition",
+    "publisher": "Food and Nutrition Research Institute, DOST",
+    "published_on": "2012-01-01",
+    "licence_id": "ph-gov-ra8293-s176"
+  },
+  {
+    "slug": "nutrition-gov-basic-nutrition",
+    "title": "Basic Nutrition",
+    "source_url": "https://www.nutrition.gov/topics/basic-nutrition",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-healthy-eating",
+    "title": "Healthy Eating",
+    "source_url": "https://www.nutrition.gov/topics/basic-nutrition/healthy-eating",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-eating-vegetarian",
+    "title": "Eating Vegetarian",
+    "source_url": "https://www.nutrition.gov/topics/basic-nutrition/eating-vegetarian",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-eating-exercise-and-sports",
+    "title": "Eating, Exercise, and Sports",
+    "source_url": "https://www.nutrition.gov/topics/basic-nutrition/eating-exercise-and-sports",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-water-hydration",
+    "title": "Water, Hydration and Health",
+    "source_url": "https://www.nutrition.gov/topics/basic-nutrition/water-hydration-and-health",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-printable-materials",
+    "title": "Printable Materials and Handouts",
+    "source_url": "https://www.nutrition.gov/topics/basic-nutrition/printable-materials-and-handouts",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-whats-in-food",
+    "title": "What's in Food",
+    "source_url": "https://www.nutrition.gov/topics/whats-food",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-carbohydrates",
+    "title": "Carbohydrates",
+    "source_url": "https://www.nutrition.gov/topics/whats-food/carbohydrates",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-proteins",
+    "title": "Protein",
+    "source_url": "https://www.nutrition.gov/topics/whats-food/proteins",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-fats",
+    "title": "Fats",
+    "source_url": "https://www.nutrition.gov/topics/whats-food/fats",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-fiber",
+    "title": "Fiber",
+    "source_url": "https://www.nutrition.gov/topics/whats-food/fiber",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-salt-and-sodium",
+    "title": "Salt and Sodium",
+    "source_url": "https://www.nutrition.gov/topics/whats-food/salt-and-sodium",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-vitamins-and-minerals",
+    "title": "Vitamins and Minerals",
+    "source_url": "https://www.nutrition.gov/topics/whats-food/vitamins-and-minerals",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-phytonutrients",
+    "title": "Phytonutrients and Antioxidants",
+    "source_url": "https://www.nutrition.gov/topics/whats-food/phytonutrients-and-antioxidants",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-food-additives",
+    "title": "Food Additives and Compounds",
+    "source_url": "https://www.nutrition.gov/topics/whats-food/food-additives-and-compounds",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-healthy-living-and-weight",
+    "title": "Healthy Living and Weight",
+    "source_url": "https://www.nutrition.gov/topics/healthy-living-and-weight",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-strategies-for-success",
+    "title": "Strategies for Success",
+    "source_url": "https://www.nutrition.gov/topics/healthy-living-and-weight/strategies-success",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-popular-diets",
+    "title": "What You Should Know About Popular Diets",
+    "source_url": "https://www.nutrition.gov/topics/healthy-living-and-weight/what-you-should-know-about-popular-diets",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-body-image",
+    "title": "Body Image",
+    "source_url": "https://www.nutrition.gov/topics/healthy-living-and-weight/body-image",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-adults",
+    "title": "Nutrition for Adults",
+    "source_url": "https://www.nutrition.gov/topics/nutrition-life-stage/adults",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-older-adults",
+    "title": "Nutrition for Older Adults",
+    "source_url": "https://www.nutrition.gov/topics/nutrition-life-stage/older-adults",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-teens",
+    "title": "Nutrition for Teens",
+    "source_url": "https://www.nutrition.gov/topics/nutrition-life-stage/teens",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-pregnancy",
+    "title": "Nutrition During Pregnancy",
+    "source_url": "https://www.nutrition.gov/topics/nutrition-life-stage/pregnancy",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-breastfeeding",
+    "title": "Nutrition While Breastfeeding",
+    "source_url": "https://www.nutrition.gov/topics/nutrition-life-stage/breastfeeding",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-food-labels",
+    "title": "Food Labels",
+    "source_url": "https://www.nutrition.gov/topics/shopping-cooking-and-meal-planning/food-labels",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-shopping-and-meal-planning",
+    "title": "Food Shopping and Meal Planning",
+    "source_url": "https://www.nutrition.gov/topics/shopping-cooking-and-meal-planning/food-shopping-and-meal-planning",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-meal-prep-and-cooking",
+    "title": "Meal Prep and Cooking Tips",
+    "source_url": "https://www.nutrition.gov/topics/shopping-cooking-and-meal-planning/meal-prep-and-cooking-tips",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-sustainable-eating",
+    "title": "Sustainable Eating",
+    "source_url": "https://www.nutrition.gov/topics/shopping-cooking-and-meal-planning/sustainable-eating",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-diabetes",
+    "title": "Diabetes and Diet",
+    "source_url": "https://www.nutrition.gov/topics/diet-and-health-conditions/diabetes",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-heart-health",
+    "title": "Heart Health and Diet",
+    "source_url": "https://www.nutrition.gov/topics/diet-and-health-conditions/heart-health",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-high-blood-pressure",
+    "title": "High Blood Pressure and Diet",
+    "source_url": "https://www.nutrition.gov/topics/diet-and-health-conditions/high-blood-pressure",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-food-allergies",
+    "title": "Food Allergies and Intolerances",
+    "source_url": "https://www.nutrition.gov/topics/diet-and-health-conditions/food-allergies-and-intolerances",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-overweight-and-obesity",
+    "title": "Overweight and Obesity",
+    "source_url": "https://www.nutrition.gov/topics/diet-and-health-conditions/overweight-and-obesity",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-dietary-supplements",
+    "title": "Dietary Supplements",
+    "source_url": "https://www.nutrition.gov/topics/dietary-supplements",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-food-safety",
+    "title": "Food Safety",
+    "source_url": "https://www.nutrition.gov/topics/food-safety",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  },
+  {
+    "slug": "nutrition-gov-exercise-and-fitness",
+    "title": "Exercise and Fitness",
+    "source_url": "https://www.nutrition.gov/topics/exercise-and-fitness",
+    "publisher": "nutrition.gov, USDA National Agricultural Library",
+    "licence_id": "us-gov-public-domain"
+  }
+]

@@ -19,7 +19,7 @@ from .db import PostgresDatabase
 from .deps import Deps
 from .graph import build_graph
 from .models import TurnEventEnvelope, TurnRequest
-from .providers import Models, langchain_factory
+from .providers import Models, langchain_embedding_factory, langchain_factory
 from .turn import run_turn
 
 NDJSON = "application/x-ndjson"
@@ -69,6 +69,8 @@ def create_app(settings: Settings) -> FastAPI:
                 factory=langchain_factory(settings.model_provider),
                 schema_model=settings.schema_model,
                 prose_model=settings.prose_model,
+                embedding_factory=langchain_embedding_factory(settings.model_provider),
+                embedding_model=settings.embedding_model,
             ),
         )
         app.state.graph = build_graph(saver)

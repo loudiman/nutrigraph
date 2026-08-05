@@ -4,12 +4,16 @@ model call, and the Turn refuses, runs an Intent path, dispatches, or asks one
 clarifying question.
 
 `guard` sits before `route` because a message the rule list catches must never
-reach an Intent path. `refuse` is the only node that writes a Refusal, and both
-detectors — the rule list and the router's `out_of_scope` flag — end there.
+reach an Intent path — including the Corpus, which an out-of-scope question is
+never allowed to search. `refuse` is the only node that writes a Refusal, and
+both detectors — the rule list and the router's `out_of_scope` flag — end there.
 
-`update_profile` is the first Intent path, and it sits after both detectors. It
-writes the change to PostgreSQL and to nothing else, so the Profile the next
-Turn reads is the changed one.
+Two Intent paths are built, both after both detectors, and `INTENT_PATHS` names
+the node each starts at. `update_profile` writes the change to PostgreSQL and to
+nothing else, so the Profile the next Turn reads is the changed one.
+`ask_question` is `retrieve` then `answer_question`: a question the guardrail
+permits, a general chronic-disease question among them, passes through `guard`
+untouched and is answered from the Corpus with a Citation on every claim.
 
 The state holds only what survives the Turn. Everything rebuilt every Turn
 lives on the `TurnContext`, which travels in the config and therefore never
@@ -32,13 +36,14 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from pydantic import ValidationError
 
-from .db import InteractionEvent
+from .db import InteractionEvent, RetrievedChunk
 from .deps import Deps
 from .guardrail import OUT_OF_SCOPE, Subject, match_rule, refusal
 from .models import (
     INTENTS,
     LIST_FIELDS,
     UPDATABLE_FIELDS,
+    Answer,
     CoachReply,
     Profile,
     ProfileUpdate,
@@ -56,6 +61,10 @@ CHECKPOINTED = ("user_id", "messages", "pending_clarification")
 
 # Below this the Turn cannot be classified, so the Coach asks instead of guessing.
 CONFIDENCE_FLOOR = 0.6
+
+# The Intent paths that are built, and the node each one starts at. An Intent
+# with no entry here goes to the stub, so adding a path is one line and a node.
+INTENT_PATHS = {"update_profile": "update_profile", "ask_question": "retrieve"}
 
 # The Intents whose answer is scanned against the Profile's allergies.
 #
@@ -115,6 +124,32 @@ Ask exactly one short question that would let you classify it. One sentence, no
 preamble, no list, no apology. Address the User by the placeholder you are given,
 written exactly as it appears."""
 
+# How many Corpus passages one question is answered from.
+PASSAGES = 5
+# Cosine similarity below which the Corpus does not cover the question. Under
+# it the Coach says so and makes no provider call at all, so there is no room
+# for an answer from the model's memory.
+RELEVANCE_FLOOR = 0.55
+
+NOT_IN_THE_CORPUS = (
+    "That is not in the nutrition guidance I cite from, so I would rather point "
+    "you at a dietitian than guess at it."
+)
+
+ANSWER_SYSTEM = """You are a nutrition Coach answering one question from the
+Corpus passages given to you, and from nothing else.
+
+Answer in at most three short sentences: the User is reading this while cooking.
+
+Every nutrition claim you make carries a Citation. A Citation names the
+passage's document and its section or page, copied exactly as they are written
+above the passage. An answer that asserts a nutrition fact with no Citation is
+rejected, so cite or do not claim.
+
+If the passages do not answer the question, say so plainly in one sentence, set
+makes_a_nutrition_claim to false, give no citations, and invent nothing. Never
+answer a nutrition question from your own memory."""
+
 
 class TurnState(TypedDict):
     user_id: str
@@ -135,6 +170,9 @@ class TurnContext:
     models: TurnModels | None = None
     decision: RouterDecision | None = None
     reply: CoachReply | None = None
+    # What retrieval found this Turn. Rebuilt every Turn, so it never enters the
+    # checkpoint — a Corpus passage is not part of the Thread.
+    passages: list[RetrievedChunk] = field(default_factory=list)
     # What the rule list caught, if anything, and whether the Turn was refused.
     # A Refusal is this codebase's own words, so the text scan does not read it.
     subject: Subject | None = None
@@ -211,19 +249,20 @@ async def route(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
 def next_node(state: TurnState, config: RunnableConfig) -> str:
     decision = turn_context(config).decision
     assert decision is not None
-    # Out of scope beats an unsure classification: refusing is the safer answer
-    # to a request the Coach may not take either way. Both this and the rule
-    # list in `guard` are decided before any Intent path is chosen, so an
-    # out-of-scope message never reaches one.
+    # Out of scope beats an unsure classification, and beats every Intent path:
+    # refusing is the safer answer to a request the Coach may not take either
+    # way. Both this and the rule list in `guard` are decided before a path is
+    # chosen, so an out-of-scope message never reaches one — the Corpus among
+    # them, which such a question is never allowed to search.
     if decision.out_of_scope:
         return "refuse"
     if decision.confidence < CONFIDENCE_FLOOR:
         return "clarify"
-    # The first Intent is the one that runs. Chaining a second one onto the
-    # first is a later slice; until then the stub says what was decided.
-    if decision.intents and decision.intents[0] == "update_profile":
-        return "update_profile"
-    return "dispatch"
+    # The first Intent is the one that runs, because the order matters and the
+    # second reads what the first produced. Chaining a second one onto the first
+    # is a later slice; until then the stub says what was decided.
+    first = decision.intents[0] if decision.intents else None
+    return INTENT_PATHS.get(first, "dispatch")
 
 
 async def refuse(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
@@ -251,6 +290,67 @@ async def clarify(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
         "pending_clarification": question,
         "messages": [{"role": "coach", "text": question}],
     }
+
+
+async def retrieve(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
+    """The question becomes a vector and the Corpus answers with passages. One
+    embedding call, through the same wrapper every other provider call uses."""
+    ctx = turn_context(config)
+    ctx.intent = "ask_question"
+    vector, call = await models(ctx).embed_query(ctx.raw_message)
+    ctx.record(call)
+    found = await ctx.deps.db.search_corpus(vector, limit=PASSAGES)
+    ctx.passages = [chunk for chunk in found if chunk.score >= RELEVANCE_FLOOR]
+    return {}
+
+
+def _passages(ctx: TurnContext) -> str:
+    return "\n\n".join(
+        f"document: {chunk.document}\nsection or page: {chunk.locator}\n{chunk.text}"
+        for chunk in ctx.passages
+    )
+
+
+async def answer_question(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
+    """The cited Answer. When nothing was retrieved the Coach says so, and no
+    provider call is made — there is nowhere for an invented claim to come from."""
+    ctx = turn_context(config)
+    ctx.intent = "ask_question"
+    if not ctx.passages:
+        answer = Answer(text=NOT_IN_THE_CORPUS, makes_a_nutrition_claim=False)
+    else:
+        turn = models(ctx)
+        answer, call = await turn.fill(
+            Answer,
+            system=ANSWER_SYSTEM,
+            user=f"Question: {ctx.raw_message}\n\nPassages:\n\n{_passages(ctx)}",
+        )
+        ctx.record(call)
+        # `fill` hands back what the provider wrote, which still holds the
+        # placeholders. Put the identifiers back before the User reads it.
+        answer = answer.model_copy(
+            update={
+                "text": turn.restore(answer.text),
+                "citations": [
+                    citation.model_copy(
+                        update={
+                            "document": turn.restore(citation.document),
+                            "locator": turn.restore(citation.locator),
+                        }
+                    )
+                    for citation in answer.citations
+                ],
+            }
+        )
+    ctx.reply = CoachReply(
+        text=answer.text,
+        parts=[
+            ReplyPart(
+                intent="ask_question", text=answer.text, citations=answer.citations
+            )
+        ],
+    )
+    return {"messages": [{"role": "coach", "text": answer.text}]}
 
 
 def _say(value: Any) -> str:
@@ -395,6 +495,8 @@ def build_graph(checkpointer: Any):
         ("route", route),
         ("clarify", clarify),
         ("update_profile", update_profile),
+        ("retrieve", retrieve),
+        ("answer_question", answer_question),
         ("dispatch", dispatch),
         ("refuse", refuse),
     ):
@@ -403,10 +505,14 @@ def build_graph(checkpointer: Any):
     builder.add_edge("load_profile", "guard")
     builder.add_conditional_edges("guard", after_guard, ["refuse", "route"])
     builder.add_conditional_edges(
-        "route", next_node, ["clarify", "update_profile", "dispatch", "refuse"]
+        "route",
+        next_node,
+        ["clarify", "update_profile", "retrieve", "dispatch", "refuse"],
     )
     builder.add_conditional_edges("update_profile", after_update, ["clarify", END])
     builder.add_edge("clarify", END)
+    builder.add_edge("retrieve", "answer_question")
+    builder.add_edge("answer_question", END)
     builder.add_edge("dispatch", END)
     builder.add_edge("refuse", END)
     return builder.compile(checkpointer=checkpointer)

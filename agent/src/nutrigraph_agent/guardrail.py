@@ -48,6 +48,34 @@ def _any(*terms: str) -> re.Pattern[str]:
     return re.compile("|".join(terms), re.IGNORECASE)
 
 
+# A figure with a unit is not a clinical claim by itself. Public dietary
+# guidance is full of milligram figures — the sodium limit is one of its
+# headline facts — so a bare `\d+ mg` refuses the Corpus's own vocabulary while
+# catching no actual prescription. The signal is the prescriptive framing around
+# the figure, not the figure: an amount counts only with a dosage marker beside
+# it, in the same sentence, in either order.
+#
+# The unit list is unchanged on purpose. This narrows a rule; it does not widen
+# one, and adding `g` or `iu` would be a separate decision about the boundary.
+AMOUNT = r"\d[\d,]*\s*(?:mg|mcg|ml)\b"
+
+DOSAGE_MARKER = (
+    r"tak(?:e|es|ing|en)|took|dos(?:e|es|age|ages)|supplements?|"
+    r"tablets?|capsules?|pills?|sachets?|injections?|"
+    # A counted frequency is a prescription's rhythm. Bare "per day" is not:
+    # "less than 2,300 mg of sodium per day" is how guidance states a limit.
+    r"(?:once|twice|thrice|three times|four times|\d+ times)"
+    r"\s+(?:a\s+|per\s+)?(?:day|daily|week|weekly)"
+)
+
+# Either order, within one sentence: "take 500 mg", "500 mg twice daily",
+# "one 500 mg tablet". The window stops at sentence punctuation, so a marker in
+# one sentence cannot arm a figure in the next.
+DOSAGE = _any(
+    rf"\b(?:{DOSAGE_MARKER})\b[^.?!]{{0,40}}?{AMOUNT}",
+    rf"{AMOUNT}[^.?!]{{0,40}}?\b(?:{DOSAGE_MARKER})\b",
+)
+
 # Diagnosis, treatment, and dosage.
 CLINICAL = _any(
     r"\bdiagnos(?:e|is|ed|ing)\b",
@@ -55,7 +83,7 @@ CLINICAL = _any(
     r"\bprescri(?:be|bed|ption)\b",
     r"\bdosages?\b",
     r"\bdose\b",
-    r"\b\d+\s*(?:mg|mcg|ml)\b",
+    DOSAGE.pattern,
     r"\bcure[sd]?\b",
     r"\btreatments?\b",
     r"\btreat (?:my|his|her|this|the)\b",
@@ -227,13 +255,17 @@ def refusal(subject: Subject) -> CoachReply:
 # answer, before the answer event is sent, so no unapproved sentence reaches the
 # screen. A Refusal is not scanned: it is this file's own words, and it names
 # the boundary in exactly the vocabulary the scan looks for.
+#
+# `DOSAGE` is the same object the rule list uses. One pattern, two detectors, so
+# the way in and the way out cannot drift apart: whatever the Coach may not be
+# asked for is also what it may not say.
 MEDICAL_CLAIM = _any(
     r"\bcure[sd]?\b",
     r"\btreats?\b",
     r"\bheals?\b",
     r"\bdiagnos(?:e|is|ed|es)\b",
     r"\bprescri(?:be|bed|ption)\b",
-    r"\b\d+\s*(?:mg|mcg|ml)\b",
+    DOSAGE.pattern,
     r"\byou (?:have|are suffering from) (?:" + "|".join(DISEASES) + r")\b",
     r"\bmedically proven\b",
     r"\breplaces? your medication\b",

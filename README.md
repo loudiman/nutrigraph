@@ -2,7 +2,7 @@
 
 A conversational nutrition coach built on LangGraph, with a Node.js/Express API gateway in front of a Python/FastAPI agent service.
 
-**Status: guarded, and the first Intent path.** One Gemini call classifies each message into Intents. The Turn refuses what is outside the Coach's job, runs `update_profile` — the User changes a Profile fact by saying it — dispatches every other Intent to a stub, or asks one clarifying question. The work is charted as a Wayfinder map: [Map: NutriGraph build spec](https://github.com/loudiman/nutrigraph/issues/1). The vocabulary is fixed by [`CONTEXT.md`](CONTEXT.md) and the hard-to-reverse choices by [`docs/adr/`](docs/adr/).
+**Status: guarded, and answering.** A rule list refuses what is outside the Coach's job before any model runs. Past it, one Gemini call classifies each message into Intents, and the Turn runs `update_profile` — the User changes a Profile fact by saying it — answers a nutrition question from a curated Corpus with a Citation on every claim, dispatches every other Intent to a stub, or asks one clarifying question. The work is charted as a Wayfinder map: [Map: NutriGraph build spec](https://github.com/loudiman/nutrigraph/issues/1). The vocabulary is fixed by [`CONTEXT.md`](CONTEXT.md) and the hard-to-reverse choices by [`docs/adr/`](docs/adr/).
 
 ## Layout
 
@@ -10,7 +10,7 @@ A conversational nutrition coach built on LangGraph, with a Node.js/Express API 
 gateway/                  Node and Express: the session, the turn identifier, the event stream
 agent/                    Python and FastAPI: the graph, the nodes, the migrations
 agent/migrations/         numbered SQL files, owned by the agent service — read its README first
-agent/seeds/              demo Profiles
+agent/seeds/              demo Profiles, and the Corpus manifest
 gateway/public/           the minimal test client, and the demo-data-only warning above the box
 gateway/src/generated/    TypeScript types, generated from the agent's OpenAPI document
 deploy/                   the scheduled jobs the pipeline does not own
@@ -38,6 +38,7 @@ cd agent
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/nutrigraph-migrate  # numbered SQL files, in order; safe to re-run
 .venv/bin/nutrigraph-seed     # the demo Profiles; safe to run twice
+.venv/bin/nutrigraph-ingest   # the Corpus: fetch, chunk, embed, store; slow, safe to run twice
 .venv/bin/python -m nutrigraph_agent.main
 
 cd ../gateway
@@ -60,13 +61,35 @@ The gateway issues a signed cookie carrying a seeded `user_id`, creates the one 
 
 Below a confidence of 0.6 the Turn goes to `clarify`, which asks one short question and ends. That question is `pending_clarification`, the only place the Coach stops and waits for the User. It survives until a Turn is classified at 0.6 or higher, and `route` clears it there. A second clarify Turn replaces the value rather than adding a second one, and a Refusal turn leaves it standing.
 
-`dispatch` is the stub the remaining Intent paths replace: it says what the router decided and stops.
+`INTENT_PATHS` names the node each built Intent path starts at: `update_profile` runs its own node, and `ask_question` goes to `retrieve` and then `answer_question`. The *first* Intent is the one that runs, because the order matters and the second reads what the first produced. `dispatch` is the stub the remaining Intent paths replace: it says what the router decided and stops.
+
+## The Corpus, and the cited Answer
+
+About forty public documents — the Dietary Guidelines for Americans 2025-2030, the WHO healthy-diet fact sheet and Q&A, the NHS Eatwell explainer, the FNRI Nutritional Guidelines for Filipinos and the Philippine Dietary Reference Intakes, and the nutrition.gov topic pages. The survey behind the choice is [`docs/research/nutrition-corpus.md`](docs/research/nutrition-corpus.md); the manifest is `agent/seeds/corpus.json`.
+
+Gemini Flash holds a very large context, so a corpus this size does not *force* retrieval. Retrieval earns its place through the Citation with page provenance, the token cost of each Turn, and the ability to filter the index by licence.
+
+**Licences are data, not documentation.** Every chunk carries its licence identifier and its attribution string, written at ingestion time. They are repeated on the chunk row on purpose, so a licence filter never needs a join:
+
+```sql
+delete from corpus_chunk where not commercial_use;   -- one predicate, no join
+```
+
+WHO's attribution requirement is then satisfied automatically, because the string travels with the chunk. **EFSA prose is excluded**: CC BY-ND does not license the adapted material that chunking prose into an index arguably produces, so a European reference value enters as a number in a data table instead. `corpus.FORBIDDEN_LICENCES` is that decision as code, and the manifest refuses a document that names one. **WHO stays in**, because this demonstration is not commercial — and the `commercial_use` flag is what makes that reversible in one statement.
+
+**The vectors.** `gemini-embedding-001` returns 3072 dimensions, truncated to 768 and **re-normalized by hand**, because version 1 of the model does not re-normalize a truncated vector. HNSW accepts at most 2000 dimensions, which is why the full output is not used ([ADR 0001](docs/adr/0001-gemini-free-tier-and-768-dimension-embeddings.md)). The column is `vector(768)` with an HNSW cosine index, and changing that number re-indexes the whole Corpus.
+
+**Ingestion is its own command**, because it talks to forty web servers and to the embedding model, and tying that to the two-second `nutrigraph-seed` would make it a two-minute one. It is safe to run twice: a document is keyed by its slug and its chunks are replaced wholesale, and a document whose extracted text has not changed is skipped before any embedding call.
+
+**The Answer.** `Answer` holds `text` and `citations`, and **a nutrition claim with an empty citations list fails schema validation** — an unsupported claim is a build failure, not a matter of taste. Each Citation names the document and the section or page. When no passage clears the relevance floor the Coach says the Corpus does not cover the question and makes no provider call at all, so there is nowhere for an invented claim to come from.
 
 ## The guardrail
 
 Four subjects sit outside the Coach's job: diagnosis, treatment, and dosage; eating-disorder content; nutrition for pregnancy, breastfeeding, and children; and the personal diet management of a chronic disease. A general factual question about a chronic disease is still answered from the Corpus — only a personal plan for it is refused, and a request framed as being about a friend is refused on the same terms as one in the first person.
 
 Two detectors, and either one produces a Refusal. `guard` runs a deterministic rule list — `agent/src/nutrigraph_agent/guardrail.py`, readable by a reviewer and provable by a test — before the router and with no model, so a message it catches never reaches an Intent path. The router's `out_of_scope` flag catches meaning no word list predicts. Both end at `refuse`, the only node that writes a Refusal.
+
+**A figure with a unit is not a clinical claim by itself.** Both detectors read one shared `DOSAGE` pattern, which needs a prescriptive marker — *take*, *dose*, *tablet*, *supplement*, a counted frequency like *twice daily* — standing in the same sentence as the amount. So "less than 2,300 mg of sodium per day" is a nutrition fact the Corpus may state and a User may ask about, and "take 500 mg twice daily" is refused on the way in and blocked on the way out. A Citation is not an exemption: a prescriptive sentence that carries one is still blocked, or the Corpus would be a bypass.
 
 The Refusal is a template in code: it names the boundary, gives the disclaimer, points to a professional, and offers what the Coach can do instead. Eating-disorder content additionally carries a help-line. Because it is assembled from those strings, it cannot drift.
 
@@ -93,8 +116,9 @@ A column name cannot be a query parameter, so `Database.update_profile` whitelis
 Not a list of nodes. Work that fills a fixed schema from text uses the schema tier; work that reasons or writes prose for the User uses the prose tier. A node picks `TurnModels.fill` or `TurnModels.write` and inherits its model from the rule — no node names a model.
 
 ```
-MODEL_SCHEMA=gemini-3.5-flash-lite   # route, and every later schema filler
-MODEL_PROSE=gemini-3.5-flash         # clarify, and every later writer
+MODEL_SCHEMA=gemini-3.5-flash-lite    # route, the cited Answer, and every later schema filler
+MODEL_PROSE=gemini-3.5-flash          # clarify, and every later writer
+MODEL_EMBEDDING=gemini-embedding-001  # the Corpus index and the query that searches it
 ```
 
 **Swapping the provider is one line.** `MODEL_PROVIDER` in `.env`, plus that vendor's LangChain package and its key variable:
@@ -111,6 +135,8 @@ Every call goes through `init_chat_model`, which is written on one line in `agen
 Gemini runs on the free tier, so Google uses submitted prompts to improve its products and a person may read them. Redaction is therefore a wrapper on every provider call, not a graph node ([ADR 0002](docs/adr/0002-redact-before-the-provider-not-before-storage.md)). It runs on the router call and on the retry after a schema failure.
 
 Replaced with placeholders: person names, email addresses, phone numbers, street addresses, exact dates of birth, government identity numbers. Sent unchanged: weight, height, allergies, diet pattern, goals, and the food — the Coach cannot work without them. A private `redaction_placeholder` table maps a placeholder back, so the answer still addresses the User by name. **The `message` row holds the raw, unredacted text**; redaction happens at the provider call and nowhere else.
+
+This covers the vector half too. Embedding the User's question is a provider call like any other, so `embed_query` and `embed_documents` sit on the same wrapper and the guard test scans what reached the embedding model as well.
 
 A node cannot opt out: it holds a `TurnModels`, which owns the Redactor, and there is no route to a chat model that skips it. `agent/tests/test_redaction_wrapper.py` is the guard — it drives every shape of Turn and asserts against the faked provider that no unredacted identifier ever arrived, and it fails if a second module reaches a provider.
 

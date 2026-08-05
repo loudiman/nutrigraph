@@ -24,16 +24,24 @@ from nutrigraph_agent.guardrail import (
     SAFE_MESSAGE,
     match_rule,
     refusal,
+    scan_reply,
 )
-from nutrigraph_agent.models import AnswerEvent, RouterDecision
+from nutrigraph_agent.models import Answer, AnswerEvent, Citation, RouterDecision
 
 from .conftest import answer
+from .fakes import EGGS_CHUNK
 
 SOURCE = Path(__file__).resolve().parents[1] / "src" / "nutrigraph_agent"
 
 OUT_OF_SCOPE_DECISION = RouterDecision(intents=[], confidence=0.9, out_of_scope=True)
 UNSURE = RouterDecision(intents=[], confidence=0.2)
 QUESTION = RouterDecision(intents=["ask_question"], confidence=0.93)
+# What the Corpus path answers a permitted question with, so a test can assert
+# that the guardrail let it reach the Corpus and not only the router.
+CITED = Answer(
+    text="Fibre slows how quickly sugar enters the blood.",
+    citations=[Citation(document=EGGS_CHUNK.document, locator=EGGS_CHUNK.locator)],
+)
 
 # One message for each of the four subjects, and the Refusal each must produce.
 SUBJECTS = {
@@ -133,24 +141,32 @@ async def test_the_refusal_text_is_a_template_and_no_model_wrote_it(seam):
 
 
 async def test_a_general_question_about_a_chronic_disease_is_answered(seam):
-    seam.provider.script(QUESTION)
+    seam.provider.script(QUESTION, CITED)
 
     events = await seam.turn("What is type 2 diabetes, and how does fibre affect blood sugar?")
 
-    # It reaches the Intent path. The Corpus and the Citation arrive in a later
-    # slice; what this slice owes is that the guardrail let the question through.
-    assert [e.node for e in events[:4]] == ["load_profile", "guard", "route", "dispatch"]
-    assert [p.intent for p in answer(events).reply.parts] == ["ask_question"]
+    # It reaches the Intent path and the Corpus. The guardrail letting a general
+    # question through is what makes the Citation on it worth anything.
+    assert [e.node for e in events[:5]] == [
+        "load_profile", "guard", "route", "retrieve", "answer_question",
+    ]
+    part = answer(events).reply.parts[0]
+    assert part.intent == "ask_question"
+    assert [c.document for c in part.citations] == [EGGS_CHUNK.document]
 
 
 async def test_only_the_personal_plan_for_that_same_disease_is_refused(seam):
-    seam.provider.script(QUESTION)
+    seam.provider.script(QUESTION, CITED)
 
     general = await seam.turn("Which foods raise blood sugar the most?")
     personal = await seam.turn("My blood sugar is high — plan my meals around it")
 
-    assert [e.node for e in general[:4]] == ["load_profile", "guard", "route", "dispatch"]
+    assert [e.node for e in general[:5]] == [
+        "load_profile", "guard", "route", "retrieve", "answer_question",
+    ]
     assert [e.node for e in personal[:3]] == ["load_profile", "guard", "refuse"]
+    # The refused Turn never searched the Corpus; the permitted one did.
+    assert len(seam.db.searched) == 1
 
 
 async def test_a_request_about_a_friend_is_refused_on_the_same_terms(seam):
@@ -190,6 +206,47 @@ async def test_an_answer_the_scan_passes_goes_out_unchanged(seam):
     events = await seam.turn("I ate two eggs and pandesal")
 
     assert answer(events).reply.text != SAFE_MESSAGE
+
+
+# A figure with a unit is not a clinical claim by itself; the prescriptive
+# framing around it is. Both detectors read the same `DOSAGE` pattern, so both
+# lists are checked here against the same pairs.
+NOT_A_DOSAGE = (
+    "The general population aged 14 and above should consume less than "
+    "2,300 mg of sodium per day.",
+    "Adults should get about 400 mcg of folate a day from food.",
+    "A cup of milk gives roughly 300 mg of calcium.",
+    "is 2300 mg of sodium a lot?",
+)
+
+A_DOSAGE = (
+    "Take 500 mg of ferrous sulfate twice daily.",
+    "You should take 1000 mg of vitamin C every morning.",
+    "500 mg twice daily is the right amount for you.",
+    "One 500 mg tablet with food.",
+    "Start a 2000 mcg B12 supplement.",
+    "is it safe to take 500 mg of iron?",
+)
+
+
+@pytest.mark.parametrize("text", NOT_A_DOSAGE)
+def test_a_figure_from_public_guidance_is_not_a_medical_claim(text):
+    """Public dietary guidance is full of milligram figures. Refusing them makes
+    the Corpus unusable for its headline facts and catches no prescription."""
+    assert scan_reply(text) is None
+    assert match_rule(text) is None
+
+
+@pytest.mark.parametrize("text", A_DOSAGE)
+def test_a_prescriptive_figure_is_still_a_medical_claim(text):
+    assert scan_reply(text) is not None
+    assert match_rule(text) is CLINICAL_SUBJECT
+
+
+def test_a_marker_in_one_sentence_does_not_arm_a_figure_in_the_next():
+    """The window stops at sentence punctuation, so 'take' in an earlier
+    sentence cannot turn a later nutrition fact into a dosage."""
+    assert scan_reply("Take a walk after dinner. Aim for 2,300 mg of sodium.") is None
 
 
 async def test_a_refusal_is_not_rewritten_by_the_scan_that_would_match_its_words(seam):

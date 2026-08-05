@@ -3,6 +3,7 @@ PostgreSQL; the turn seam swaps a fake in for it."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 from uuid import UUID
@@ -16,6 +17,42 @@ PROFILE_COLUMNS = """
     user_id, name, sex, age, height_cm, weight_kg, target_weight_kg,
     activity_level, diet_pattern, units, allergies, disliked_foods
 """
+
+# One predicate excludes every non-commercial chunk, and it needs no join,
+# because `commercial_use` is written onto the chunk row at ingestion time
+# beside the licence identifier and the attribution string. A commercial review
+# runs `delete from corpus_chunk where not commercial_use` and is finished.
+COMMERCIAL_ONLY = "commercial_use"
+
+SEARCH_CORPUS = f"""
+select d.title as document, d.source_url, c.locator, c.text,
+       c.licence_id, c.attribution, c.{COMMERCIAL_ONLY} as commercial_use,
+       1 - (c.embedding <=> %(query)s::vector) as score
+from corpus_chunk c join corpus_document d using (document_id)
+order by c.embedding <=> %(query)s::vector
+limit %(limit)s
+"""
+
+
+def vector_literal(values: Sequence[float]) -> str:
+    """pgvector's text input. No adapter to register, and no dependency beyond
+    psycopg — the cast in the query does the rest."""
+    return "[" + ",".join(repr(float(value)) for value in values) + "]"
+
+
+@dataclass(frozen=True)
+class RetrievedChunk:
+    """One Corpus chunk, holding both halves of a Citation and the licence terms
+    it was ingested under."""
+
+    document: str
+    source_url: str
+    locator: str
+    text: str
+    licence_id: str
+    attribution: str
+    commercial_use: bool
+    score: float
 
 
 class Database(Protocol):
@@ -32,6 +69,10 @@ class Database(Protocol):
     async def store_redaction_map(
         self, *, turn_id: UUID, mapping: dict[str, str]
     ) -> None: ...
+
+    async def search_corpus(
+        self, embedding: Sequence[float], *, limit: int = 5
+    ) -> list[RetrievedChunk]: ...
 
 
 @dataclass(frozen=True)
@@ -117,3 +158,15 @@ class PostgresDatabase:
                 "values (%s, %s, %s) on conflict do nothing",
                 [(str(turn_id), k, v) for k, v in mapping.items()],
             )
+
+    async def search_corpus(
+        self, embedding: Sequence[float], *, limit: int = 5
+    ) -> list[RetrievedChunk]:
+        """Nearest chunks by cosine distance, through the HNSW index."""
+        async with self._pool.connection() as conn:
+            cur = await conn.cursor(row_factory=dict_row).execute(
+                SEARCH_CORPUS,
+                {"query": vector_literal(embedding), "limit": limit},
+            )
+            rows = await cur.fetchall()
+        return [RetrievedChunk(**row) for row in rows]

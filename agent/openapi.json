@@ -127,6 +127,40 @@
         "title": "AnswerEvent",
         "description": "The answer text, held back and sent as one event at the end.\n\nA later slice inserts the guardrail text scan immediately before this event\nis emitted, and does not have to change this contract."
       },
+      "Citation": {
+        "properties": {
+          "document": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Document",
+            "description": "The title of the Corpus document, exactly as given."
+          },
+          "locator": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Locator",
+            "description": "The section heading or page number within that document, exactly as given."
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document",
+          "locator"
+        ],
+        "title": "Citation",
+        "description": "The pointer from a claim in an answer to the Corpus document, and the\nplace within it, that supports the claim."
+      },
       "CoachReply": {
         "properties": {
           "text": {
@@ -234,6 +268,13 @@
           "text": {
             "type": "string",
             "title": "Text"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "type": "array",
+            "title": "Citations"
           }
         },
         "type": "object",

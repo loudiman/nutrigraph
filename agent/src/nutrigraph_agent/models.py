@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, RootModel
+from pydantic import BaseModel, Field, RootModel, model_validator
 
 
 class Profile(BaseModel):
@@ -88,11 +88,63 @@ class RouterDecision(BaseModel):
     )
 
 
+class Citation(BaseModel):
+    """The pointer from a claim in an answer to the Corpus document, and the
+    place within it, that supports the claim."""
+
+    document: str = Field(
+        min_length=1, description="The title of the Corpus document, exactly as given."
+    )
+    locator: str = Field(
+        min_length=1,
+        description="The section heading or page number within that document, "
+        "exactly as given.",
+    )
+    source_url: str | None = None
+
+
+# Three short sentences. The User is reading this while cooking.
+ANSWER_MAX_CHARS = 700
+
+
+class Answer(BaseModel):
+    """The Coach's answer to one nutrition question, drawn from the Corpus.
+
+    A nutrition claim with an empty citations list fails validation here, so an
+    unsupported claim is a build failure and not a matter of taste. When the
+    Corpus does not cover the question the Coach says so, which is the one
+    answer that carries no Citation.
+    """
+
+    text: str = Field(min_length=1, max_length=ANSWER_MAX_CHARS)
+    citations: list[Citation] = Field(
+        default_factory=list,
+        description="One for every claim made. Never empty when the answer "
+        "asserts a nutrition fact.",
+    )
+    makes_a_nutrition_claim: bool = Field(
+        default=True,
+        description="False only when the answer says the Corpus does not cover "
+        "the question. Any answer that asserts a nutrition fact is true.",
+    )
+
+    @model_validator(mode="after")
+    def a_nutrition_claim_carries_a_citation(self) -> Answer:
+        if self.makes_a_nutrition_claim and not self.citations:
+            raise ValueError(
+                "a nutrition claim needs at least one Citation naming the Corpus "
+                "document and the section or page; say the Corpus does not cover "
+                "the question instead of answering from memory"
+            )
+        return self
+
+
 class ReplyPart(BaseModel):
     """One part of a reply, one for each Intent the Turn ran."""
 
     intent: str
     text: str
+    citations: list[Citation] = Field(default_factory=list)
 
 
 class CoachReply(BaseModel):

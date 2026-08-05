@@ -63,6 +63,25 @@ export interface components {
             reply: components["schemas"]["CoachReply"];
         };
         /**
+         * Citation
+         * @description The pointer from a claim in an answer to the Corpus document, and the
+         *     place within it, that supports the claim.
+         */
+        Citation: {
+            /**
+             * Document
+             * @description The title of the Corpus document, exactly as given.
+             */
+            document: string;
+            /**
+             * Locator
+             * @description The section heading or page number within that document, exactly as given.
+             */
+            locator: string;
+            /** Source Url */
+            source_url?: string | null;
+        };
+        /**
          * CoachReply
          * @description The Coach's complete answer to one User message.
          */
@@ -126,6 +145,8 @@ export interface components {
             intent: string;
             /** Text */
             text: string;
+            /** Citations */
+            citations?: components["schemas"]["Citation"][];
         };
         /**
          * TurnEventEnvelope
