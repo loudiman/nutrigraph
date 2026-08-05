@@ -1,0 +1,2123 @@
+{
+  "_meta": {
+    "title": "Common Filipino dishes, nutrient values per 100 g edible portion",
+    "issue": "https://github.com/loudiman/nutrigraph/issues/26",
+    "source": "DOST-FNRI Philippine Food Composition Tables Online Database (PhilFCT), Release 1 December 2019",
+    "source_url": "https://i.fnri.dost.gov.ph/fct/library/search_item",
+    "source_shape": "Single unauthenticated HTML page, 17,444,645 bytes, HTTP 200, one <tr> plus one hidden Bootstrap modal per food; 1,542 distinct food entries parsed, matching the count recorded in docs/research/filipino-dish-values.md.",
+    "fetched_on": "2026-08-06",
+    "basis": "Per 100 g edible portion (E.P.), the same basis FoodData Central uses.",
+    "licence": "Philippine government works carry no copyright under RA 8293 section 176.1, so this non-commercial demonstration needs no approval from FNRI. The same section requires PRIOR APPROVAL of the originating agency for exploitation of the work FOR PROFIT, and FNRI may impose royalties as a condition. Before NutriGraph is used commercially, get FNRI's written position on these figures. Attribute DOST-FNRI PhilFCT wherever they are shown.",
+    "value_kind": {
+      "direct": "The PhilFCT entry is the dish itself.",
+      "proxy": "The PhilFCT entry stands in for the dish and is something else — usually a canned or commercial product, or a differently-cooked form. source_note states exactly what it is. Never present a proxy row as the home-cooked dish.",
+      "calculated": "PhilFCT holds no entry for the dish. The row is computed from component foods; the calculation object records components, PhilFCT Food IDs, gram weights and the arithmetic so a checker can recompute it."
+    },
+    "calculated_row_assumption": "No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated. The component gram weights and the added-water figures on calculated rows are DECLARED, not sourced: FNRI publishes no recipe weights and no yield factors for any dish, and docs/research/filipino-dish-values.md section 4 records that even the Pinggang Pinoy serving grams could not be sourced. Every NUTRIENT number in this file, on every row, is transcribed from PhilFCT. No figure anywhere has been adjusted to compensate for the assumption.",
+    "nulls": "fibre_g and sodium_mg are null wherever PhilFCT prints '-'. Never zero, never estimated. The 1997 base tables carried no fibre, sugar or sodium at all; the later indirect-method retrofit reached only about 1,246 items for fibre and 1,298 for sodium out of roughly 1,600.",
+    "audit_file": "filipino_dishes_audit.json — the verbatim PhilFCT panels for every Food ID used here, for a second agent to re-fetch and diff.",
+    "row_count": 20
+  },
+  "dishes": [
+    {
+      "name": "Sinangag",
+      "aliases": [
+        "garlic fried rice",
+        "sinangag na kanin",
+        "fried rice"
+      ],
+      "philfct_food_id": "A021",
+      "value_kind": "direct",
+      "per_100g": {
+        "proximates": {
+          "Water (g)": "57.4",
+          "Energy, calculated (kcal)": "187",
+          "Protein (g)": "2.6",
+          "Total Fat (g)": "4.0",
+          "Carbohydrate, total (g)": "35.2",
+          "Ash, total (g)": "0.8"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.5",
+          "Sugars, total (g)": "0.1"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "3",
+          "Phosphorus, P (mg)": "35",
+          "Iron, Fe (mg)": "1.1",
+          "Sodium, Na (mg)": "4"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "0",
+          "Thiamin, Vitamin B1 (mg)": "0.02",
+          "Riboflavin, Vitamin B2 (mg)": "0.04",
+          "Niacin (mg)": "0.4",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "3.37",
+          "Fatty acids, monounsaturated, total (g)": "0.27",
+          "Fatty acids, polyunsaturated, total(g)": "0.11",
+          "Cholesterol (mg)": "0"
+        }
+      },
+      "kcal": 187,
+      "protein_g": 2.6,
+      "fat_g": 4.0,
+      "carb_g": 35.2,
+      "fibre_g": 0.5,
+      "sodium_mg": 4,
+      "tags": [
+        "rice",
+        "breakfast",
+        "vegetarian",
+        "vegan",
+        "gluten-free"
+      ],
+      "source_note": "PhilFCT A021 'Rice, well-milled, fried' (Bigas, maputi, sinangag) is the dish itself. PhilFCT entry: 'Rice, well-milled, fried' (Bigas, maputi, sinangag), Food ID A021, edible portion 100%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+    },
+    {
+      "name": "Pandesal",
+      "aliases": [
+        "pan de sal",
+        "pan de sal bread"
+      ],
+      "philfct_food_id": "A042",
+      "value_kind": "direct",
+      "per_100g": {
+        "proximates": {
+          "Water (g)": "21.6",
+          "Energy, calculated (kcal)": "330",
+          "Protein (g)": "10.1",
+          "Total Fat (g)": "4.2",
+          "Carbohydrate, total (g)": "62.9",
+          "Ash, total (g)": "1.2"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "2.5",
+          "Sugars, total (g)": "7.6"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "24",
+          "Phosphorus, P (mg)": "75",
+          "Iron, Fe (mg)": "3.0",
+          "Sodium, Na (mg)": "596"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "0",
+          "Thiamin, Vitamin B1 (mg)": "0.23",
+          "Riboflavin, Vitamin B2 (mg)": "0.15",
+          "Niacin (mg)": "3.0",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.99",
+          "Fatty acids, monounsaturated, total (g)": "1.01",
+          "Fatty acids, polyunsaturated, total(g)": "1.78",
+          "Cholesterol (mg)": "4"
+        }
+      },
+      "kcal": 330,
+      "protein_g": 10.1,
+      "fat_g": 4.2,
+      "carb_g": 62.9,
+      "fibre_g": 2.5,
+      "sodium_mg": 596,
+      "tags": [
+        "bread",
+        "breakfast",
+        "wheat",
+        "gluten",
+        "vegetarian"
+      ],
+      "source_note": "PhilFCT A042 'Bread, pan de sal' is the dish itself. PhilFCT entry: 'Bread, pan de sal', Food ID A042, edible portion 100%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+    },
+    {
+      "name": "Arroz caldo",
+      "aliases": [
+        "arozcaldo",
+        "chicken rice porridge",
+        "lugaw na may manok"
+      ],
+      "philfct_food_id": "R011",
+      "value_kind": "direct",
+      "per_100g": {
+        "proximates": {
+          "Water (g)": "83.8",
+          "Energy, calculated (kcal)": "63",
+          "Protein (g)": "2.0",
+          "Total Fat (g)": "0.4",
+          "Carbohydrate, total (g)": "12.8",
+          "Ash, total (g)": "1.0"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.5",
+          "Sugars, total (g)": "0.7"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "15",
+          "Phosphorus, P (mg)": "15",
+          "Iron, Fe (mg)": "0.8",
+          "Sodium, Na (mg)": "453"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "5",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "5",
+          "Thiamin, Vitamin B1 (mg)": "0.02",
+          "Riboflavin, Vitamin B2 (mg)": "0.03",
+          "Niacin (mg)": "0.4",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.27",
+          "Fatty acids, monounsaturated, total (g)": "0.05",
+          "Fatty acids, polyunsaturated, total(g)": "0.04",
+          "Cholesterol (mg)": "10"
+        }
+      },
+      "kcal": 63,
+      "protein_g": 2.0,
+      "fat_g": 0.4,
+      "carb_g": 12.8,
+      "fibre_g": 0.5,
+      "sodium_mg": 453,
+      "tags": [
+        "rice",
+        "soup",
+        "poultry",
+        "chicken",
+        "breakfast"
+      ],
+      "source_note": "PhilFCT R011 'Rice gruel w/ chicken' (Arroz caldo) is the dish itself. PhilFCT entry: 'Rice gruel w/ chicken' (Arroz caldo), Food ID R011, edible portion 100%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+    },
+    {
+      "name": "Champorado",
+      "aliases": [
+        "tsampurado",
+        "chocolate rice porridge",
+        "champorado na may gatas"
+      ],
+      "philfct_food_id": "R012",
+      "value_kind": "direct",
+      "per_100g": {
+        "proximates": {
+          "Water (g)": "75.8",
+          "Energy, calculated (kcal)": "97",
+          "Protein (g)": "1.7",
+          "Total Fat (g)": "0.2",
+          "Carbohydrate, total (g)": "22.0",
+          "Ash, total (g)": "0.3"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.7",
+          "Sugars, total (g)": "4.8"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "27",
+          "Phosphorus, P (mg)": "34",
+          "Iron, Fe (mg)": "0.0",
+          "Sodium, Na (mg)": "13"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "15",
+          "beta-Carotene (µg)": "5",
+          "Retinol Activity Equivalent, RAE (µg)": "15",
+          "Thiamin, Vitamin B1 (mg)": "0.02",
+          "Riboflavin, Vitamin B2 (mg)": "0.07",
+          "Niacin (mg)": "0.2",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.11",
+          "Fatty acids, monounsaturated, total (g)": "0.07",
+          "Fatty acids, polyunsaturated, total(g)": "0.01",
+          "Cholesterol (mg)": "2"
+        }
+      },
+      "kcal": 97,
+      "protein_g": 1.7,
+      "fat_g": 0.2,
+      "carb_g": 22.0,
+      "fibre_g": 0.7,
+      "sodium_mg": 13,
+      "tags": [
+        "rice",
+        "breakfast",
+        "dessert",
+        "cocoa",
+        "dairy",
+        "vegetarian"
+      ],
+      "source_note": "PhilFCT R012 'Rice gruel w/ choc & milk' (Champorado, may gatas) is the dish itself; the entry includes milk. PhilFCT entry: 'Rice gruel w/ choc & milk' (Champorado, may gatas), Food ID R012, edible portion 100%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+    },
+    {
+      "name": "Lechon",
+      "aliases": [
+        "lechon manok",
+        "litson",
+        "roast pig",
+        "whole roast"
+      ],
+      "philfct_food_id": "F265",
+      "value_kind": "proxy",
+      "per_100g": {
+        "proximates": {
+          "Water (g)": "56.0",
+          "Energy, calculated (kcal)": "226",
+          "Protein (g)": "24.8",
+          "Total Fat (g)": "12.0",
+          "Carbohydrate, total (g)": "4.7",
+          "Ash, total (g)": "2.5"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.0",
+          "Sugars, total (g)": "1.5"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "33",
+          "Phosphorus, P (mg)": "223",
+          "Iron, Fe (mg)": "2.1",
+          "Potassium, K (mg)": "287",
+          "Sodium, Na (mg)": "716",
+          "Zinc, Zn (mg)": "1.70"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "58",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "58",
+          "Thiamin, Vitamin B1 (mg)": "0.07",
+          "Riboflavin, Vitamin B2 (mg)": "0.13",
+          "Niacin (mg)": "12.4",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "4.07",
+          "Caproic, C6 (g)": "0",
+          "Caprylic, C8 (g)": "0.02",
+          "Capric, C10 (g)": "0.04",
+          "Lauric, C12 (g)": "0.59",
+          "Myristic, C14 (g)": "0.44",
+          "Palmitic, C16 (g)": "2.41",
+          "Stearic, C18 (g)": "0.58",
+          "Arachidic, C20 (g)": "0",
+          "Behenic, C22 (g)": "0",
+          "Lignoceric, C24 (g)": "0",
+          "Fatty acids, monounsaturated, total (g)": "3.59",
+          "Oleic , C18:1 (g)": "3.59",
+          "Fatty acids, polyunsaturated, total(g)": "1.55",
+          "Linoleic, C18:2 (g)": "1.46",
+          "Linolenic, C18:3 (g)": "0.09",
+          "Cholesterol (mg)": "122"
+        }
+      },
+      "kcal": 226,
+      "protein_g": 24.8,
+      "fat_g": 12.0,
+      "carb_g": 4.7,
+      "fibre_g": 0.0,
+      "sodium_mg": 716,
+      "tags": [
+        "poultry",
+        "chicken",
+        "roast",
+        "festive"
+      ],
+      "source_note": "PROXY: PhilFCT F265 is 'Chicken, whole, seasoned, roasted' (lechon manok) — roast CHICKEN, not the whole roast pig that 'lechon' usually names. Same cooking style, different animal; pork lechon is markedly fattier. Edible portion 70%. PhilFCT entry: 'Chicken, whole, seasoned, roasted' (Lechon manok), Food ID F265, edible portion 70%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+    },
+    {
+      "name": "Tapa (pork)",
+      "aliases": [
+        "tapang baboy",
+        "pork tapa",
+        "tapsilog (pork)"
+      ],
+      "philfct_food_id": "F243",
+      "value_kind": "proxy",
+      "per_100g": {
+        "proximates": {
+          "Water (g)": "51.4",
+          "Energy, calculated (kcal)": "277",
+          "Protein (g)": "15.8",
+          "Total Fat (g)": "19.2",
+          "Carbohydrate, total (g)": "10.2",
+          "Ash, total (g)": "3.4"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.0",
+          "Sugars, total (g)": "-"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "39",
+          "Phosphorus, P (mg)": "118",
+          "Iron, Fe (mg)": "1.6",
+          "Sodium, Na (mg)": "1086"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "80",
+          "beta-Carotene (µg)": "10",
+          "Retinol Activity Equivalent, RAE (µg)": "81",
+          "Thiamin, Vitamin B1 (mg)": "0.22",
+          "Riboflavin, Vitamin B2 (mg)": "0.12",
+          "Niacin (mg)": "3.4",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "6.59",
+          "Fatty acids, monounsaturated, total (g)": "6.90",
+          "Fatty acids, polyunsaturated, total(g)": "2.10",
+          "Cholesterol (mg)": "-"
+        }
+      },
+      "kcal": 277,
+      "protein_g": 15.8,
+      "fat_g": 19.2,
+      "carb_g": 10.2,
+      "fibre_g": 0.0,
+      "sodium_mg": 1086,
+      "tags": [
+        "pork",
+        "cured",
+        "breakfast"
+      ],
+      "source_note": "PROXY: PhilFCT F243 'Pork jerky' (Tapa, baboy) is the dried/cured jerky form, not the pan-fried tapa served in a tapsilog. PhilFCT entry: 'Pork jerky' (Tapa, baboy), Food ID F243, edible portion 100%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+    },
+    {
+      "name": "Tapa (beef)",
+      "aliases": [
+        "tapang baka",
+        "beef tapa",
+        "tapsilog"
+      ],
+      "philfct_food_id": "F215",
+      "value_kind": "proxy",
+      "per_100g": {
+        "proximates": {
+          "Water (g)": "76.6",
+          "Energy, calculated (kcal)": "102",
+          "Protein (g)": "13.8",
+          "Total Fat (g)": "3.6",
+          "Carbohydrate, total (g)": "3.7",
+          "Ash, total (g)": "2.3"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.0",
+          "Sugars, total (g)": "1.2"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "10",
+          "Phosphorus, P (mg)": "164",
+          "Iron, Fe (mg)": "1.0",
+          "Potassium, K (mg)": "239",
+          "Sodium, Na (mg)": "694",
+          "Zinc, Zn (mg)": "2.90"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "8",
+          "Retinol Activity Equivalent, RAE (µg)": "1",
+          "Thiamin, Vitamin B1 (mg)": "0.03",
+          "Riboflavin, Vitamin B2 (mg)": "0.09",
+          "Niacin (mg)": "4.4",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "1.33",
+          "Caproic, C6 (g)": "0",
+          "Caprylic, C8 (g)": "0.01",
+          "Capric, C10 (g)": "0.01",
+          "Lauric, C12 (g)": "0.04",
+          "Myristic, C14 (g)": "0.10",
+          "Palmitic, C16 (g)": "0.71",
+          "Stearic, C18 (g)": "0.45",
+          "Arachidic, C20 (g)": "0",
+          "Behenic, C22 (g)": "0.01",
+          "Lignoceric, C24 (g)": "0",
+          "Fatty acids, monounsaturated, total (g)": "0.96",
+          "Oleic , C18:1 (g)": "0.96",
+          "Fatty acids, polyunsaturated, total(g)": "0.13",
+          "Linoleic, C18:2 (g)": "0.11",
+          "Linolenic, C18:3 (g)": "0.02",
+          "Cholesterol (mg)": "39"
+        }
+      },
+      "kcal": 102,
+      "protein_g": 13.8,
+      "fat_g": 3.6,
+      "carb_g": 3.7,
+      "fibre_g": 0.0,
+      "sodium_mg": 694,
+      "tags": [
+        "beef",
+        "cured",
+        "breakfast"
+      ],
+      "source_note": "PROXY: PhilFCT F215 'Beef jerky' (Tapa, baka) is the dried/cured jerky form, not the pan-fried tapa served in a tapsilog. PhilFCT entry: 'Beef jerky' (Tapa, baka), Food ID F215, edible portion 100%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+    },
+    {
+      "name": "Longganisa",
+      "aliases": [
+        "longanisa",
+        "longsilog",
+        "pork sausage",
+        "chorizo"
+      ],
+      "philfct_food_id": "F257",
+      "value_kind": "proxy",
+      "per_100g": {
+        "proximates": {
+          "Water (g)": "47.3",
+          "Energy, calculated (kcal)": "315",
+          "Protein (g)": "11.8",
+          "Total Fat (g)": "22.7",
+          "Carbohydrate, total (g)": "15.8",
+          "Ash, total (g)": "2.4"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.9",
+          "Sugars, total (g)": "-"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "23",
+          "Phosphorus, P (mg)": "43",
+          "Iron, Fe (mg)": "1.5",
+          "Potassium, K (mg)": "165",
+          "Sodium, Na (mg)": "714",
+          "Zinc, Zn (mg)": "1.70"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "58",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "58",
+          "Thiamin, Vitamin B1 (mg)": "0.23",
+          "Riboflavin, Vitamin B2 (mg)": "0.10",
+          "Niacin (mg)": "1.6",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "6.93",
+          "Fatty acids, monounsaturated, total (g)": "9.01",
+          "Fatty acids, polyunsaturated, total(g)": "4.06",
+          "Cholesterol (mg)": "65"
+        }
+      },
+      "kcal": 315,
+      "protein_g": 11.8,
+      "fat_g": 22.7,
+      "carb_g": 15.8,
+      "fibre_g": 0.9,
+      "sodium_mg": 714,
+      "tags": [
+        "pork",
+        "sausage",
+        "cured",
+        "breakfast"
+      ],
+      "source_note": "PROXY: PhilFCT F257 'Sausage, pork' (Longanisa, baboy) is the raw/cured sausage as sold, not the pan-fried longganisa on the plate; frying renders fat out and concentrates the rest. PhilFCT entry: 'Sausage, pork' (Longanisa, baboy), Food ID F257, edible portion 100%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+    },
+    {
+      "name": "Adobo (pork)",
+      "aliases": [
+        "adobong baboy",
+        "pork adobo",
+        "adobo"
+      ],
+      "philfct_food_id": "R050",
+      "value_kind": "proxy",
+      "per_100g": {
+        "proximates": {
+          "Water (g)": "60.2",
+          "Energy, calculated (kcal)": "277",
+          "Protein (g)": "10.3",
+          "Total Fat (g)": "24.8",
+          "Carbohydrate, total (g)": "3.1",
+          "Ash, total (g)": "1.6"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.3",
+          "Sugars, total (g)": "0.1"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "45",
+          "Phosphorus, P (mg)": "56",
+          "Iron, Fe (mg)": "1.5",
+          "Sodium, Na (mg)": "254"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "130",
+          "beta-Carotene (µg)": "5",
+          "Retinol Activity Equivalent, RAE (µg)": "130",
+          "Thiamin, Vitamin B1 (mg)": "0.04",
+          "Riboflavin, Vitamin B2 (mg)": "0.09",
+          "Niacin (mg)": "1.5",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "-",
+          "Fatty acids, monounsaturated, total (g)": "-",
+          "Fatty acids, polyunsaturated, total(g)": "-",
+          "Cholesterol (mg)": "-"
+        }
+      },
+      "kcal": 277,
+      "protein_g": 10.3,
+      "fat_g": 24.8,
+      "carb_g": 3.1,
+      "fibre_g": 0.3,
+      "sodium_mg": 254,
+      "tags": [
+        "pork",
+        "stew",
+        "canned",
+        "soy",
+        "vinegar"
+      ],
+      "source_note": "PROXY: PhilFCT R050 'Pork adobo, cnd' is a CANNED COMMERCIAL PRODUCT, not home-cooked adobo. Home versions vary widely in fat and in soy-sauce sodium. PhilFCT entry: 'Pork adobo, cnd', Food ID R050, edible portion 100%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+    },
+    {
+      "name": "Caldereta (beef)",
+      "aliases": [
+        "kaldereta",
+        "beef caldereta",
+        "kalderetang baka"
+      ],
+      "philfct_food_id": "R027",
+      "value_kind": "proxy",
+      "per_100g": {
+        "proximates": {
+          "Water (g)": "58.6",
+          "Energy, calculated (kcal)": "284",
+          "Protein (g)": "13.3",
+          "Total Fat (g)": "24.9",
+          "Carbohydrate, total (g)": "1.6",
+          "Ash, total (g)": "1.6"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "1.1",
+          "Sugars, total (g)": "-"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "71",
+          "Phosphorus, P (mg)": "117",
+          "Iron, Fe (mg)": "8.0",
+          "Sodium, Na (mg)": "315"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "220",
+          "beta-Carotene (µg)": "-",
+          "Retinol Activity Equivalent, RAE (µg)": "-",
+          "Thiamin, Vitamin B1 (mg)": "0.02",
+          "Riboflavin, Vitamin B2 (mg)": "0.16",
+          "Niacin (mg)": "1.5",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "-",
+          "Fatty acids, monounsaturated, total (g)": "-",
+          "Fatty acids, polyunsaturated, total(g)": "-",
+          "Cholesterol (mg)": "-"
+        }
+      },
+      "kcal": 284,
+      "protein_g": 13.3,
+      "fat_g": 24.9,
+      "carb_g": 1.6,
+      "fibre_g": 1.1,
+      "sodium_mg": 315,
+      "tags": [
+        "beef",
+        "stew",
+        "canned",
+        "tomato"
+      ],
+      "source_note": "PROXY: PhilFCT R027 'Beef caldereta, cnd' is a CANNED COMMERCIAL PRODUCT, not home-cooked caldereta. Edible portion 95%. PhilFCT entry: 'Beef caldereta, cnd', Food ID R027, edible portion 95%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+    },
+    {
+      "name": "Kare-kare (beef)",
+      "aliases": [
+        "karekare",
+        "beef kare-kare",
+        "oxtail peanut stew"
+      ],
+      "philfct_food_id": "R031",
+      "value_kind": "proxy",
+      "per_100g": {
+        "proximates": {
+          "Water (g)": "83.4",
+          "Energy, calculated (kcal)": "64",
+          "Protein (g)": "9.0",
+          "Total Fat (g)": "1.1",
+          "Carbohydrate, total (g)": "4.4",
+          "Ash, total (g)": "2.1"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "1.5",
+          "Sugars, total (g)": "1.7"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "76",
+          "Phosphorus, P (mg)": "45",
+          "Iron, Fe (mg)": "2.2",
+          "Sodium, Na (mg)": "109"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "485",
+          "beta-Carotene (µg)": "-",
+          "Retinol Activity Equivalent, RAE (µg)": "-",
+          "Thiamin, Vitamin B1 (mg)": "0.01",
+          "Riboflavin, Vitamin B2 (mg)": "0.07",
+          "Niacin (mg)": "1.2",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "-",
+          "Fatty acids, monounsaturated, total (g)": "-",
+          "Fatty acids, polyunsaturated, total(g)": "-",
+          "Cholesterol (mg)": "-"
+        }
+      },
+      "kcal": 64,
+      "protein_g": 9.0,
+      "fat_g": 1.1,
+      "carb_g": 4.4,
+      "fibre_g": 1.5,
+      "sodium_mg": 109,
+      "tags": [
+        "beef",
+        "stew",
+        "canned",
+        "peanut"
+      ],
+      "source_note": "PROXY: PhilFCT R031 'Beef kare-kare, cnd' is a CANNED COMMERCIAL PRODUCT. The figures are implausibly lean for a home kare-kare, which carries a thick peanut sauce; treat the fat and energy columns as a floor, not a description. Contains peanut. PhilFCT entry: 'Beef kare-kare, cnd', Food ID R031, edible portion -%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+    },
+    {
+      "name": "Dinuguan",
+      "aliases": [
+        "dinuguang baboy",
+        "pork blood stew",
+        "chocolate meat"
+      ],
+      "philfct_food_id": "R053",
+      "value_kind": "proxy",
+      "per_100g": {
+        "proximates": {
+          "Water (g)": "73.2",
+          "Energy, calculated (kcal)": "155",
+          "Protein (g)": "14.8",
+          "Total Fat (g)": "10.6",
+          "Carbohydrate, total (g)": "0.0",
+          "Ash, total (g)": "1.4"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.2",
+          "Sugars, total (g)": "0.0"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "53",
+          "Phosphorus, P (mg)": "68",
+          "Iron, Fe (mg)": "12.7",
+          "Sodium, Na (mg)": "-"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "-",
+          "beta-Carotene (µg)": "-",
+          "Retinol Activity Equivalent, RAE (µg)": "-",
+          "Thiamin, Vitamin B1 (mg)": "0.01",
+          "Riboflavin, Vitamin B2 (mg)": "0.07",
+          "Niacin (mg)": "0.6",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "-",
+          "Fatty acids, monounsaturated, total (g)": "-",
+          "Fatty acids, polyunsaturated, total(g)": "-",
+          "Cholesterol (mg)": "-"
+        }
+      },
+      "kcal": 155,
+      "protein_g": 14.8,
+      "fat_g": 10.6,
+      "carb_g": 0.0,
+      "fibre_g": 0.2,
+      "sodium_mg": null,
+      "tags": [
+        "pork",
+        "offal",
+        "stew",
+        "canned"
+      ],
+      "source_note": "PROXY: PhilFCT R053 'Pork blood stew, cnd' (Dinuguan baboy, de lata) is a CANNED COMMERCIAL PRODUCT, not home-cooked dinuguan. PhilFCT prints no sodium for this entry, so sodium_mg is null. PhilFCT entry: 'Pork blood stew, cnd' (Dinuguan baboy, de lata), Food ID R053, edible portion -%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+    },
+    {
+      "name": "Pancit molo",
+      "aliases": [
+        "pancit",
+        "pansit molo",
+        "wonton soup",
+        "pansit"
+      ],
+      "philfct_food_id": "R100",
+      "value_kind": "proxy",
+      "per_100g": {
+        "proximates": {
+          "Water (g)": "82.3",
+          "Energy, calculated (kcal)": "93",
+          "Protein (g)": "5.0",
+          "Total Fat (g)": "5.3",
+          "Carbohydrate, total (g)": "6.3",
+          "Ash, total (g)": "1.1"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "3.6",
+          "Sugars, total (g)": "2.8"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "40",
+          "Phosphorus, P (mg)": "47",
+          "Iron, Fe (mg)": "0.6",
+          "Sodium, Na (mg)": "320"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "50",
+          "beta-Carotene (µg)": "292",
+          "Retinol Activity Equivalent, RAE (µg)": "74",
+          "Thiamin, Vitamin B1 (mg)": "0.11",
+          "Riboflavin, Vitamin B2 (mg)": "0.09",
+          "Niacin (mg)": "1.5",
+          "Ascorbic Acid, Vitamin C (mg)": "2"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "2.70",
+          "Fatty acids, monounsaturated, total (g)": "1.10",
+          "Fatty acids, polyunsaturated, total(g)": "0.40",
+          "Cholesterol (mg)": "31"
+        }
+      },
+      "kcal": 93,
+      "protein_g": 5.0,
+      "fat_g": 5.3,
+      "carb_g": 6.3,
+      "fibre_g": 3.6,
+      "sodium_mg": 320,
+      "tags": [
+        "soup",
+        "pork",
+        "noodle",
+        "wheat",
+        "gluten"
+      ],
+      "source_note": "PROXY: PhilFCT R100 'Wonton soup, prep, w/ MLP' (Pancit molo, w/ MLP) is the only pancit variant in PhilFCT and is made with meat-like protein (MLP), a meat analogue. It is NOT pancit canton, bihon, or palabok — do not serve these figures for a stir-fried noodle pancit. PhilFCT entry: 'Wonton soup, prep, w/ MLP' (Pancit molo, w/ MLP), Food ID R100, edible portion 100%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+    },
+    {
+      "name": "Lumpiang Shanghai",
+      "aliases": [
+        "lumpia shanghai",
+        "lumpia",
+        "spring roll",
+        "shanghai rolls"
+      ],
+      "philfct_food_id": "R064",
+      "value_kind": "proxy",
+      "per_100g": {
+        "proximates": {
+          "Water (g)": "44.1",
+          "Energy, calculated (kcal)": "266",
+          "Protein (g)": "5.8",
+          "Total Fat (g)": "10.0",
+          "Carbohydrate, total (g)": "38.3",
+          "Ash, total (g)": "1.8"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "1.2",
+          "Sugars, total (g)": "0.7"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "17",
+          "Phosphorus, P (mg)": "30",
+          "Iron, Fe (mg)": "0.0",
+          "Sodium, Na (mg)": "275"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "10",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "10",
+          "Thiamin, Vitamin B1 (mg)": "0.08",
+          "Riboflavin, Vitamin B2 (mg)": "0.02",
+          "Niacin (mg)": "0.6",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "3.64",
+          "Fatty acids, monounsaturated, total (g)": "4.28",
+          "Fatty acids, polyunsaturated, total(g)": "0.98",
+          "Cholesterol (mg)": "50"
+        }
+      },
+      "kcal": 266,
+      "protein_g": 5.8,
+      "fat_g": 10.0,
+      "carb_g": 38.3,
+      "fibre_g": 1.2,
+      "sodium_mg": 275,
+      "tags": [
+        "pork",
+        "fried",
+        "wheat",
+        "gluten",
+        "appetiser"
+      ],
+      "source_note": "PROXY: PhilFCT R064 'Spring roll, Shanghai, unckd' (Lumpia, Shanghai, hindi luto) is the UNCOOKED filling-and-wrapper mix, not the deep-fried finished lumpia. Frying adds oil, so the fat and energy columns understate the served dish. PhilFCT entry: 'Spring roll, Shanghai, unckd' (Lumpia, Shanghai, hindi luto), Food ID R064, edible portion 100%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+    },
+    {
+      "name": "Sinigang na baboy",
+      "aliases": [
+        "sinigang",
+        "pork sinigang",
+        "sour tamarind soup",
+        "sinigang baboy"
+      ],
+      "philfct_food_id": null,
+      "value_kind": "calculated",
+      "per_100g": null,
+      "kcal": 68,
+      "protein_g": 1.9,
+      "fat_g": 5.3,
+      "carb_g": 3.1,
+      "fibre_g": null,
+      "sodium_mg": 155,
+      "tags": [
+        "pork",
+        "soup",
+        "vegetable",
+        "sour",
+        "tamarind"
+      ],
+      "calculation": {
+        "method": "Recipe calculation. For each component: contribution = PhilFCT per-100 g value * grams / 100. The contributions are summed and divided by the finished dish weight, then multiplied by 100. Finished dish weight = sum of component grams + water added. A column is null when any component's PhilFCT panel prints '-' for it; nothing is estimated to fill a gap.",
+        "assumption": "No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated.",
+        "recipe_weights_sourced": false,
+        "recipe_weights_note": "The component gram weights and the added-water figure are declared here, NOT taken from FNRI. PhilFCT publishes no recipe weights and no yield factors for any dish. Every NUTRIENT number below is transcribed from PhilFCT.",
+        "components": [
+          {
+            "philfct_food_id": "F151",
+            "philfct_name": "Pork belly, boiled",
+            "philfct_filipino_name": "Baboy liempo, nilaga",
+            "grams": 120,
+            "why": "Pork belly, boiled — the simmered pork",
+            "per_100g": {
+              "kcal": "444",
+              "protein_g": "13.0",
+              "fat_g": "43.6",
+              "carb_g": "0.0",
+              "fibre_g": "0.0",
+              "sodium_mg": "89"
+            },
+            "contribution": {
+              "kcal": 532.8,
+              "protein_g": 15.6,
+              "fat_g": 52.32,
+              "carb_g": 0.0,
+              "fibre_g": 0.0,
+              "sodium_mg": 106.8
+            }
+          },
+          {
+            "philfct_food_id": "B016",
+            "philfct_name": "Taro, boiled",
+            "philfct_filipino_name": "Gabi, nilaga",
+            "grams": 60,
+            "why": "Taro, boiled — gabi",
+            "per_100g": {
+              "kcal": "105",
+              "protein_g": "1.5",
+              "fat_g": "0.1",
+              "carb_g": "24.4",
+              "fibre_g": "3.7",
+              "sodium_mg": "11"
+            },
+            "contribution": {
+              "kcal": 63.0,
+              "protein_g": 0.9,
+              "fat_g": 0.06,
+              "carb_g": 14.64,
+              "fibre_g": 2.22,
+              "sodium_mg": 6.6
+            }
+          },
+          {
+            "philfct_food_id": "D184",
+            "philfct_name": "Radish, boiled",
+            "philfct_filipino_name": "Labanos/Rabanos, lamang ugat, nilaga",
+            "grams": 50,
+            "why": "Radish, boiled — labanos",
+            "per_100g": {
+              "kcal": "15",
+              "protein_g": "0.2",
+              "fat_g": "0.1",
+              "carb_g": "3.2",
+              "fibre_g": "0.4",
+              "sodium_mg": "15"
+            },
+            "contribution": {
+              "kcal": 7.5,
+              "protein_g": 0.1,
+              "fat_g": 0.05,
+              "carb_g": 1.6,
+              "fibre_g": 0.2,
+              "sodium_mg": 7.5
+            }
+          },
+          {
+            "philfct_food_id": "D233",
+            "philfct_name": "String/Yard long bean pod, green, boiled",
+            "philfct_filipino_name": "Sitaw bunga, berde, nilaga",
+            "grams": 40,
+            "why": "String/Yard long bean pod, green, boiled — sitaw",
+            "per_100g": {
+              "kcal": "52",
+              "protein_g": "4.0",
+              "fat_g": "0.5",
+              "carb_g": "7.9",
+              "fibre_g": "2.7",
+              "sodium_mg": "4"
+            },
+            "contribution": {
+              "kcal": 20.8,
+              "protein_g": 1.6,
+              "fat_g": 0.2,
+              "carb_g": 3.16,
+              "fibre_g": 1.08,
+              "sodium_mg": 1.6
+            }
+          },
+          {
+            "philfct_food_id": "D243",
+            "philfct_name": "Swamp cabbage lvs, boiled",
+            "philfct_filipino_name": "Kangkong dahon, nilaga/Water spinach lvs, boiled",
+            "grams": 40,
+            "why": "Swamp cabbage lvs, boiled — kangkong",
+            "per_100g": {
+              "kcal": "28",
+              "protein_g": "1.5",
+              "fat_g": "0.4",
+              "carb_g": "4.7",
+              "fibre_g": "2.6",
+              "sodium_mg": "78"
+            },
+            "contribution": {
+              "kcal": 11.2,
+              "protein_g": 0.6,
+              "fat_g": 0.16,
+              "carb_g": 1.88,
+              "fibre_g": 1.04,
+              "sodium_mg": 31.2
+            }
+          },
+          {
+            "philfct_food_id": "D258",
+            "philfct_name": "Tomato, boiled",
+            "philfct_filipino_name": "Kamatis, nilaga",
+            "grams": 40,
+            "why": "Tomato, boiled — kamatis",
+            "per_100g": {
+              "kcal": "25",
+              "protein_g": "0.4",
+              "fat_g": "0.1",
+              "carb_g": "5.6",
+              "fibre_g": "0.3",
+              "sodium_mg": "11"
+            },
+            "contribution": {
+              "kcal": 10.0,
+              "protein_g": 0.16,
+              "fat_g": 0.04,
+              "carb_g": 2.24,
+              "fibre_g": 0.12,
+              "sodium_mg": 4.4
+            }
+          },
+          {
+            "philfct_food_id": "D142",
+            "philfct_name": "Onion, Bombay bulb, boiled",
+            "philfct_filipino_name": "Sibuyas, Bombay ulo, nilaga",
+            "grams": 20,
+            "why": "Onion, Bombay bulb, boiled — sibuyas",
+            "per_100g": {
+              "kcal": "47",
+              "protein_g": "1.2",
+              "fat_g": "0.4",
+              "carb_g": "9.7",
+              "fibre_g": "1.3",
+              "sodium_mg": "3"
+            },
+            "contribution": {
+              "kcal": 9.4,
+              "protein_g": 0.24,
+              "fat_g": 0.08,
+              "carb_g": 1.94,
+              "fibre_g": 0.26,
+              "sodium_mg": 0.6
+            }
+          },
+          {
+            "philfct_food_id": "E094",
+            "philfct_name": "Tamarind, unripe",
+            "philfct_filipino_name": "Sampalok, hilaw",
+            "grams": 30,
+            "why": "Tamarind, unripe — sampalok, the souring agent",
+            "per_100g": {
+              "kcal": "77",
+              "protein_g": "0.9",
+              "fat_g": "0.3",
+              "carb_g": "17.7",
+              "fibre_g": "-",
+              "sodium_mg": "3"
+            },
+            "contribution": {
+              "kcal": 23.1,
+              "protein_g": 0.27,
+              "fat_g": 0.09,
+              "carb_g": 5.31,
+              "fibre_g": null,
+              "sodium_mg": 0.9
+            }
+          },
+          {
+            "philfct_food_id": "N019",
+            "philfct_name": "Salt, coarse",
+            "philfct_filipino_name": "Asin, magaspang",
+            "grams": 4,
+            "why": "Salt, coarse — asin",
+            "per_100g": {
+              "kcal": "0",
+              "protein_g": "0.0",
+              "fat_g": "0.0",
+              "carb_g": "0.0",
+              "fibre_g": "0.0",
+              "sodium_mg": "34836"
+            },
+            "contribution": {
+              "kcal": 0.0,
+              "protein_g": 0.0,
+              "fat_g": 0.0,
+              "carb_g": 0.0,
+              "fibre_g": 0.0,
+              "sodium_mg": 1393.44
+            }
+          }
+        ],
+        "water_added_g": 600,
+        "total_dish_weight_g": 1004,
+        "yield_factor": 1.0,
+        "totals_for_whole_dish": {
+          "kcal": 677.8,
+          "protein_g": 19.47,
+          "fat_g": 53.0,
+          "carb_g": 30.77,
+          "fibre_g": null,
+          "sodium_mg": 1553.04
+        },
+        "rounding": "kcal and sodium_mg to whole numbers; protein, fat, carbohydrate and fibre to one decimal.",
+        "columns_null_because_source_has_no_value": [
+          "fibre_g"
+        ]
+      },
+      "source_note": "CALCULATED: PhilFCT holds no entry for sinigang na baboy under any name searched in the full 1542-item dataset, so this row is computed from component foods. Every component nutrient value is transcribed from PhilFCT (https://i.fnri.dost.gov.ph/fct/library/search_item, fetched 2026-08-06); the component gram weights are declared, not sourced — FNRI publishes none. No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated. Fibre is null because PhilFCT prints no dietary fibre for E094 (Tamarind, unripe), so the sum is not computable without guessing. Null columns: fibre_g — the source prints no value for at least one component. See the calculation object for components, PhilFCT Food IDs, grams and the arithmetic."
+    },
+    {
+      "name": "Tinola",
+      "aliases": [
+        "tinolang manok",
+        "chicken tinola",
+        "chicken ginger soup"
+      ],
+      "philfct_food_id": null,
+      "value_kind": "calculated",
+      "per_100g": null,
+      "kcal": 30,
+      "protein_g": 4.6,
+      "fat_g": 0.7,
+      "carb_g": 1.3,
+      "fibre_g": null,
+      "sodium_mg": 167,
+      "tags": [
+        "poultry",
+        "chicken",
+        "soup",
+        "vegetable",
+        "ginger"
+      ],
+      "calculation": {
+        "method": "Recipe calculation. For each component: contribution = PhilFCT per-100 g value * grams / 100. The contributions are summed and divided by the finished dish weight, then multiplied by 100. Finished dish weight = sum of component grams + water added. A column is null when any component's PhilFCT panel prints '-' for it; nothing is estimated to fill a gap.",
+        "assumption": "No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated.",
+        "recipe_weights_sourced": false,
+        "recipe_weights_note": "The component gram weights and the added-water figure are declared here, NOT taken from FNRI. PhilFCT publishes no recipe weights and no yield factors for any dish. Every NUTRIENT number below is transcribed from PhilFCT.",
+        "components": [
+          {
+            "philfct_food_id": "F111",
+            "philfct_name": "Chicken, white meat, boiled",
+            "philfct_filipino_name": "Manok laman, nilaga",
+            "grams": 120,
+            "why": "Chicken, white meat, boiled — the simmered chicken",
+            "per_100g": {
+              "kcal": "173",
+              "protein_g": "32.9",
+              "fat_g": "4.6",
+              "carb_g": "0.0",
+              "fibre_g": "0.0",
+              "sodium_mg": "81"
+            },
+            "contribution": {
+              "kcal": 207.6,
+              "protein_g": 39.48,
+              "fat_g": 5.52,
+              "carb_g": 0.0,
+              "fibre_g": 0.0,
+              "sodium_mg": 97.2
+            }
+          },
+          {
+            "philfct_food_id": "D154",
+            "philfct_name": "Papaya fruit, unripe",
+            "philfct_filipino_name": "N/A",
+            "grams": 120,
+            "why": "Papaya fruit, unripe — green papaya",
+            "per_100g": {
+              "kcal": "27",
+              "protein_g": "1.0",
+              "fat_g": "0.1",
+              "carb_g": "5.5",
+              "fibre_g": "0.7",
+              "sodium_mg": "4"
+            },
+            "contribution": {
+              "kcal": 32.4,
+              "protein_g": 1.2,
+              "fat_g": 0.12,
+              "carb_g": 6.6,
+              "fibre_g": 0.84,
+              "sodium_mg": 4.8
+            }
+          },
+          {
+            "philfct_food_id": "D166",
+            "philfct_name": "Pepper, chili lvs, boiled",
+            "philfct_filipino_name": "Sili, labuyo, dahon, nilaga",
+            "grams": 25,
+            "why": "Pepper, chili lvs, boiled — dahon ng sili",
+            "per_100g": {
+              "kcal": "52",
+              "protein_g": "1.8",
+              "fat_g": "0.3",
+              "carb_g": "10.5",
+              "fibre_g": "-",
+              "sodium_mg": "4"
+            },
+            "contribution": {
+              "kcal": 13.0,
+              "protein_g": 0.45,
+              "fat_g": 0.075,
+              "carb_g": 2.625,
+              "fibre_g": null,
+              "sodium_mg": 1.0
+            }
+          },
+          {
+            "philfct_food_id": "D304",
+            "philfct_name": "Ginger",
+            "philfct_filipino_name": "Luya",
+            "grams": 10,
+            "why": "Ginger — luya",
+            "per_100g": {
+              "kcal": "46",
+              "protein_g": "1.1",
+              "fat_g": "0.8",
+              "carb_g": "8.5",
+              "fibre_g": "1.1",
+              "sodium_mg": "3"
+            },
+            "contribution": {
+              "kcal": 4.6,
+              "protein_g": 0.11,
+              "fat_g": 0.08,
+              "carb_g": 0.85,
+              "fibre_g": 0.11,
+              "sodium_mg": 0.3
+            }
+          },
+          {
+            "philfct_food_id": "D142",
+            "philfct_name": "Onion, Bombay bulb, boiled",
+            "philfct_filipino_name": "Sibuyas, Bombay ulo, nilaga",
+            "grams": 20,
+            "why": "Onion, Bombay bulb, boiled — sibuyas",
+            "per_100g": {
+              "kcal": "47",
+              "protein_g": "1.2",
+              "fat_g": "0.4",
+              "carb_g": "9.7",
+              "fibre_g": "1.3",
+              "sodium_mg": "3"
+            },
+            "contribution": {
+              "kcal": 9.4,
+              "protein_g": 0.24,
+              "fat_g": 0.08,
+              "carb_g": 1.94,
+              "fibre_g": 0.26,
+              "sodium_mg": 0.6
+            }
+          },
+          {
+            "philfct_food_id": "N019",
+            "philfct_name": "Salt, coarse",
+            "philfct_filipino_name": "Asin, magaspang",
+            "grams": 4,
+            "why": "Salt, coarse — asin",
+            "per_100g": {
+              "kcal": "0",
+              "protein_g": "0.0",
+              "fat_g": "0.0",
+              "carb_g": "0.0",
+              "fibre_g": "0.0",
+              "sodium_mg": "34836"
+            },
+            "contribution": {
+              "kcal": 0.0,
+              "protein_g": 0.0,
+              "fat_g": 0.0,
+              "carb_g": 0.0,
+              "fibre_g": 0.0,
+              "sodium_mg": 1393.44
+            }
+          }
+        ],
+        "water_added_g": 600,
+        "total_dish_weight_g": 899,
+        "yield_factor": 1.0,
+        "totals_for_whole_dish": {
+          "kcal": 267.0,
+          "protein_g": 41.48,
+          "fat_g": 5.875,
+          "carb_g": 12.015,
+          "fibre_g": null,
+          "sodium_mg": 1497.34
+        },
+        "rounding": "kcal and sodium_mg to whole numbers; protein, fat, carbohydrate and fibre to one decimal.",
+        "columns_null_because_source_has_no_value": [
+          "fibre_g"
+        ]
+      },
+      "source_note": "CALCULATED: PhilFCT holds no entry for tinola under any name searched in the full 1542-item dataset, so this row is computed from component foods. Every component nutrient value is transcribed from PhilFCT (https://i.fnri.dost.gov.ph/fct/library/search_item, fetched 2026-08-06); the component gram weights are declared, not sourced — FNRI publishes none. No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated. Fibre is null because PhilFCT prints no dietary fibre for D166 (Pepper, chili lvs, boiled), so the sum is not computable without guessing. Null columns: fibre_g — the source prints no value for at least one component. See the calculation object for components, PhilFCT Food IDs, grams and the arithmetic."
+    },
+    {
+      "name": "Bulalo",
+      "aliases": [
+        "beef bulalo",
+        "bone marrow soup",
+        "nilagang bulalo"
+      ],
+      "philfct_food_id": null,
+      "value_kind": "calculated",
+      "per_100g": null,
+      "kcal": 28,
+      "protein_g": 2.9,
+      "fat_g": 0.3,
+      "carb_g": 3.4,
+      "fibre_g": 0.4,
+      "sodium_mg": 143,
+      "tags": [
+        "beef",
+        "soup",
+        "vegetable",
+        "bone-broth"
+      ],
+      "calculation": {
+        "method": "Recipe calculation. For each component: contribution = PhilFCT per-100 g value * grams / 100. The contributions are summed and divided by the finished dish weight, then multiplied by 100. Finished dish weight = sum of component grams + water added. A column is null when any component's PhilFCT panel prints '-' for it; nothing is estimated to fill a gap.",
+        "assumption": "No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated.",
+        "recipe_weights_sourced": false,
+        "recipe_weights_note": "The component gram weights and the added-water figure are declared here, NOT taken from FNRI. PhilFCT publishes no recipe weights and no yield factors for any dish. Every NUTRIENT number below is transcribed from PhilFCT.",
+        "components": [
+          {
+            "philfct_food_id": "F036",
+            "philfct_name": "Beef shank, boiled",
+            "philfct_filipino_name": "Baka kenchi, nilaga",
+            "grams": 130,
+            "why": "Beef shank, boiled — the shank meat",
+            "per_100g": {
+              "kcal": "92",
+              "protein_g": "19.5",
+              "fat_g": "1.5",
+              "carb_g": "0.0",
+              "fibre_g": "0.0",
+              "sodium_mg": "34"
+            },
+            "contribution": {
+              "kcal": 119.6,
+              "protein_g": 25.35,
+              "fat_g": 1.95,
+              "carb_g": 0.0,
+              "fibre_g": 0.0,
+              "sodium_mg": 44.2
+            }
+          },
+          {
+            "philfct_food_id": "D036",
+            "philfct_name": "Cabbage, green, boiled",
+            "philfct_filipino_name": "Repolyo, berde, nilaga",
+            "grams": 60,
+            "why": "Cabbage, green, boiled — repolyo",
+            "per_100g": {
+              "kcal": "23",
+              "protein_g": "0.6",
+              "fat_g": "0.1",
+              "carb_g": "5.0",
+              "fibre_g": "1.5",
+              "sodium_mg": "6"
+            },
+            "contribution": {
+              "kcal": 13.8,
+              "protein_g": 0.36,
+              "fat_g": 0.06,
+              "carb_g": 3.0,
+              "fibre_g": 0.9,
+              "sodium_mg": 3.6
+            }
+          },
+          {
+            "philfct_food_id": "A005",
+            "philfct_name": "Corn on cob, yellow, boiled",
+            "philfct_filipino_name": "Mais sa busal, dilaw, nilaga",
+            "grams": 60,
+            "why": "Corn on cob, yellow, boiled — mais",
+            "per_100g": {
+              "kcal": "167",
+              "protein_g": "3.3",
+              "fat_g": "1.2",
+              "carb_g": "35.7",
+              "fibre_g": "3.7",
+              "sodium_mg": "1"
+            },
+            "contribution": {
+              "kcal": 100.2,
+              "protein_g": 1.98,
+              "fat_g": 0.72,
+              "carb_g": 21.42,
+              "fibre_g": 2.22,
+              "sodium_mg": 0.6
+            }
+          },
+          {
+            "philfct_food_id": "B008",
+            "philfct_name": "Potato, boiled",
+            "philfct_filipino_name": "Patatas, nilaga",
+            "grams": 50,
+            "why": "Potato, boiled — patatas",
+            "per_100g": {
+              "kcal": "63",
+              "protein_g": "1.7",
+              "fat_g": "0.1",
+              "carb_g": "13.7",
+              "fibre_g": "1.3",
+              "sodium_mg": "4"
+            },
+            "contribution": {
+              "kcal": 31.5,
+              "protein_g": 0.85,
+              "fat_g": 0.05,
+              "carb_g": 6.85,
+              "fibre_g": 0.65,
+              "sodium_mg": 2.0
+            }
+          },
+          {
+            "philfct_food_id": "D161",
+            "philfct_name": "Pechay lvs, boiled",
+            "philfct_filipino_name": "Petsay dahon, nilaga",
+            "grams": 40,
+            "why": "Pechay lvs, boiled — petsay",
+            "per_100g": {
+              "kcal": "21",
+              "protein_g": "1.7",
+              "fat_g": "0.5",
+              "carb_g": "2.4",
+              "fibre_g": "1.1",
+              "sodium_mg": "12"
+            },
+            "contribution": {
+              "kcal": 8.4,
+              "protein_g": 0.68,
+              "fat_g": 0.2,
+              "carb_g": 0.96,
+              "fibre_g": 0.44,
+              "sodium_mg": 4.8
+            }
+          },
+          {
+            "philfct_food_id": "D142",
+            "philfct_name": "Onion, Bombay bulb, boiled",
+            "philfct_filipino_name": "Sibuyas, Bombay ulo, nilaga",
+            "grams": 20,
+            "why": "Onion, Bombay bulb, boiled — sibuyas",
+            "per_100g": {
+              "kcal": "47",
+              "protein_g": "1.2",
+              "fat_g": "0.4",
+              "carb_g": "9.7",
+              "fibre_g": "1.3",
+              "sodium_mg": "3"
+            },
+            "contribution": {
+              "kcal": 9.4,
+              "protein_g": 0.24,
+              "fat_g": 0.08,
+              "carb_g": 1.94,
+              "fibre_g": 0.26,
+              "sodium_mg": 0.6
+            }
+          },
+          {
+            "philfct_food_id": "N019",
+            "philfct_name": "Salt, coarse",
+            "philfct_filipino_name": "Asin, magaspang",
+            "grams": 4,
+            "why": "Salt, coarse — asin",
+            "per_100g": {
+              "kcal": "0",
+              "protein_g": "0.0",
+              "fat_g": "0.0",
+              "carb_g": "0.0",
+              "fibre_g": "0.0",
+              "sodium_mg": "34836"
+            },
+            "contribution": {
+              "kcal": 0.0,
+              "protein_g": 0.0,
+              "fat_g": 0.0,
+              "carb_g": 0.0,
+              "fibre_g": 0.0,
+              "sodium_mg": 1393.44
+            }
+          }
+        ],
+        "water_added_g": 650,
+        "total_dish_weight_g": 1014,
+        "yield_factor": 1.0,
+        "totals_for_whole_dish": {
+          "kcal": 282.9,
+          "protein_g": 29.46,
+          "fat_g": 3.06,
+          "carb_g": 34.17,
+          "fibre_g": 4.47,
+          "sodium_mg": 1449.24
+        },
+        "rounding": "kcal and sodium_mg to whole numbers; protein, fat, carbohydrate and fibre to one decimal.",
+        "columns_null_because_source_has_no_value": []
+      },
+      "source_note": "CALCULATED: PhilFCT holds no entry for bulalo under any name searched in the full 1542-item dataset, so this row is computed from component foods. Every component nutrient value is transcribed from PhilFCT (https://i.fnri.dost.gov.ph/fct/library/search_item, fetched 2026-08-06); the component gram weights are declared, not sourced — FNRI publishes none. No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated. PhilFCT has no entry for bone marrow, so the marrow that gives bulalo its name contributes nothing to this row. Fat and energy are understated on that count as well as by the water. See the calculation object for components, PhilFCT Food IDs, grams and the arithmetic."
+    },
+    {
+      "name": "Pinakbet",
+      "aliases": [
+        "pakbet",
+        "pinakbet ilocano",
+        "mixed vegetable stew"
+      ],
+      "philfct_food_id": null,
+      "value_kind": "calculated",
+      "per_100g": null,
+      "kcal": 59,
+      "protein_g": 2.3,
+      "fat_g": 3.5,
+      "carb_g": 4.7,
+      "fibre_g": 1.2,
+      "sodium_mg": 215,
+      "tags": [
+        "vegetable",
+        "pork",
+        "shellfish",
+        "shrimp-paste",
+        "stew"
+      ],
+      "calculation": {
+        "method": "Recipe calculation. For each component: contribution = PhilFCT per-100 g value * grams / 100. The contributions are summed and divided by the finished dish weight, then multiplied by 100. Finished dish weight = sum of component grams + water added. A column is null when any component's PhilFCT panel prints '-' for it; nothing is estimated to fill a gap.",
+        "assumption": "No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated.",
+        "recipe_weights_sourced": false,
+        "recipe_weights_note": "The component gram weights and the added-water figure are declared here, NOT taken from FNRI. PhilFCT publishes no recipe weights and no yield factors for any dish. Every NUTRIENT number below is transcribed from PhilFCT.",
+        "components": [
+          {
+            "philfct_food_id": "D019",
+            "philfct_name": "Bitter melon/gourd fruit, boiled",
+            "philfct_filipino_name": "Ampalaya bunga, nilaga",
+            "grams": 70,
+            "why": "Bitter melon/gourd fruit, boiled — ampalaya",
+            "per_100g": {
+              "kcal": "19",
+              "protein_g": "0.4",
+              "fat_g": "0.2",
+              "carb_g": "3.8",
+              "fibre_g": "1.6",
+              "sodium_mg": "1"
+            },
+            "contribution": {
+              "kcal": 13.3,
+              "protein_g": 0.28,
+              "fat_g": 0.14,
+              "carb_g": 2.66,
+              "fibre_g": 1.12,
+              "sodium_mg": 0.7
+            }
+          },
+          {
+            "philfct_food_id": "D074",
+            "philfct_name": "Eggplant, boiled",
+            "philfct_filipino_name": "Talong, nilaga/Aubergine, boiled",
+            "grams": 70,
+            "why": "Eggplant, boiled — talong",
+            "per_100g": {
+              "kcal": "25",
+              "protein_g": "1.0",
+              "fat_g": "0.1",
+              "carb_g": "4.9",
+              "fibre_g": "1.5",
+              "sodium_mg": "1"
+            },
+            "contribution": {
+              "kcal": 17.5,
+              "protein_g": 0.7,
+              "fat_g": 0.07,
+              "carb_g": 3.43,
+              "fibre_g": 1.05,
+              "sodium_mg": 0.7
+            }
+          },
+          {
+            "philfct_food_id": "D226",
+            "philfct_name": "Squash fruit, boiled",
+            "philfct_filipino_name": "Kalabasa bunga, nilaga",
+            "grams": 70,
+            "why": "Squash fruit, boiled — kalabasa",
+            "per_100g": {
+              "kcal": "47",
+              "protein_g": "0.4",
+              "fat_g": "0.2",
+              "carb_g": "10.8",
+              "fibre_g": "1.1",
+              "sodium_mg": "5"
+            },
+            "contribution": {
+              "kcal": 32.9,
+              "protein_g": 0.28,
+              "fat_g": 0.14,
+              "carb_g": 7.56,
+              "fibre_g": 0.77,
+              "sodium_mg": 3.5
+            }
+          },
+          {
+            "philfct_food_id": "D140",
+            "philfct_name": "Okra, boiled",
+            "philfct_filipino_name": "Ladyfinger, boiled",
+            "grams": 50,
+            "why": "Okra, boiled — ladyfinger",
+            "per_100g": {
+              "kcal": "30",
+              "protein_g": "1.0",
+              "fat_g": "0.2",
+              "carb_g": "6.1",
+              "fibre_g": "2.6",
+              "sodium_mg": "6"
+            },
+            "contribution": {
+              "kcal": 15.0,
+              "protein_g": 0.5,
+              "fat_g": 0.1,
+              "carb_g": 3.05,
+              "fibre_g": 1.3,
+              "sodium_mg": 3.0
+            }
+          },
+          {
+            "philfct_food_id": "D233",
+            "philfct_name": "String/Yard long bean pod, green, boiled",
+            "philfct_filipino_name": "Sitaw bunga, berde, nilaga",
+            "grams": 50,
+            "why": "String/Yard long bean pod, green, boiled — sitaw",
+            "per_100g": {
+              "kcal": "52",
+              "protein_g": "4.0",
+              "fat_g": "0.5",
+              "carb_g": "7.9",
+              "fibre_g": "2.7",
+              "sodium_mg": "4"
+            },
+            "contribution": {
+              "kcal": 26.0,
+              "protein_g": 2.0,
+              "fat_g": 0.25,
+              "carb_g": 3.95,
+              "fibre_g": 1.35,
+              "sodium_mg": 2.0
+            }
+          },
+          {
+            "philfct_food_id": "F151",
+            "philfct_name": "Pork belly, boiled",
+            "philfct_filipino_name": "Baboy liempo, nilaga",
+            "grams": 40,
+            "why": "Pork belly, boiled — the pork it is sauteed with",
+            "per_100g": {
+              "kcal": "444",
+              "protein_g": "13.0",
+              "fat_g": "43.6",
+              "carb_g": "0.0",
+              "fibre_g": "0.0",
+              "sodium_mg": "89"
+            },
+            "contribution": {
+              "kcal": 177.6,
+              "protein_g": 5.2,
+              "fat_g": 17.44,
+              "carb_g": 0.0,
+              "fibre_g": 0.0,
+              "sodium_mg": 35.6
+            }
+          },
+          {
+            "philfct_food_id": "D258",
+            "philfct_name": "Tomato, boiled",
+            "philfct_filipino_name": "Kamatis, nilaga",
+            "grams": 40,
+            "why": "Tomato, boiled — kamatis",
+            "per_100g": {
+              "kcal": "25",
+              "protein_g": "0.4",
+              "fat_g": "0.1",
+              "carb_g": "5.6",
+              "fibre_g": "0.3",
+              "sodium_mg": "11"
+            },
+            "contribution": {
+              "kcal": 10.0,
+              "protein_g": 0.16,
+              "fat_g": 0.04,
+              "carb_g": 2.24,
+              "fibre_g": 0.12,
+              "sodium_mg": 4.4
+            }
+          },
+          {
+            "philfct_food_id": "D142",
+            "philfct_name": "Onion, Bombay bulb, boiled",
+            "philfct_filipino_name": "Sibuyas, Bombay ulo, nilaga",
+            "grams": 20,
+            "why": "Onion, Bombay bulb, boiled — sibuyas",
+            "per_100g": {
+              "kcal": "47",
+              "protein_g": "1.2",
+              "fat_g": "0.4",
+              "carb_g": "9.7",
+              "fibre_g": "1.3",
+              "sodium_mg": "3"
+            },
+            "contribution": {
+              "kcal": 9.4,
+              "protein_g": 0.24,
+              "fat_g": 0.08,
+              "carb_g": 1.94,
+              "fibre_g": 0.26,
+              "sodium_mg": 0.6
+            }
+          },
+          {
+            "philfct_food_id": "N021",
+            "philfct_name": "Shrimp paste, alamang",
+            "philfct_filipino_name": "Bagoong hipon, alamang",
+            "grams": 25,
+            "why": "Shrimp paste, alamang — bagoong. Contains shellfish.",
+            "per_100g": {
+              "kcal": "61",
+              "protein_g": "12.4",
+              "fat_g": "1.0",
+              "carb_g": "0.6",
+              "fibre_g": "1.3",
+              "sodium_mg": "4396"
+            },
+            "contribution": {
+              "kcal": 15.25,
+              "protein_g": 3.1,
+              "fat_g": 0.25,
+              "carb_g": 0.15,
+              "fibre_g": 0.325,
+              "sodium_mg": 1099.0
+            }
+          }
+        ],
+        "water_added_g": 100,
+        "total_dish_weight_g": 535,
+        "yield_factor": 1.0,
+        "totals_for_whole_dish": {
+          "kcal": 316.95,
+          "protein_g": 12.46,
+          "fat_g": 18.51,
+          "carb_g": 24.98,
+          "fibre_g": 6.295,
+          "sodium_mg": 1149.5
+        },
+        "rounding": "kcal and sodium_mg to whole numbers; protein, fat, carbohydrate and fibre to one decimal.",
+        "columns_null_because_source_has_no_value": []
+      },
+      "source_note": "CALCULATED: PhilFCT holds no entry for pinakbet under any name searched in the full 1542-item dataset, so this row is computed from component foods. Every component nutrient value is transcribed from PhilFCT (https://i.fnri.dost.gov.ph/fct/library/search_item, fetched 2026-08-06); the component gram weights are declared, not sourced — FNRI publishes none. No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated. Bagoong drives the sodium column almost entirely; a household that salts to taste will land somewhere else. See the calculation object for components, PhilFCT Food IDs, grams and the arithmetic."
+    },
+    {
+      "name": "Sisig",
+      "aliases": [
+        "pork sisig",
+        "sizzling sisig",
+        "sisig na baboy"
+      ],
+      "philfct_food_id": null,
+      "value_kind": "calculated",
+      "per_100g": null,
+      "kcal": 259,
+      "protein_g": 18.1,
+      "fat_g": 18.0,
+      "carb_g": 6.2,
+      "fibre_g": 0.5,
+      "sodium_mg": 664,
+      "tags": [
+        "pork",
+        "offal",
+        "grilled",
+        "sizzling",
+        "citrus"
+      ],
+      "calculation": {
+        "method": "Recipe calculation. For each component: contribution = PhilFCT per-100 g value * grams / 100. The contributions are summed and divided by the finished dish weight, then multiplied by 100. Finished dish weight = sum of component grams + water added. A column is null when any component's PhilFCT panel prints '-' for it; nothing is estimated to fill a gap.",
+        "assumption": "No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated.",
+        "recipe_weights_sourced": false,
+        "recipe_weights_note": "The component gram weights and the added-water figure are declared here, NOT taken from FNRI. PhilFCT publishes no recipe weights and no yield factors for any dish. Every NUTRIENT number below is transcribed from PhilFCT.",
+        "components": [
+          {
+            "philfct_food_id": "F164",
+            "philfct_name": "Pork ear, bbq",
+            "philfct_filipino_name": "Baboy tenga, bbq/",
+            "grams": 150,
+            "why": "Pork ear, bbq — stands for the boiled-then-grilled pork face, ear and jowl that sisig is chopped from",
+            "per_100g": {
+              "kcal": "350",
+              "protein_g": "23.8",
+              "fat_g": "25.9",
+              "carb_g": "5.4",
+              "fibre_g": "0.0",
+              "sodium_mg": "503"
+            },
+            "contribution": {
+              "kcal": 525.0,
+              "protein_g": 35.7,
+              "fat_g": 38.85,
+              "carb_g": 8.1,
+              "fibre_g": 0.0,
+              "sodium_mg": 754.5
+            }
+          },
+          {
+            "philfct_food_id": "F103",
+            "philfct_name": "Chicken liver",
+            "philfct_filipino_name": "Manok atay",
+            "grams": 20,
+            "why": "Chicken liver — manok atay",
+            "per_100g": {
+              "kcal": "124",
+              "protein_g": "18.1",
+              "fat_g": "3.9",
+              "carb_g": "4.0",
+              "fibre_g": "0.0",
+              "sodium_mg": "97"
+            },
+            "contribution": {
+              "kcal": 24.8,
+              "protein_g": 3.62,
+              "fat_g": 0.78,
+              "carb_g": 0.8,
+              "fibre_g": 0.0,
+              "sodium_mg": 19.4
+            }
+          },
+          {
+            "philfct_food_id": "D141",
+            "philfct_name": "Onion, Bombay bulb",
+            "philfct_filipino_name": "Sibuyas, Bombay ulo",
+            "grams": 30,
+            "why": "Onion, Bombay bulb — raw, stirred in at the end",
+            "per_100g": {
+              "kcal": "52",
+              "protein_g": "1.7",
+              "fat_g": "0.3",
+              "carb_g": "10.5",
+              "fibre_g": "2.0",
+              "sodium_mg": "11"
+            },
+            "contribution": {
+              "kcal": 15.6,
+              "protein_g": 0.51,
+              "fat_g": 0.09,
+              "carb_g": 3.15,
+              "fibre_g": 0.6,
+              "sodium_mg": 3.3
+            }
+          },
+          {
+            "philfct_food_id": "E023",
+            "philfct_name": "Calamansi/Philippine lemon",
+            "philfct_filipino_name": "Kalamansi/Calamondin",
+            "grams": 15,
+            "why": "Calamansi — kalamansi juice",
+            "per_100g": {
+              "kcal": "44",
+              "protein_g": "0.4",
+              "fat_g": "1.0",
+              "carb_g": "8.3",
+              "fibre_g": "2.4",
+              "sodium_mg": "3"
+            },
+            "contribution": {
+              "kcal": 6.6,
+              "protein_g": 0.06,
+              "fat_g": 0.15,
+              "carb_g": 1.245,
+              "fibre_g": 0.36,
+              "sodium_mg": 0.45
+            }
+          },
+          {
+            "philfct_food_id": "D164",
+            "philfct_name": "Pepper, chili fruit",
+            "philfct_filipino_name": "Sili, labuyo, bunga",
+            "grams": 5,
+            "why": "Pepper, chili fruit — siling labuyo",
+            "per_100g": {
+              "kcal": "75",
+              "protein_g": "4.8",
+              "fat_g": "2.2",
+              "carb_g": "9.0",
+              "fibre_g": "3.5",
+              "sodium_mg": "14"
+            },
+            "contribution": {
+              "kcal": 3.75,
+              "protein_g": 0.24,
+              "fat_g": 0.11,
+              "carb_g": 0.45,
+              "fibre_g": 0.175,
+              "sodium_mg": 0.7
+            }
+          },
+          {
+            "philfct_food_id": "N019",
+            "philfct_name": "Salt, coarse",
+            "philfct_filipino_name": "Asin, magaspang",
+            "grams": 2,
+            "why": "Salt, coarse — asin",
+            "per_100g": {
+              "kcal": "0",
+              "protein_g": "0.0",
+              "fat_g": "0.0",
+              "carb_g": "0.0",
+              "fibre_g": "0.0",
+              "sodium_mg": "34836"
+            },
+            "contribution": {
+              "kcal": 0.0,
+              "protein_g": 0.0,
+              "fat_g": 0.0,
+              "carb_g": 0.0,
+              "fibre_g": 0.0,
+              "sodium_mg": 696.72
+            }
+          }
+        ],
+        "water_added_g": 0,
+        "total_dish_weight_g": 222,
+        "yield_factor": 1.0,
+        "totals_for_whole_dish": {
+          "kcal": 575.75,
+          "protein_g": 40.13,
+          "fat_g": 39.98,
+          "carb_g": 13.745,
+          "fibre_g": 1.135,
+          "sodium_mg": 1475.07
+        },
+        "rounding": "kcal and sodium_mg to whole numbers; protein, fat, carbohydrate and fibre to one decimal.",
+        "columns_null_because_source_has_no_value": []
+      },
+      "source_note": "CALCULATED: PhilFCT holds no entry for sisig under any name searched in the full 1542-item dataset, so this row is computed from component foods. Every component nutrient value is transcribed from PhilFCT (https://i.fnri.dost.gov.ph/fct/library/search_item, fetched 2026-08-06); the component gram weights are declared, not sourced — FNRI publishes none. No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated. PhilFCT has no entry for pork face, jowl or maskara; F166 'Pork head' exists but PhilFCT prints no fibre and no sodium for it, so F164 'Pork ear, bbq' — a cooked, grilled pork offcut with a complete panel — stands in for the whole pork portion. No mayonnaise or egg is modelled. See the calculation object for components, PhilFCT Food IDs, grams and the arithmetic."
+    },
+    {
+      "name": "Chicken inasal",
+      "aliases": [
+        "inasal",
+        "inasal na manok",
+        "bacolod grilled chicken",
+        "chicken inasal"
+      ],
+      "philfct_food_id": null,
+      "value_kind": "calculated",
+      "per_100g": null,
+      "kcal": 154,
+      "protein_g": 14.0,
+      "fat_g": 10.4,
+      "carb_g": 1.1,
+      "fibre_g": 0.2,
+      "sodium_mg": 476,
+      "tags": [
+        "poultry",
+        "chicken",
+        "grilled",
+        "citrus",
+        "vinegar"
+      ],
+      "calculation": {
+        "method": "Recipe calculation. For each component: contribution = PhilFCT per-100 g value * grams / 100. The contributions are summed and divided by the finished dish weight, then multiplied by 100. Finished dish weight = sum of component grams + water added. A column is null when any component's PhilFCT panel prints '-' for it; nothing is estimated to fill a gap.",
+        "assumption": "No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated.",
+        "recipe_weights_sourced": false,
+        "recipe_weights_note": "The component gram weights and the added-water figure are declared here, NOT taken from FNRI. PhilFCT publishes no recipe weights and no yield factors for any dish. Every NUTRIENT number below is transcribed from PhilFCT.",
+        "components": [
+          {
+            "philfct_food_id": "F108",
+            "philfct_name": "Chicken thigh & leg",
+            "philfct_filipino_name": "Manok hita at binti",
+            "grams": 200,
+            "why": "Chicken thigh & leg — raw weight; PhilFCT has no grilled-chicken entry other than F265, which is lechon manok",
+            "per_100g": {
+              "kcal": "187",
+              "protein_g": "17.6",
+              "fat_g": "13.0",
+              "carb_g": "0.0",
+              "fibre_g": "0.0",
+              "sodium_mg": "79"
+            },
+            "contribution": {
+              "kcal": 374.0,
+              "protein_g": 35.2,
+              "fat_g": 26.0,
+              "carb_g": 0.0,
+              "fibre_g": 0.0,
+              "sodium_mg": 158.0
+            }
+          },
+          {
+            "philfct_food_id": "E023",
+            "philfct_name": "Calamansi/Philippine lemon",
+            "philfct_filipino_name": "Kalamansi/Calamondin",
+            "grams": 20,
+            "why": "Calamansi — kalamansi juice in the marinade",
+            "per_100g": {
+              "kcal": "44",
+              "protein_g": "0.4",
+              "fat_g": "1.0",
+              "carb_g": "8.3",
+              "fibre_g": "2.4",
+              "sodium_mg": "3"
+            },
+            "contribution": {
+              "kcal": 8.8,
+              "protein_g": 0.08,
+              "fat_g": 0.2,
+              "carb_g": 1.66,
+              "fibre_g": 0.48,
+              "sodium_mg": 0.6
+            }
+          },
+          {
+            "philfct_food_id": "N027",
+            "philfct_name": "Vinegar, coconut",
+            "philfct_filipino_name": "Suka, niyog",
+            "grams": 20,
+            "why": "Vinegar, coconut — suka",
+            "per_100g": {
+              "kcal": "7",
+              "protein_g": "0.0",
+              "fat_g": "0.1",
+              "carb_g": "1.4",
+              "fibre_g": "0.0",
+              "sodium_mg": "1"
+            },
+            "contribution": {
+              "kcal": 1.4,
+              "protein_g": 0.0,
+              "fat_g": 0.02,
+              "carb_g": 0.28,
+              "fibre_g": 0.0,
+              "sodium_mg": 0.2
+            }
+          },
+          {
+            "philfct_food_id": "D304",
+            "philfct_name": "Ginger",
+            "philfct_filipino_name": "Luya",
+            "grams": 10,
+            "why": "Ginger — luya",
+            "per_100g": {
+              "kcal": "46",
+              "protein_g": "1.1",
+              "fat_g": "0.8",
+              "carb_g": "8.5",
+              "fibre_g": "1.1",
+              "sodium_mg": "3"
+            },
+            "contribution": {
+              "kcal": 4.6,
+              "protein_g": 0.11,
+              "fat_g": 0.08,
+              "carb_g": 0.85,
+              "fibre_g": 0.11,
+              "sodium_mg": 0.3
+            }
+          },
+          {
+            "philfct_food_id": "N019",
+            "philfct_name": "Salt, coarse",
+            "philfct_filipino_name": "Asin, magaspang",
+            "grams": 3,
+            "why": "Salt, coarse — asin",
+            "per_100g": {
+              "kcal": "0",
+              "protein_g": "0.0",
+              "fat_g": "0.0",
+              "carb_g": "0.0",
+              "fibre_g": "0.0",
+              "sodium_mg": "34836"
+            },
+            "contribution": {
+              "kcal": 0.0,
+              "protein_g": 0.0,
+              "fat_g": 0.0,
+              "carb_g": 0.0,
+              "fibre_g": 0.0,
+              "sodium_mg": 1045.08
+            }
+          }
+        ],
+        "water_added_g": 0,
+        "total_dish_weight_g": 253,
+        "yield_factor": 1.0,
+        "totals_for_whole_dish": {
+          "kcal": 388.8,
+          "protein_g": 35.39,
+          "fat_g": 26.3,
+          "carb_g": 2.79,
+          "fibre_g": 0.59,
+          "sodium_mg": 1204.18
+        },
+        "rounding": "kcal and sodium_mg to whole numbers; protein, fat, carbohydrate and fibre to one decimal.",
+        "columns_null_because_source_has_no_value": []
+      },
+      "source_note": "CALCULATED: PhilFCT holds no entry for chicken inasal under any name searched in the full 1542-item dataset, so this row is computed from component foods. Every component nutrient value is transcribed from PhilFCT (https://i.fnri.dost.gov.ph/fct/library/search_item, fetched 2026-08-06); the component gram weights are declared, not sourced — FNRI publishes none. No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated. The chicken component is a RAW weight because PhilFCT holds no grilled-chicken entry, and grilling drives off a large share of that water. Annatto basting oil is not modelled. Of the six calculated rows this one and sisig carry the least added water, but this one carries the largest un-modelled cooking loss. See the calculation object for components, PhilFCT Food IDs, grams and the arithmetic."
+    }
+  ]
+}

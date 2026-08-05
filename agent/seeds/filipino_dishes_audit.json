@@ -1,0 +1,1953 @@
+{
+  "_meta": {
+    "purpose": "Verbatim PhilFCT values for every Food ID used by filipino_dishes.json, so a second agent can re-fetch the source and diff it against this file field by field.",
+    "source_url": "https://i.fnri.dost.gov.ph/fct/library/search_item",
+    "fetched_on": "2026-08-06",
+    "http_status": 200,
+    "bytes": 17444645,
+    "entries_in_source": 1542,
+    "basis": "Amount per 100 g E.P.",
+    "verbatim": "Values are the exact strings PhilFCT rendered, including '-' for no data. Nothing is coerced, rounded or filled in.",
+    "food_ids": [
+      "A005",
+      "A021",
+      "A042",
+      "B008",
+      "B016",
+      "D019",
+      "D036",
+      "D074",
+      "D140",
+      "D141",
+      "D142",
+      "D154",
+      "D161",
+      "D164",
+      "D166",
+      "D184",
+      "D226",
+      "D233",
+      "D243",
+      "D258",
+      "D304",
+      "E023",
+      "E094",
+      "F036",
+      "F103",
+      "F108",
+      "F111",
+      "F151",
+      "F164",
+      "F215",
+      "F243",
+      "F257",
+      "F265",
+      "N019",
+      "N021",
+      "N027",
+      "R011",
+      "R012",
+      "R027",
+      "R031",
+      "R050",
+      "R053",
+      "R064",
+      "R100"
+    ]
+  },
+  "foods": {
+    "A005": {
+      "food_id": "A005",
+      "english_name": "Corn on cob, yellow, boiled",
+      "scientific_name": "Zea mays",
+      "filipino_name": "Mais sa busal, dilaw, nilaga",
+      "edible_portion": "54%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "59.2",
+          "Energy, calculated (kcal)": "167",
+          "Protein (g)": "3.3",
+          "Total Fat (g)": "1.2",
+          "Carbohydrate, total (g)": "35.7",
+          "Ash, total (g)": "0.6"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "3.7",
+          "Sugars, total (g)": "7.0"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "10",
+          "Phosphorus, P (mg)": "92",
+          "Iron, Fe (mg)": "1.2",
+          "Sodium, Na (mg)": "1"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "104",
+          "Retinol Activity Equivalent, RAE (µg)": "9",
+          "Thiamin, Vitamin B1 (mg)": "0.09",
+          "Riboflavin, Vitamin B2 (mg)": "0.08",
+          "Niacin (mg)": "0.9",
+          "Ascorbic Acid, Vitamin C (mg)": "5"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.16",
+          "Fatty acids, monounsaturated, total (g)": "0.30",
+          "Fatty acids, polyunsaturated, total(g)": "0.48",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "A021": {
+      "food_id": "A021",
+      "english_name": "Rice, well-milled, fried",
+      "scientific_name": "N/A",
+      "filipino_name": "Bigas, maputi, sinangag",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "57.4",
+          "Energy, calculated (kcal)": "187",
+          "Protein (g)": "2.6",
+          "Total Fat (g)": "4.0",
+          "Carbohydrate, total (g)": "35.2",
+          "Ash, total (g)": "0.8"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.5",
+          "Sugars, total (g)": "0.1"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "3",
+          "Phosphorus, P (mg)": "35",
+          "Iron, Fe (mg)": "1.1",
+          "Sodium, Na (mg)": "4"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "0",
+          "Thiamin, Vitamin B1 (mg)": "0.02",
+          "Riboflavin, Vitamin B2 (mg)": "0.04",
+          "Niacin (mg)": "0.4",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "3.37",
+          "Fatty acids, monounsaturated, total (g)": "0.27",
+          "Fatty acids, polyunsaturated, total(g)": "0.11",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "A042": {
+      "food_id": "A042",
+      "english_name": "Bread, pan de sal",
+      "scientific_name": "N/A",
+      "filipino_name": "N/A",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "21.6",
+          "Energy, calculated (kcal)": "330",
+          "Protein (g)": "10.1",
+          "Total Fat (g)": "4.2",
+          "Carbohydrate, total (g)": "62.9",
+          "Ash, total (g)": "1.2"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "2.5",
+          "Sugars, total (g)": "7.6"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "24",
+          "Phosphorus, P (mg)": "75",
+          "Iron, Fe (mg)": "3.0",
+          "Sodium, Na (mg)": "596"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "0",
+          "Thiamin, Vitamin B1 (mg)": "0.23",
+          "Riboflavin, Vitamin B2 (mg)": "0.15",
+          "Niacin (mg)": "3.0",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.99",
+          "Fatty acids, monounsaturated, total (g)": "1.01",
+          "Fatty acids, polyunsaturated, total(g)": "1.78",
+          "Cholesterol (mg)": "4"
+        }
+      }
+    },
+    "B008": {
+      "food_id": "B008",
+      "english_name": "Potato, boiled",
+      "scientific_name": "Solanum tuberosum",
+      "filipino_name": "Patatas, nilaga",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "83.8",
+          "Energy, calculated (kcal)": "63",
+          "Protein (g)": "1.7",
+          "Total Fat (g)": "0.1",
+          "Carbohydrate, total (g)": "13.7",
+          "Ash, total (g)": "0.7"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "1.3",
+          "Sugars, total (g)": "0.6"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "34",
+          "Phosphorus, P (mg)": "44",
+          "Iron, Fe (mg)": "0.8",
+          "Sodium, Na (mg)": "4"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "0",
+          "Thiamin, Vitamin B1 (mg)": "0.07",
+          "Riboflavin, Vitamin B2 (mg)": "0.05",
+          "Niacin (mg)": "1.7",
+          "Ascorbic Acid, Vitamin C (mg)": "24"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.03",
+          "Fatty acids, monounsaturated, total (g)": "0",
+          "Fatty acids, polyunsaturated, total(g)": "0.04",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "B016": {
+      "food_id": "B016",
+      "english_name": "Taro, boiled",
+      "scientific_name": "Colocasia esculenta",
+      "filipino_name": "Gabi, nilaga",
+      "edible_portion": "69%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "73.4",
+          "Energy, calculated (kcal)": "105",
+          "Protein (g)": "1.5",
+          "Total Fat (g)": "0.1",
+          "Carbohydrate, total (g)": "24.4",
+          "Ash, total (g)": "0.6"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "3.7",
+          "Sugars, total (g)": "0.4"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "37",
+          "Phosphorus, P (mg)": "41",
+          "Iron, Fe (mg)": "0.7",
+          "Sodium, Na (mg)": "11"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "5",
+          "Retinol Activity Equivalent, RAE (µg)": "0",
+          "Thiamin, Vitamin B1 (mg)": "0.08",
+          "Riboflavin, Vitamin B2 (mg)": "0.01",
+          "Niacin (mg)": "1.0",
+          "Ascorbic Acid, Vitamin C (mg)": "6"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.02",
+          "Fatty acids, monounsaturated, total (g)": "0.01",
+          "Fatty acids, polyunsaturated, total(g)": "0.04",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "D019": {
+      "food_id": "D019",
+      "english_name": "Bitter melon/gourd fruit, boiled",
+      "scientific_name": "Momordica charantia",
+      "filipino_name": "Ampalaya bunga, nilaga",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "95.3",
+          "Energy, calculated (kcal)": "19",
+          "Protein (g)": "0.4",
+          "Total Fat (g)": "0.2",
+          "Carbohydrate, total (g)": "3.8",
+          "Ash, total (g)": "0.3"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "1.6",
+          "Sugars, total (g)": "1.5"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "33",
+          "Phosphorus, P (mg)": "13",
+          "Iron, Fe (mg)": "0.3",
+          "Sodium, Na (mg)": "1"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "95",
+          "Retinol Activity Equivalent, RAE (µg)": "8",
+          "Thiamin, Vitamin B1 (mg)": "0.01",
+          "Riboflavin, Vitamin B2 (mg)": "0.01",
+          "Niacin (mg)": "0.1",
+          "Ascorbic Acid, Vitamin C (mg)": "15"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.02",
+          "Fatty acids, monounsaturated, total (g)": "0.04",
+          "Fatty acids, polyunsaturated, total(g)": "0.09",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "D036": {
+      "food_id": "D036",
+      "english_name": "Cabbage, green, boiled",
+      "scientific_name": "Brassica oleracea var. capitata",
+      "filipino_name": "Repolyo, berde, nilaga",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "94.0",
+          "Energy, calculated (kcal)": "23",
+          "Protein (g)": "0.6",
+          "Total Fat (g)": "0.1",
+          "Carbohydrate, total (g)": "5.0",
+          "Ash, total (g)": "0.3"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "1.5",
+          "Sugars, total (g)": "2.3"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "34",
+          "Phosphorus, P (mg)": "12",
+          "Iron, Fe (mg)": "0.3",
+          "Sodium, Na (mg)": "6"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "25",
+          "Retinol Activity Equivalent, RAE (µg)": "2",
+          "Thiamin, Vitamin B1 (mg)": "0.02",
+          "Riboflavin, Vitamin B2 (mg)": "0.03",
+          "Niacin (mg)": "0.1",
+          "Ascorbic Acid, Vitamin C (mg)": "15"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.0",
+          "Fatty acids, monounsaturated, total (g)": "0.03",
+          "Fatty acids, polyunsaturated, total(g)": "0.04",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "D074": {
+      "food_id": "D074",
+      "english_name": "Eggplant, boiled",
+      "scientific_name": "Solanum melongena",
+      "filipino_name": "Talong, nilaga/Aubergine, boiled",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "93.6",
+          "Energy, calculated (kcal)": "25",
+          "Protein (g)": "1.0",
+          "Total Fat (g)": "0.1",
+          "Carbohydrate, total (g)": "4.9",
+          "Ash, total (g)": "0.4"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "1.5",
+          "Sugars, total (g)": "2.0"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "30",
+          "Phosphorus, P (mg)": "28",
+          "Iron, Fe (mg)": "0.5",
+          "Sodium, Na (mg)": "1"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "80",
+          "Retinol Activity Equivalent, RAE (µg)": "7",
+          "Thiamin, Vitamin B1 (mg)": "0.07",
+          "Riboflavin, Vitamin B2 (mg)": "0.04",
+          "Niacin (mg)": "0.5",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.02",
+          "Fatty acids, monounsaturated, total (g)": "0.01",
+          "Fatty acids, polyunsaturated, total(g)": "0.04",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "D140": {
+      "food_id": "D140",
+      "english_name": "Okra, boiled",
+      "scientific_name": "Abelmoschus esculentus",
+      "filipino_name": "Ladyfinger, boiled",
+      "edible_portion": "90%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "92.2",
+          "Energy, calculated (kcal)": "30",
+          "Protein (g)": "1.0",
+          "Total Fat (g)": "0.2",
+          "Carbohydrate, total (g)": "6.1",
+          "Ash, total (g)": "0.5"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "2.6",
+          "Sugars, total (g)": "2.5"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "79",
+          "Phosphorus, P (mg)": "23",
+          "Iron, Fe (mg)": "0.5",
+          "Sodium, Na (mg)": "6"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "80",
+          "Retinol Activity Equivalent, RAE (µg)": "7",
+          "Thiamin, Vitamin B1 (mg)": "0.04",
+          "Riboflavin, Vitamin B2 (mg)": "0.05",
+          "Niacin (mg)": "0.6",
+          "Ascorbic Acid, Vitamin C (mg)": "12"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.04",
+          "Fatty acids, monounsaturated, total (g)": "0.03",
+          "Fatty acids, polyunsaturated, total(g)": "0.04",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "D141": {
+      "food_id": "D141",
+      "english_name": "Onion, Bombay bulb",
+      "scientific_name": "Allium cepa",
+      "filipino_name": "Sibuyas, Bombay ulo",
+      "edible_portion": "93%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "87.0",
+          "Energy, calculated (kcal)": "52",
+          "Protein (g)": "1.7",
+          "Total Fat (g)": "0.3",
+          "Carbohydrate, total (g)": "10.5",
+          "Ash, total (g)": "0.5"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "2.0",
+          "Sugars, total (g)": "5.1"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "40",
+          "Phosphorus, P (mg)": "51",
+          "Iron, Fe (mg)": "0.6",
+          "Sodium, Na (mg)": "11"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "3",
+          "Retinol Activity Equivalent, RAE (µg)": "0",
+          "Thiamin, Vitamin B1 (mg)": "0.04",
+          "Riboflavin, Vitamin B2 (mg)": "0.01",
+          "Niacin (mg)": "0.4",
+          "Ascorbic Acid, Vitamin C (mg)": "5"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.13",
+          "Fatty acids, monounsaturated, total (g)": "0.04",
+          "Fatty acids, polyunsaturated, total(g)": "0.05",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "D142": {
+      "food_id": "D142",
+      "english_name": "Onion, Bombay bulb, boiled",
+      "scientific_name": "Allium cepa",
+      "filipino_name": "Sibuyas, Bombay ulo, nilaga",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "88.3",
+          "Energy, calculated (kcal)": "47",
+          "Protein (g)": "1.2",
+          "Total Fat (g)": "0.4",
+          "Carbohydrate, total (g)": "9.7",
+          "Ash, total (g)": "0.4"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "1.3",
+          "Sugars, total (g)": "4.6"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "40",
+          "Phosphorus, P (mg)": "37",
+          "Iron, Fe (mg)": "0.6",
+          "Sodium, Na (mg)": "3"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "0",
+          "Thiamin, Vitamin B1 (mg)": "0.04",
+          "Riboflavin, Vitamin B2 (mg)": "0.01",
+          "Niacin (mg)": "0.2",
+          "Ascorbic Acid, Vitamin C (mg)": "4"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.07",
+          "Fatty acids, monounsaturated, total (g)": "0.06",
+          "Fatty acids, polyunsaturated, total(g)": "0.15",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "D154": {
+      "food_id": "D154",
+      "english_name": "Papaya fruit, unripe",
+      "scientific_name": "Carica papaya",
+      "filipino_name": "N/A",
+      "edible_portion": "64%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "92.9",
+          "Energy, calculated (kcal)": "27",
+          "Protein (g)": "1.0",
+          "Total Fat (g)": "0.1",
+          "Carbohydrate, total (g)": "5.5",
+          "Ash, total (g)": "0.5"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.7",
+          "Sugars, total (g)": "3.0"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "60",
+          "Phosphorus, P (mg)": "28",
+          "Iron, Fe (mg)": "0.3",
+          "Sodium, Na (mg)": "4"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "0",
+          "Thiamin, Vitamin B1 (mg)": "0.03",
+          "Riboflavin, Vitamin B2 (mg)": "0.02",
+          "Niacin (mg)": "0.2",
+          "Ascorbic Acid, Vitamin C (mg)": "20"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.03",
+          "Fatty acids, monounsaturated, total (g)": "0.03",
+          "Fatty acids, polyunsaturated, total(g)": "0.02",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "D161": {
+      "food_id": "D161",
+      "english_name": "Pechay lvs, boiled",
+      "scientific_name": "Brassica chinensis",
+      "filipino_name": "Petsay dahon, nilaga",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "94.6",
+          "Energy, calculated (kcal)": "21",
+          "Protein (g)": "1.7",
+          "Total Fat (g)": "0.5",
+          "Carbohydrate, total (g)": "2.4",
+          "Ash, total (g)": "0.8"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "1.1",
+          "Sugars, total (g)": "0.8"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "155",
+          "Phosphorus, P (mg)": "30",
+          "Iron, Fe (mg)": "2.6",
+          "Sodium, Na (mg)": "12"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "1355",
+          "Retinol Activity Equivalent, RAE (µg)": "113",
+          "Thiamin, Vitamin B1 (mg)": "0.06",
+          "Riboflavin, Vitamin B2 (mg)": "0.10",
+          "Niacin (mg)": "0.7",
+          "Ascorbic Acid, Vitamin C (mg)": "54"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.07",
+          "Fatty acids, monounsaturated, total (g)": "0.04",
+          "Fatty acids, polyunsaturated, total(g)": "0.24",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "D164": {
+      "food_id": "D164",
+      "english_name": "Pepper, chili fruit",
+      "scientific_name": "Capsicum frutescens",
+      "filipino_name": "Sili, labuyo, bunga",
+      "edible_portion": "89%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "72.2",
+          "Energy, calculated (kcal)": "75",
+          "Protein (g)": "4.8",
+          "Total Fat (g)": "2.2",
+          "Carbohydrate, total (g)": "9.0",
+          "Ash, total (g)": "11.8"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "3.5",
+          "Sugars, total (g)": "5.0"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "65",
+          "Phosphorus, P (mg)": "89",
+          "Iron, Fe (mg)": "2.3",
+          "Sodium, Na (mg)": "14"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "4205",
+          "Retinol Activity Equivalent, RAE (µg)": "350",
+          "Thiamin, Vitamin B1 (mg)": "0.31",
+          "Riboflavin, Vitamin B2 (mg)": "0.25",
+          "Niacin (mg)": "1.8",
+          "Ascorbic Acid, Vitamin C (mg)": "69"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "-",
+          "Fatty acids, monounsaturated, total (g)": "-",
+          "Fatty acids, polyunsaturated, total(g)": "-",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "D166": {
+      "food_id": "D166",
+      "english_name": "Pepper, chili lvs, boiled",
+      "scientific_name": "Capsicum frutescens",
+      "filipino_name": "Sili, labuyo, dahon, nilaga",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "86.8",
+          "Energy, calculated (kcal)": "52",
+          "Protein (g)": "1.8",
+          "Total Fat (g)": "0.3",
+          "Carbohydrate, total (g)": "10.5",
+          "Ash, total (g)": "0.6"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "-",
+          "Sugars, total (g)": "-"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "87",
+          "Phosphorus, P (mg)": "16",
+          "Iron, Fe (mg)": "1.7",
+          "Sodium, Na (mg)": "4"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "2030",
+          "Retinol Activity Equivalent, RAE (µg)": "169",
+          "Thiamin, Vitamin B1 (mg)": "0.09",
+          "Riboflavin, Vitamin B2 (mg)": "0.08",
+          "Niacin (mg)": "0.6",
+          "Ascorbic Acid, Vitamin C (mg)": "5"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "-",
+          "Fatty acids, monounsaturated, total (g)": "-",
+          "Fatty acids, polyunsaturated, total(g)": "-",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "D184": {
+      "food_id": "D184",
+      "english_name": "Radish, boiled",
+      "scientific_name": "Raphanus sativus",
+      "filipino_name": "Labanos/Rabanos, lamang ugat, nilaga",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "96.2",
+          "Energy, calculated (kcal)": "15",
+          "Protein (g)": "0.2",
+          "Total Fat (g)": "0.1",
+          "Carbohydrate, total (g)": "3.2",
+          "Ash, total (g)": "0.3"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.4",
+          "Sugars, total (g)": "1.9"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "24",
+          "Phosphorus, P (mg)": "13",
+          "Iron, Fe (mg)": "0.5",
+          "Sodium, Na (mg)": "15"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "0",
+          "Thiamin, Vitamin B1 (mg)": "0.01",
+          "Riboflavin, Vitamin B2 (mg)": "0.01",
+          "Niacin (mg)": "0.3",
+          "Ascorbic Acid, Vitamin C (mg)": "15"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.03",
+          "Fatty acids, monounsaturated, total (g)": "0.02",
+          "Fatty acids, polyunsaturated, total(g)": "0.05",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "D226": {
+      "food_id": "D226",
+      "english_name": "Squash fruit, boiled",
+      "scientific_name": "Cucurbita maxima",
+      "filipino_name": "Kalabasa bunga, nilaga",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "88.2",
+          "Energy, calculated (kcal)": "47",
+          "Protein (g)": "0.4",
+          "Total Fat (g)": "0.2",
+          "Carbohydrate, total (g)": "10.8",
+          "Ash, total (g)": "0.4"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "1.1",
+          "Sugars, total (g)": "3.4"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "38",
+          "Phosphorus, P (mg)": "20",
+          "Iron, Fe (mg)": "0.3",
+          "Sodium, Na (mg)": "5"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "410",
+          "Retinol Activity Equivalent, RAE (µg)": "34",
+          "Thiamin, Vitamin B1 (mg)": "0.03",
+          "Riboflavin, Vitamin B2 (mg)": "0.02",
+          "Niacin (mg)": "0.5",
+          "Ascorbic Acid, Vitamin C (mg)": "8"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.04",
+          "Fatty acids, monounsaturated, total (g)": "0.02",
+          "Fatty acids, polyunsaturated, total(g)": "0.08",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "D233": {
+      "food_id": "D233",
+      "english_name": "String/Yard long bean pod, green, boiled",
+      "scientific_name": "Vigna unguiculata ssp. sesquipedalis",
+      "filipino_name": "Sitaw bunga, berde, nilaga",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "87.0",
+          "Energy, calculated (kcal)": "52",
+          "Protein (g)": "4.0",
+          "Total Fat (g)": "0.5",
+          "Carbohydrate, total (g)": "7.9",
+          "Ash, total (g)": "0.6"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "2.7",
+          "Sugars, total (g)": "-"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "74",
+          "Phosphorus, P (mg)": "43",
+          "Iron, Fe (mg)": "0.8",
+          "Sodium, Na (mg)": "4"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "315",
+          "Retinol Activity Equivalent, RAE (µg)": "26",
+          "Thiamin, Vitamin B1 (mg)": "0.12",
+          "Riboflavin, Vitamin B2 (mg)": "0.11",
+          "Niacin (mg)": "0.8",
+          "Ascorbic Acid, Vitamin C (mg)": "15"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.13",
+          "Fatty acids, monounsaturated, total (g)": "0.05",
+          "Fatty acids, polyunsaturated, total(g)": "0.21",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "D243": {
+      "food_id": "D243",
+      "english_name": "Swamp cabbage lvs, boiled",
+      "scientific_name": "Ipomoea aquatica",
+      "filipino_name": "Kangkong dahon, nilaga/Water spinach lvs, boiled",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "92.9",
+          "Energy, calculated (kcal)": "28",
+          "Protein (g)": "1.5",
+          "Total Fat (g)": "0.4",
+          "Carbohydrate, total (g)": "4.7",
+          "Ash, total (g)": "0.5"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "2.6",
+          "Sugars, total (g)": "0.4"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "51",
+          "Phosphorus, P (mg)": "25",
+          "Iron, Fe (mg)": "1.3",
+          "Sodium, Na (mg)": "78"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "1550",
+          "Retinol Activity Equivalent, RAE (µg)": "129",
+          "Thiamin, Vitamin B1 (mg)": "0.03",
+          "Riboflavin, Vitamin B2 (mg)": "0.08",
+          "Niacin (mg)": "0.6",
+          "Ascorbic Acid, Vitamin C (mg)": "10"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.09",
+          "Fatty acids, monounsaturated, total (g)": "0.02",
+          "Fatty acids, polyunsaturated, total(g)": "0.16",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "D258": {
+      "food_id": "D258",
+      "english_name": "Tomato, boiled",
+      "scientific_name": "Lycopersicon esculentum",
+      "filipino_name": "Kamatis, nilaga",
+      "edible_portion": "98%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "93.6",
+          "Energy, calculated (kcal)": "25",
+          "Protein (g)": "0.4",
+          "Total Fat (g)": "0.1",
+          "Carbohydrate, total (g)": "5.6",
+          "Ash, total (g)": "0.3"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.3",
+          "Sugars, total (g)": "3.6"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "13",
+          "Phosphorus, P (mg)": "9",
+          "Iron, Fe (mg)": "0.5",
+          "Sodium, Na (mg)": "11"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "255",
+          "Retinol Activity Equivalent, RAE (µg)": "21",
+          "Thiamin, Vitamin B1 (mg)": "0.03",
+          "Riboflavin, Vitamin B2 (mg)": "0.02",
+          "Niacin (mg)": "0.3",
+          "Ascorbic Acid, Vitamin C (mg)": "15"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.01",
+          "Fatty acids, monounsaturated, total (g)": "0.02",
+          "Fatty acids, polyunsaturated, total(g)": "0.04",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "D304": {
+      "food_id": "D304",
+      "english_name": "Ginger",
+      "scientific_name": "Zingiber officinale",
+      "filipino_name": "Luya",
+      "edible_portion": "74%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "88.8",
+          "Energy, calculated (kcal)": "46",
+          "Protein (g)": "1.1",
+          "Total Fat (g)": "0.8",
+          "Carbohydrate, total (g)": "8.5",
+          "Ash, total (g)": "0.8"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "1.1",
+          "Sugars, total (g)": "0.9"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "32",
+          "Phosphorus, P (mg)": "30",
+          "Iron, Fe (mg)": "3.0",
+          "Sodium, Na (mg)": "3"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "0",
+          "Thiamin, Vitamin B1 (mg)": "0.04",
+          "Riboflavin, Vitamin B2 (mg)": "0.04",
+          "Niacin (mg)": "0.6",
+          "Ascorbic Acid, Vitamin C (mg)": "4"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.31",
+          "Fatty acids, monounsaturated, total (g)": "0.16",
+          "Fatty acids, polyunsaturated, total(g)": "0.15",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "E023": {
+      "food_id": "E023",
+      "english_name": "Calamansi/Philippine lemon",
+      "scientific_name": "X Citrofortunella microcarpa",
+      "filipino_name": "Kalamansi/Calamondin",
+      "edible_portion": "38%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "89.8",
+          "Energy, calculated (kcal)": "44",
+          "Protein (g)": "0.4",
+          "Total Fat (g)": "1.0",
+          "Carbohydrate, total (g)": "8.3",
+          "Ash, total (g)": "0.5"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "2.4",
+          "Sugars, total (g)": "1.5"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "18",
+          "Phosphorus, P (mg)": "12",
+          "Iron, Fe (mg)": "0.8",
+          "Sodium, Na (mg)": "3"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "0",
+          "Thiamin, Vitamin B1 (mg)": "0.02",
+          "Riboflavin, Vitamin B2 (mg)": "0.01",
+          "Niacin (mg)": "0.2",
+          "Ascorbic Acid, Vitamin C (mg)": "45"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.12",
+          "Fatty acids, monounsaturated, total (g)": "0.07",
+          "Fatty acids, polyunsaturated, total(g)": "0.29",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "E094": {
+      "food_id": "E094",
+      "english_name": "Tamarind, unripe",
+      "scientific_name": "Tamarindus indica",
+      "filipino_name": "Sampalok, hilaw",
+      "edible_portion": "40%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "80.3",
+          "Energy, calculated (kcal)": "77",
+          "Protein (g)": "0.9",
+          "Total Fat (g)": "0.3",
+          "Carbohydrate, total (g)": "17.7",
+          "Ash, total (g)": "0.8"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "-",
+          "Sugars, total (g)": "-"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "68",
+          "Phosphorus, P (mg)": "29",
+          "Iron, Fe (mg)": "0.5",
+          "Sodium, Na (mg)": "3"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "10",
+          "Retinol Activity Equivalent, RAE (µg)": "1",
+          "Thiamin, Vitamin B1 (mg)": "0.14",
+          "Riboflavin, Vitamin B2 (mg)": "0.06",
+          "Niacin (mg)": "0.4",
+          "Ascorbic Acid, Vitamin C (mg)": "20"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.14",
+          "Fatty acids, monounsaturated, total (g)": "0.09",
+          "Fatty acids, polyunsaturated, total(g)": "0.03",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "F036": {
+      "food_id": "F036",
+      "english_name": "Beef shank, boiled",
+      "scientific_name": "Bos taurus",
+      "filipino_name": "Baka kenchi, nilaga",
+      "edible_portion": "89%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "77.9",
+          "Energy, calculated (kcal)": "92",
+          "Protein (g)": "19.5",
+          "Total Fat (g)": "1.5",
+          "Carbohydrate, total (g)": "0.0",
+          "Ash, total (g)": "1.1"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.0",
+          "Sugars, total (g)": "0.0"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "31",
+          "Phosphorus, P (mg)": "205",
+          "Iron, Fe (mg)": "1.1",
+          "Sodium, Na (mg)": "34"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "15",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "15",
+          "Thiamin, Vitamin B1 (mg)": "0.02",
+          "Riboflavin, Vitamin B2 (mg)": "0.03",
+          "Niacin (mg)": "3.9",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.54",
+          "Fatty acids, monounsaturated, total (g)": "0.67",
+          "Fatty acids, polyunsaturated, total(g)": "0.05",
+          "Cholesterol (mg)": "-"
+        }
+      }
+    },
+    "F103": {
+      "food_id": "F103",
+      "english_name": "Chicken liver",
+      "scientific_name": "Gallus gallus",
+      "filipino_name": "Manok atay",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "72.7",
+          "Energy, calculated (kcal)": "124",
+          "Protein (g)": "18.1",
+          "Total Fat (g)": "3.9",
+          "Carbohydrate, total (g)": "4.0",
+          "Ash, total (g)": "1.3"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.0",
+          "Sugars, total (g)": "0.0"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "14",
+          "Phosphorus, P (mg)": "152",
+          "Iron, Fe (mg)": "3.5",
+          "Sodium, Na (mg)": "97"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "9205",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "9205",
+          "Thiamin, Vitamin B1 (mg)": "0.30",
+          "Riboflavin, Vitamin B2 (mg)": "4.49",
+          "Niacin (mg)": "11.2",
+          "Ascorbic Acid, Vitamin C (mg)": "35"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "1.26",
+          "Fatty acids, monounsaturated, total (g)": "1.01",
+          "Fatty acids, polyunsaturated, total(g)": "1.05",
+          "Cholesterol (mg)": "279"
+        }
+      }
+    },
+    "F108": {
+      "food_id": "F108",
+      "english_name": "Chicken thigh & leg",
+      "scientific_name": "Gallus gallus",
+      "filipino_name": "Manok hita at binti",
+      "edible_portion": "74%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "69.4",
+          "Energy, calculated (kcal)": "187",
+          "Protein (g)": "17.6",
+          "Total Fat (g)": "13.0",
+          "Carbohydrate, total (g)": "0.0",
+          "Ash, total (g)": "0.9"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.0",
+          "Sugars, total (g)": "0.0"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "20",
+          "Phosphorus, P (mg)": "160",
+          "Iron, Fe (mg)": "0.9",
+          "Sodium, Na (mg)": "79"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "30",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "30",
+          "Thiamin, Vitamin B1 (mg)": "0.05",
+          "Riboflavin, Vitamin B2 (mg)": "0.19",
+          "Niacin (mg)": "4.8",
+          "Ascorbic Acid, Vitamin C (mg)": "4"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "3.55",
+          "Fatty acids, monounsaturated, total (g)": "5.41",
+          "Fatty acids, polyunsaturated, total(g)": "2.72",
+          "Cholesterol (mg)": "76"
+        }
+      }
+    },
+    "F111": {
+      "food_id": "F111",
+      "english_name": "Chicken, white meat, boiled",
+      "scientific_name": "Gallus gallus",
+      "filipino_name": "Manok laman, nilaga",
+      "edible_portion": "72%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "61.8",
+          "Energy, calculated (kcal)": "173",
+          "Protein (g)": "32.9",
+          "Total Fat (g)": "4.6",
+          "Carbohydrate, total (g)": "0.0",
+          "Ash, total (g)": "0.7"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.0",
+          "Sugars, total (g)": "0.0"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "104",
+          "Phosphorus, P (mg)": "154",
+          "Iron, Fe (mg)": "2.8",
+          "Sodium, Na (mg)": "81"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "20",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "20",
+          "Thiamin, Vitamin B1 (mg)": "0.04",
+          "Riboflavin, Vitamin B2 (mg)": "0.04",
+          "Niacin (mg)": "4.5",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "1.18",
+          "Fatty acids, monounsaturated, total (g)": "1.34",
+          "Fatty acids, polyunsaturated, total(g)": "1.12",
+          "Cholesterol (mg)": "-"
+        }
+      }
+    },
+    "F151": {
+      "food_id": "F151",
+      "english_name": "Pork belly, boiled",
+      "scientific_name": "Sus scrofa scrofa",
+      "filipino_name": "Baboy liempo, nilaga",
+      "edible_portion": "96%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "42.8",
+          "Energy, calculated (kcal)": "444",
+          "Protein (g)": "13.0",
+          "Total Fat (g)": "43.6",
+          "Carbohydrate, total (g)": "0.0",
+          "Ash, total (g)": "0.6"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.0",
+          "Sugars, total (g)": "0.0"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "20",
+          "Phosphorus, P (mg)": "84",
+          "Iron, Fe (mg)": "1.1",
+          "Sodium, Na (mg)": "89"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "70",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "70",
+          "Thiamin, Vitamin B1 (mg)": "0.15",
+          "Riboflavin, Vitamin B2 (mg)": "0.11",
+          "Niacin (mg)": "1.8",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "14.16",
+          "Fatty acids, monounsaturated, total (g)": "18.20",
+          "Fatty acids, polyunsaturated, total(g)": "6.26",
+          "Cholesterol (mg)": "48"
+        }
+      }
+    },
+    "F164": {
+      "food_id": "F164",
+      "english_name": "Pork ear, bbq",
+      "scientific_name": "Sus scrofa scrofa",
+      "filipino_name": "Baboy tenga, bbq/",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "43.0",
+          "Energy, calculated (kcal)": "350",
+          "Protein (g)": "23.8",
+          "Total Fat (g)": "25.9",
+          "Carbohydrate, total (g)": "5.4",
+          "Ash, total (g)": "1.9"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.0",
+          "Sugars, total (g)": "0.5"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "24",
+          "Phosphorus, P (mg)": "116",
+          "Iron, Fe (mg)": "2.0",
+          "Sodium, Na (mg)": "503"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "22",
+          "beta-Carotene (µg)": "27",
+          "Retinol Activity Equivalent, RAE (µg)": "24",
+          "Thiamin, Vitamin B1 (mg)": "0.04",
+          "Riboflavin, Vitamin B2 (mg)": "0.15",
+          "Niacin (mg)": "1.8",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "8.42",
+          "Caproic, C6 (g)": "0",
+          "Caprylic, C8 (g)": "0.02",
+          "Capric, C10 (g)": "0.03",
+          "Lauric, C12 (g)": "0.14",
+          "Myristic, C14 (g)": "0.42",
+          "Palmitic, C16 (g)": "5.53",
+          "Stearic, C18 (g)": "2.27",
+          "Arachidic, C20 (g)": "0",
+          "Behenic, C22 (g)": "0",
+          "Lignoceric, C24 (g)": "0",
+          "Fatty acids, monounsaturated, total (g)": "10.67",
+          "Oleic , C18:1 (g)": "10.67",
+          "Fatty acids, polyunsaturated, total(g)": "4.46",
+          "Linoleic, C18:2 (g)": "3.91",
+          "Linolenic, C18:3 (g)": "0.55",
+          "Cholesterol (mg)": "145"
+        }
+      }
+    },
+    "F215": {
+      "food_id": "F215",
+      "english_name": "Beef jerky",
+      "scientific_name": "N/A",
+      "filipino_name": "Tapa, baka",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "76.6",
+          "Energy, calculated (kcal)": "102",
+          "Protein (g)": "13.8",
+          "Total Fat (g)": "3.6",
+          "Carbohydrate, total (g)": "3.7",
+          "Ash, total (g)": "2.3"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.0",
+          "Sugars, total (g)": "1.2"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "10",
+          "Phosphorus, P (mg)": "164",
+          "Iron, Fe (mg)": "1.0",
+          "Potassium, K (mg)": "239",
+          "Sodium, Na (mg)": "694",
+          "Zinc, Zn (mg)": "2.90"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "8",
+          "Retinol Activity Equivalent, RAE (µg)": "1",
+          "Thiamin, Vitamin B1 (mg)": "0.03",
+          "Riboflavin, Vitamin B2 (mg)": "0.09",
+          "Niacin (mg)": "4.4",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "1.33",
+          "Caproic, C6 (g)": "0",
+          "Caprylic, C8 (g)": "0.01",
+          "Capric, C10 (g)": "0.01",
+          "Lauric, C12 (g)": "0.04",
+          "Myristic, C14 (g)": "0.10",
+          "Palmitic, C16 (g)": "0.71",
+          "Stearic, C18 (g)": "0.45",
+          "Arachidic, C20 (g)": "0",
+          "Behenic, C22 (g)": "0.01",
+          "Lignoceric, C24 (g)": "0",
+          "Fatty acids, monounsaturated, total (g)": "0.96",
+          "Oleic , C18:1 (g)": "0.96",
+          "Fatty acids, polyunsaturated, total(g)": "0.13",
+          "Linoleic, C18:2 (g)": "0.11",
+          "Linolenic, C18:3 (g)": "0.02",
+          "Cholesterol (mg)": "39"
+        }
+      }
+    },
+    "F243": {
+      "food_id": "F243",
+      "english_name": "Pork jerky",
+      "scientific_name": "N/A",
+      "filipino_name": "Tapa, baboy",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "51.4",
+          "Energy, calculated (kcal)": "277",
+          "Protein (g)": "15.8",
+          "Total Fat (g)": "19.2",
+          "Carbohydrate, total (g)": "10.2",
+          "Ash, total (g)": "3.4"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.0",
+          "Sugars, total (g)": "-"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "39",
+          "Phosphorus, P (mg)": "118",
+          "Iron, Fe (mg)": "1.6",
+          "Sodium, Na (mg)": "1086"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "80",
+          "beta-Carotene (µg)": "10",
+          "Retinol Activity Equivalent, RAE (µg)": "81",
+          "Thiamin, Vitamin B1 (mg)": "0.22",
+          "Riboflavin, Vitamin B2 (mg)": "0.12",
+          "Niacin (mg)": "3.4",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "6.59",
+          "Fatty acids, monounsaturated, total (g)": "6.90",
+          "Fatty acids, polyunsaturated, total(g)": "2.10",
+          "Cholesterol (mg)": "-"
+        }
+      }
+    },
+    "F257": {
+      "food_id": "F257",
+      "english_name": "Sausage, pork",
+      "scientific_name": "N/A",
+      "filipino_name": "Longanisa, baboy",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "47.3",
+          "Energy, calculated (kcal)": "315",
+          "Protein (g)": "11.8",
+          "Total Fat (g)": "22.7",
+          "Carbohydrate, total (g)": "15.8",
+          "Ash, total (g)": "2.4"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.9",
+          "Sugars, total (g)": "-"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "23",
+          "Phosphorus, P (mg)": "43",
+          "Iron, Fe (mg)": "1.5",
+          "Potassium, K (mg)": "165",
+          "Sodium, Na (mg)": "714",
+          "Zinc, Zn (mg)": "1.70"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "58",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "58",
+          "Thiamin, Vitamin B1 (mg)": "0.23",
+          "Riboflavin, Vitamin B2 (mg)": "0.10",
+          "Niacin (mg)": "1.6",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "6.93",
+          "Fatty acids, monounsaturated, total (g)": "9.01",
+          "Fatty acids, polyunsaturated, total(g)": "4.06",
+          "Cholesterol (mg)": "65"
+        }
+      }
+    },
+    "F265": {
+      "food_id": "F265",
+      "english_name": "Chicken, whole, seasoned, roasted",
+      "scientific_name": "Gallus gallus",
+      "filipino_name": "Lechon manok",
+      "edible_portion": "70%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "56.0",
+          "Energy, calculated (kcal)": "226",
+          "Protein (g)": "24.8",
+          "Total Fat (g)": "12.0",
+          "Carbohydrate, total (g)": "4.7",
+          "Ash, total (g)": "2.5"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.0",
+          "Sugars, total (g)": "1.5"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "33",
+          "Phosphorus, P (mg)": "223",
+          "Iron, Fe (mg)": "2.1",
+          "Potassium, K (mg)": "287",
+          "Sodium, Na (mg)": "716",
+          "Zinc, Zn (mg)": "1.70"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "58",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "58",
+          "Thiamin, Vitamin B1 (mg)": "0.07",
+          "Riboflavin, Vitamin B2 (mg)": "0.13",
+          "Niacin (mg)": "12.4",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "4.07",
+          "Caproic, C6 (g)": "0",
+          "Caprylic, C8 (g)": "0.02",
+          "Capric, C10 (g)": "0.04",
+          "Lauric, C12 (g)": "0.59",
+          "Myristic, C14 (g)": "0.44",
+          "Palmitic, C16 (g)": "2.41",
+          "Stearic, C18 (g)": "0.58",
+          "Arachidic, C20 (g)": "0",
+          "Behenic, C22 (g)": "0",
+          "Lignoceric, C24 (g)": "0",
+          "Fatty acids, monounsaturated, total (g)": "3.59",
+          "Oleic , C18:1 (g)": "3.59",
+          "Fatty acids, polyunsaturated, total(g)": "1.55",
+          "Linoleic, C18:2 (g)": "1.46",
+          "Linolenic, C18:3 (g)": "0.09",
+          "Cholesterol (mg)": "122"
+        }
+      }
+    },
+    "N019": {
+      "food_id": "N019",
+      "english_name": "Salt, coarse",
+      "scientific_name": "N/A",
+      "filipino_name": "Asin, magaspang",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "14.0",
+          "Energy, calculated (kcal)": "0",
+          "Protein (g)": "0.0",
+          "Total Fat (g)": "0.0",
+          "Carbohydrate, total (g)": "0.0",
+          "Ash, total (g)": "85.6"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.0",
+          "Sugars, total (g)": "0.0"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "267",
+          "Phosphorus, P (mg)": "27",
+          "Iron, Fe (mg)": "5.5",
+          "Sodium, Na (mg)": "34836"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "0",
+          "Thiamin, Vitamin B1 (mg)": "0.00",
+          "Riboflavin, Vitamin B2 (mg)": "0.00",
+          "Niacin (mg)": "0.0",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.0",
+          "Fatty acids, monounsaturated, total (g)": "0",
+          "Fatty acids, polyunsaturated, total(g)": "0",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "N021": {
+      "food_id": "N021",
+      "english_name": "Shrimp paste, alamang",
+      "scientific_name": "N/A",
+      "filipino_name": "Bagoong hipon, alamang",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "66.4",
+          "Energy, calculated (kcal)": "61",
+          "Protein (g)": "12.4",
+          "Total Fat (g)": "1.0",
+          "Carbohydrate, total (g)": "0.6",
+          "Ash, total (g)": "19.6"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "1.3",
+          "Sugars, total (g)": "0.0"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "864",
+          "Phosphorus, P (mg)": "242",
+          "Iron, Fe (mg)": "5.9",
+          "Sodium, Na (mg)": "4396"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "485",
+          "beta-Carotene (µg)": "285",
+          "Retinol Activity Equivalent, RAE (µg)": "509",
+          "Thiamin, Vitamin B1 (mg)": "0.01",
+          "Riboflavin, Vitamin B2 (mg)": "0.14",
+          "Niacin (mg)": "1.4",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "-",
+          "Fatty acids, monounsaturated, total (g)": "-",
+          "Fatty acids, polyunsaturated, total(g)": "-",
+          "Cholesterol (mg)": "-"
+        }
+      }
+    },
+    "N027": {
+      "food_id": "N027",
+      "english_name": "Vinegar, coconut",
+      "scientific_name": "N/A",
+      "filipino_name": "Suka, niyog",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "98.2",
+          "Energy, calculated (kcal)": "7",
+          "Protein (g)": "0.0",
+          "Total Fat (g)": "0.1",
+          "Carbohydrate, total (g)": "1.4",
+          "Ash, total (g)": "0.3"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.0",
+          "Sugars, total (g)": "0.0"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "24",
+          "Phosphorus, P (mg)": "34",
+          "Iron, Fe (mg)": "0.1",
+          "Sodium, Na (mg)": "1"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "0",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "0",
+          "Thiamin, Vitamin B1 (mg)": "0.00",
+          "Riboflavin, Vitamin B2 (mg)": "0.01",
+          "Niacin (mg)": "0.0",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "-",
+          "Fatty acids, monounsaturated, total (g)": "-",
+          "Fatty acids, polyunsaturated, total(g)": "-",
+          "Cholesterol (mg)": "0"
+        }
+      }
+    },
+    "R011": {
+      "food_id": "R011",
+      "english_name": "Rice gruel w/ chicken",
+      "scientific_name": "N/A",
+      "filipino_name": "Arroz caldo",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "83.8",
+          "Energy, calculated (kcal)": "63",
+          "Protein (g)": "2.0",
+          "Total Fat (g)": "0.4",
+          "Carbohydrate, total (g)": "12.8",
+          "Ash, total (g)": "1.0"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.5",
+          "Sugars, total (g)": "0.7"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "15",
+          "Phosphorus, P (mg)": "15",
+          "Iron, Fe (mg)": "0.8",
+          "Sodium, Na (mg)": "453"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "5",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "5",
+          "Thiamin, Vitamin B1 (mg)": "0.02",
+          "Riboflavin, Vitamin B2 (mg)": "0.03",
+          "Niacin (mg)": "0.4",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.27",
+          "Fatty acids, monounsaturated, total (g)": "0.05",
+          "Fatty acids, polyunsaturated, total(g)": "0.04",
+          "Cholesterol (mg)": "10"
+        }
+      }
+    },
+    "R012": {
+      "food_id": "R012",
+      "english_name": "Rice gruel w/ choc & milk",
+      "scientific_name": "N/A",
+      "filipino_name": "Champorado, may gatas",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "75.8",
+          "Energy, calculated (kcal)": "97",
+          "Protein (g)": "1.7",
+          "Total Fat (g)": "0.2",
+          "Carbohydrate, total (g)": "22.0",
+          "Ash, total (g)": "0.3"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.7",
+          "Sugars, total (g)": "4.8"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "27",
+          "Phosphorus, P (mg)": "34",
+          "Iron, Fe (mg)": "0.0",
+          "Sodium, Na (mg)": "13"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "15",
+          "beta-Carotene (µg)": "5",
+          "Retinol Activity Equivalent, RAE (µg)": "15",
+          "Thiamin, Vitamin B1 (mg)": "0.02",
+          "Riboflavin, Vitamin B2 (mg)": "0.07",
+          "Niacin (mg)": "0.2",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "0.11",
+          "Fatty acids, monounsaturated, total (g)": "0.07",
+          "Fatty acids, polyunsaturated, total(g)": "0.01",
+          "Cholesterol (mg)": "2"
+        }
+      }
+    },
+    "R027": {
+      "food_id": "R027",
+      "english_name": "Beef caldereta, cnd",
+      "scientific_name": "N/A",
+      "filipino_name": "N/A",
+      "edible_portion": "95%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "58.6",
+          "Energy, calculated (kcal)": "284",
+          "Protein (g)": "13.3",
+          "Total Fat (g)": "24.9",
+          "Carbohydrate, total (g)": "1.6",
+          "Ash, total (g)": "1.6"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "1.1",
+          "Sugars, total (g)": "-"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "71",
+          "Phosphorus, P (mg)": "117",
+          "Iron, Fe (mg)": "8.0",
+          "Sodium, Na (mg)": "315"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "220",
+          "beta-Carotene (µg)": "-",
+          "Retinol Activity Equivalent, RAE (µg)": "-",
+          "Thiamin, Vitamin B1 (mg)": "0.02",
+          "Riboflavin, Vitamin B2 (mg)": "0.16",
+          "Niacin (mg)": "1.5",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "-",
+          "Fatty acids, monounsaturated, total (g)": "-",
+          "Fatty acids, polyunsaturated, total(g)": "-",
+          "Cholesterol (mg)": "-"
+        }
+      }
+    },
+    "R031": {
+      "food_id": "R031",
+      "english_name": "Beef kare-kare, cnd",
+      "scientific_name": "N/A",
+      "filipino_name": "N/A",
+      "edible_portion": "-%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "83.4",
+          "Energy, calculated (kcal)": "64",
+          "Protein (g)": "9.0",
+          "Total Fat (g)": "1.1",
+          "Carbohydrate, total (g)": "4.4",
+          "Ash, total (g)": "2.1"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "1.5",
+          "Sugars, total (g)": "1.7"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "76",
+          "Phosphorus, P (mg)": "45",
+          "Iron, Fe (mg)": "2.2",
+          "Sodium, Na (mg)": "109"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "485",
+          "beta-Carotene (µg)": "-",
+          "Retinol Activity Equivalent, RAE (µg)": "-",
+          "Thiamin, Vitamin B1 (mg)": "0.01",
+          "Riboflavin, Vitamin B2 (mg)": "0.07",
+          "Niacin (mg)": "1.2",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "-",
+          "Fatty acids, monounsaturated, total (g)": "-",
+          "Fatty acids, polyunsaturated, total(g)": "-",
+          "Cholesterol (mg)": "-"
+        }
+      }
+    },
+    "R050": {
+      "food_id": "R050",
+      "english_name": "Pork adobo, cnd",
+      "scientific_name": "N/A",
+      "filipino_name": "N/A",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "60.2",
+          "Energy, calculated (kcal)": "277",
+          "Protein (g)": "10.3",
+          "Total Fat (g)": "24.8",
+          "Carbohydrate, total (g)": "3.1",
+          "Ash, total (g)": "1.6"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.3",
+          "Sugars, total (g)": "0.1"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "45",
+          "Phosphorus, P (mg)": "56",
+          "Iron, Fe (mg)": "1.5",
+          "Sodium, Na (mg)": "254"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "130",
+          "beta-Carotene (µg)": "5",
+          "Retinol Activity Equivalent, RAE (µg)": "130",
+          "Thiamin, Vitamin B1 (mg)": "0.04",
+          "Riboflavin, Vitamin B2 (mg)": "0.09",
+          "Niacin (mg)": "1.5",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "-",
+          "Fatty acids, monounsaturated, total (g)": "-",
+          "Fatty acids, polyunsaturated, total(g)": "-",
+          "Cholesterol (mg)": "-"
+        }
+      }
+    },
+    "R053": {
+      "food_id": "R053",
+      "english_name": "Pork blood stew, cnd",
+      "scientific_name": "N/A",
+      "filipino_name": "Dinuguan baboy, de lata",
+      "edible_portion": "-%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "73.2",
+          "Energy, calculated (kcal)": "155",
+          "Protein (g)": "14.8",
+          "Total Fat (g)": "10.6",
+          "Carbohydrate, total (g)": "0.0",
+          "Ash, total (g)": "1.4"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.2",
+          "Sugars, total (g)": "0.0"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "53",
+          "Phosphorus, P (mg)": "68",
+          "Iron, Fe (mg)": "12.7",
+          "Sodium, Na (mg)": "-"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "-",
+          "beta-Carotene (µg)": "-",
+          "Retinol Activity Equivalent, RAE (µg)": "-",
+          "Thiamin, Vitamin B1 (mg)": "0.01",
+          "Riboflavin, Vitamin B2 (mg)": "0.07",
+          "Niacin (mg)": "0.6",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "-",
+          "Fatty acids, monounsaturated, total (g)": "-",
+          "Fatty acids, polyunsaturated, total(g)": "-",
+          "Cholesterol (mg)": "-"
+        }
+      }
+    },
+    "R064": {
+      "food_id": "R064",
+      "english_name": "Spring roll, Shanghai, unckd",
+      "scientific_name": "N/A",
+      "filipino_name": "Lumpia, Shanghai, hindi luto",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "44.1",
+          "Energy, calculated (kcal)": "266",
+          "Protein (g)": "5.8",
+          "Total Fat (g)": "10.0",
+          "Carbohydrate, total (g)": "38.3",
+          "Ash, total (g)": "1.8"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "1.2",
+          "Sugars, total (g)": "0.7"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "17",
+          "Phosphorus, P (mg)": "30",
+          "Iron, Fe (mg)": "0.0",
+          "Sodium, Na (mg)": "275"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "10",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "10",
+          "Thiamin, Vitamin B1 (mg)": "0.08",
+          "Riboflavin, Vitamin B2 (mg)": "0.02",
+          "Niacin (mg)": "0.6",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "3.64",
+          "Fatty acids, monounsaturated, total (g)": "4.28",
+          "Fatty acids, polyunsaturated, total(g)": "0.98",
+          "Cholesterol (mg)": "50"
+        }
+      }
+    },
+    "R100": {
+      "food_id": "R100",
+      "english_name": "Wonton soup, prep, w/ MLP",
+      "scientific_name": "N/A",
+      "filipino_name": "Pancit molo, w/ MLP",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "82.3",
+          "Energy, calculated (kcal)": "93",
+          "Protein (g)": "5.0",
+          "Total Fat (g)": "5.3",
+          "Carbohydrate, total (g)": "6.3",
+          "Ash, total (g)": "1.1"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "3.6",
+          "Sugars, total (g)": "2.8"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "40",
+          "Phosphorus, P (mg)": "47",
+          "Iron, Fe (mg)": "0.6",
+          "Sodium, Na (mg)": "320"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "50",
+          "beta-Carotene (µg)": "292",
+          "Retinol Activity Equivalent, RAE (µg)": "74",
+          "Thiamin, Vitamin B1 (mg)": "0.11",
+          "Riboflavin, Vitamin B2 (mg)": "0.09",
+          "Niacin (mg)": "1.5",
+          "Ascorbic Acid, Vitamin C (mg)": "2"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "2.70",
+          "Fatty acids, monounsaturated, total (g)": "1.10",
+          "Fatty acids, polyunsaturated, total(g)": "0.40",
+          "Cholesterol (mg)": "31"
+        }
+      }
+    }
+  }
+}
