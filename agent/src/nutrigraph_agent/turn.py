@@ -10,6 +10,7 @@ from uuid import UUID
 
 from .deps import Deps
 from .graph import TURN_CONTEXT_KEY, TurnContext, UnknownUser
+from .guardrail import safe_reply, scan_reply
 from .models import AnswerEvent, ErrorEvent, NodeEvent, TurnEvent
 
 log = logging.getLogger("nutrigraph.agent.turn")
@@ -36,11 +37,11 @@ async def run_turn(
         "metadata": {"turn_id": str(turn_id), "user_id": user_id},
         "tags": [f"turn:{turn_id}"],
     }
-    inputs = {
-        "user_id": user_id,
-        "messages": [{"role": "user", "text": message}],
-        "pending_clarification": None,
-    }
+    # `pending_clarification` is deliberately not seeded here. It is a plain
+    # overwrite key, so passing it would wipe the pending Clarification at the
+    # start of every Turn, and only the nodes that answer one may clear it — a
+    # Refusal turn must leave it standing.
+    inputs = {"user_id": user_id, "messages": [{"role": "user", "text": message}]}
     try:
         async for update in graph.astream(inputs, config, stream_mode="updates"):
             for node in update:
@@ -50,19 +51,30 @@ async def run_turn(
         if ctx.reply is None:  # pragma: no cover - a graph that reached no composer
             raise RuntimeError("the graph produced no CoachReply")
 
-        # Store the raw message and the trace, then release the answer. A later
-        # slice runs the guardrail text scan on this line; the contract holds.
+        # The guardrail's last gate. The answer was held back, so the scan runs
+        # before the answer event is sent and an unapproved sentence never
+        # reaches the screen. What fails the scan is replaced whole: the Turn
+        # ends with the fixed safe message, not with a partial answer. A Refusal
+        # is a template in code, never a model's words, so it is not scanned.
+        reply = ctx.reply
+        claim = None if ctx.refused else scan_reply(reply.text)
+        if claim is not None:
+            log.warning("the text scan blocked the answer",
+                        extra={"turn_id": str(turn_id), "claim": claim})
+            reply = safe_reply()
+
+        # Store the raw message and the trace, then release the answer.
         await deps.db.store_message(
             user_id=user_id, turn_id=turn_id, role="user", raw_text=message
         )
         await deps.db.store_message(
-            user_id=user_id, turn_id=turn_id, role="coach", raw_text=ctx.reply.text
+            user_id=user_id, turn_id=turn_id, role="coach", raw_text=reply.text
         )
         # The private table that maps a placeholder back to what the User wrote.
         if ctx.models is not None:
             await deps.db.store_redaction_map(turn_id=turn_id, mapping=ctx.models.mapping)
         log.info("turn finished", extra={"turn_id": str(turn_id)})
-        yield AnswerEvent(turn_id=turn_id, reply=ctx.reply)
+        yield AnswerEvent(turn_id=turn_id, reply=reply)
     except Exception as exc:
         code = "unknown_user" if isinstance(exc, UnknownUser) else "turn_failed"
         log.exception("turn failed", extra={"turn_id": str(turn_id), "code": code})
