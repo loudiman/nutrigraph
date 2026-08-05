@@ -8,14 +8,13 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 from uuid import UUID
 
-import psycopg
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
-from .config import CHECKPOINT_SCHEMA, Settings
+from .config import Settings
 from .db import PostgresDatabase
 from .deps import Deps
 from .graph import build_graph
@@ -29,18 +28,19 @@ log = logging.getLogger("nutrigraph.agent")
 
 
 async def open_checkpointer(database_url: str) -> tuple[AsyncPostgresSaver, AsyncConnectionPool]:
-    """The checkpointer's tables live in the `langgraph` schema, which the
-    library owns. No migration file references it, so the service creates it."""
-    async with await psycopg.AsyncConnection.connect(database_url, autocommit=True) as conn:
-        await conn.execute(f"create schema if not exists {CHECKPOINT_SCHEMA}")
+    """The checkpointer creates and owns its own tables. No migration file
+    names one, and nothing here names one either."""
     pool = AsyncConnectionPool(
         database_url,
         open=False,
+        check=AsyncConnectionPool.check_connection,
         kwargs={
-            "autocommit": True,
+            # Neon's pooled endpoint hands one server connection to many
+            # clients, so a prepared statement outlives the transaction that
+            # made it and is then looked for on a connection that never saw it.
             "prepare_threshold": 0,
+            "autocommit": True,
             "row_factory": dict_row,
-            "options": f"-c search_path={CHECKPOINT_SCHEMA},public",
         },
     )
     await pool.open()
@@ -52,7 +52,15 @@ async def open_checkpointer(database_url: str) -> tuple[AsyncPostgresSaver, Asyn
 def create_app(settings: Settings) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        pool = AsyncConnectionPool(settings.database_url, open=False)
+        # An instance can sit idle for longer than Neon keeps a connection, and
+        # the pool then hands out a closed socket. `check` costs one round trip
+        # per checkout and turns that into a reconnect.
+        pool = AsyncConnectionPool(
+            settings.database_url,
+            open=False,
+            check=AsyncConnectionPool.check_connection,
+            kwargs={"prepare_threshold": 0},
+        )
         await pool.open()
         saver, saver_pool = await open_checkpointer(settings.database_url)
         app.state.deps = Deps(
