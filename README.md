@@ -2,7 +2,7 @@
 
 A conversational nutrition coach built on LangGraph, with a Node.js/Express API gateway in front of a Python/FastAPI agent service.
 
-**Status: routed.** One Gemini call classifies each message into Intents, and the Turn either dispatches to a stub or asks one clarifying question. The work is charted as a Wayfinder map: [Map: NutriGraph build spec](https://github.com/loudiman/nutrigraph/issues/1). The vocabulary is fixed by [`CONTEXT.md`](CONTEXT.md) and the hard-to-reverse choices by [`docs/adr/`](docs/adr/).
+**Status: the first Intent path.** One Gemini call classifies each message into Intents. `update_profile` is built: the User changes a Profile fact by saying it. Every other Intent dispatches to a stub, and a message the Coach cannot classify gets one clarifying question. The work is charted as a Wayfinder map: [Map: NutriGraph build spec](https://github.com/loudiman/nutrigraph/issues/1). The vocabulary is fixed by [`CONTEXT.md`](CONTEXT.md) and the hard-to-reverse choices by [`docs/adr/`](docs/adr/).
 
 ## Layout
 
@@ -47,11 +47,25 @@ The gateway issues a signed cookie carrying a seeded `user_id`, creates the one 
 
 ## The router
 
-`load_profile` → `route` → either `dispatch` or `clarify`. `route` is one call to Gemini 3.5 Flash-Lite at temperature 0, filling a fixed `RouterDecision`: at most two Intents from the five, a confidence, and an out-of-scope flag. No keyword list is maintained for routing, and the router never writes a Refusal — it detects, and a later slice gives the guardrail the wording.
+`load_profile` → `route` → an Intent path, `dispatch`, or `clarify`. `route` is one call to Gemini 3.5 Flash-Lite at temperature 0, filling a fixed `RouterDecision`: at most two Intents from the five, a confidence, and an out-of-scope flag. No keyword list is maintained for routing, and the router never writes a Refusal — it detects, and a later slice gives the guardrail the wording.
 
 Below a confidence of 0.6 the Turn goes to `clarify`, which asks one short question and ends. That question is `pending_clarification`, the only place the Coach stops and waits for the User. It survives until a Turn is classified at 0.6 or higher, and `route` clears it there. A second clarify Turn replaces the value rather than adding a second one.
 
-`dispatch` is a stub: no Intent path is built yet, so it says what the router decided and stops.
+`dispatch` is the stub the remaining Intent paths replace: it says what the router decided and stops.
+
+## `update_profile`
+
+The User changes a Profile fact by saying it — "I am allergic to shrimp", "my target is 70 kilograms". No settings page, no onboarding questionnaire. The Profile starts as seeded fixture data so the Coach works from the first message, and this is what lets the conversation change it.
+
+`route` → `update_profile` → either the confirmation or `clarify`. One schema call fills a `ProfileUpdate` — `field`, `old_value`, `new_value` — and the field name is a `Literal` over the ten Profile fields a User may change. `user_id` and `name` are not among them.
+
+**The Profile lives in PostgreSQL alone.** The change is written there and nowhere else, so no second copy can drift and the checkpoint never holds a Profile. `load_profile` reads it back on the next Turn, in this Session or in a new one. The cost is one small read on each Turn, and it is accepted. The prototype exposed the failure this rule prevents: a Profile change that lived only in the graph state did not survive to the next Turn.
+
+The confirmation is written, not generated — the three values are known, so nothing can hallucinate one into the sentence, and the old value reported is the Profile's own rather than the extractor's. A statement the extractor cannot pin to exactly one field, or a value the field cannot hold, goes to `clarify` instead of to a guessed field.
+
+**The allergy check must not run on this path.** It belongs to `recommend` and `log_meal`, which is what `ALLERGY_CHECKED_INTENTS` says. A correct confirmation of "I am allergic to shrimp" contains the word shrimp, and a check here reads the Coach's own answer as a violation and destroys it — the prototype showed exactly that. Four tests in `agent/tests/test_update_profile.py` fail if a later change puts it back.
+
+A column name cannot be a query parameter, so `Database.update_profile` whitelists the field against the same tuple the extractor's schema is built from, before it takes a connection.
 
 ## The model routing rule
 

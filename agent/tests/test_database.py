@@ -10,9 +10,11 @@ from pathlib import Path
 
 import psycopg
 import pytest
+from psycopg_pool import AsyncConnectionPool
 
 from nutrigraph_agent.app import open_checkpointer
 from nutrigraph_agent.config import CHECKPOINT_SCHEMA
+from nutrigraph_agent.db import PostgresDatabase
 from nutrigraph_agent.graph import build_graph
 from nutrigraph_agent.migrate import MIGRATIONS_DIR, migrate, pending
 from nutrigraph_agent.seed import seed_profiles
@@ -68,6 +70,35 @@ def test_the_seed_is_safe_to_run_twice(empty_database):
     with psycopg.connect(empty_database) as conn:
         count = conn.execute("select count(*) from user_profile").fetchone()[0]
     assert count == len(seeded)
+
+
+async def test_a_profile_change_is_written_to_postgresql_and_read_back(empty_database):
+    """The Profile lives in PostgreSQL alone, so this is where the change is
+    proved: written through the seam, read back through the seam."""
+    migrate(empty_database)
+    seed_profiles(empty_database)
+    pool = AsyncConnectionPool(empty_database, open=False)
+    await pool.open()
+    db = PostgresDatabase(pool)
+    try:
+        before = await db.load_profile("demo-user-1")
+        await db.update_profile(
+            "demo-user-1", field="allergies", value=[*before.allergies, "shrimp"]
+        )
+        await db.update_profile("demo-user-1", field="target_weight_kg", value=70.0)
+        after = await db.load_profile("demo-user-1")
+    finally:
+        await pool.close()
+
+    assert after.allergies == [*before.allergies, "shrimp"]
+    assert after.target_weight_kg == 70.0
+
+    with psycopg.connect(empty_database) as conn:
+        touched = conn.execute(
+            "select updated_at > created_at from user_profile where user_id = %s",
+            ("demo-user-1",),
+        ).fetchone()[0]
+    assert touched
 
 
 async def test_the_checkpointer_writes_to_the_langgraph_schema(empty_database):
