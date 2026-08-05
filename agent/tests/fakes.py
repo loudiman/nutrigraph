@@ -7,16 +7,37 @@ would have seen.
 
 from __future__ import annotations
 
+import random
 import re
 from collections import deque
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
 
-from nutrigraph_agent.db import InteractionEvent
+from pydantic import BaseModel
+
+from nutrigraph_agent.db import InteractionEvent, RetrievedChunk
 from nutrigraph_agent.models import Profile, RouterDecision
 from nutrigraph_agent.providers import Models
+
+# What `gemini-embedding-001` returns before truncation.
+PROVIDER_DIMENSIONS = 3072
+
+# One Corpus passage, so a seam test can assert what a Citation names.
+EGGS_CHUNK = RetrievedChunk(
+    document="Dietary Guidelines for Americans, 2025-2030",
+    source_url="https://cdn.realfood.gov/DGA_508.pdf",
+    locator="page 3",
+    text="Eat a variety of protein foods, including eggs, seafood, lean meats, "
+    "beans, and nuts. Protein foods supply the amino acids the body cannot make.",
+    licence_id="us-gov-public-domain",
+    attribution="Dietary Guidelines for Americans, 2025-2030. A work of the "
+    "United States federal government, public domain under 17 U.S.C. §105.",
+    commercial_use=True,
+    score=0.81,
+)
 
 DEMO_PROFILE = Profile(
     user_id="demo-user-1",
@@ -51,6 +72,10 @@ class FakeDatabase:
     events: list[InteractionEvent] = field(default_factory=list)
     redaction_maps: dict[UUID, dict[str, str]] = field(default_factory=dict)
     fail_on_load: bool = False
+    # What the Corpus returns for any query vector. Empty means the Corpus does
+    # not cover the question.
+    corpus: list[RetrievedChunk] = field(default_factory=lambda: [EGGS_CHUNK])
+    searched: list[list[float]] = field(default_factory=list)
 
     async def load_profile(self, user_id: str) -> Profile | None:
         if self.fail_on_load:
@@ -67,6 +92,12 @@ class FakeDatabase:
 
     async def store_redaction_map(self, *, turn_id: UUID, mapping: dict[str, str]) -> None:
         self.redaction_maps.setdefault(turn_id, {}).update(mapping)
+
+    async def search_corpus(
+        self, embedding: Sequence[float], *, limit: int = 5
+    ) -> list[RetrievedChunk]:
+        self.searched.append(list(embedding))
+        return self.corpus[:limit]
 
 
 @dataclass
@@ -96,24 +127,42 @@ class FakeProvider:
     """Records every prompt that reached the provider, and answers from a
     script. A `str` in the script is a schema failure, which forces the retry."""
 
-    decisions: deque[RouterDecision | str] = field(default_factory=deque)
+    decisions: deque[BaseModel | str] = field(default_factory=deque)
     default: RouterDecision = field(
         default_factory=lambda: RouterDecision(intents=["log_meal"], confidence=0.92)
     )
     seen: list[ProviderCall] = field(default_factory=list)
+    # Every text that reached the embedding model, as it reached it.
+    embedded: list[str] = field(default_factory=list)
 
-    def script(self, *decisions: RouterDecision | str) -> FakeProvider:
+    def script(self, *decisions: BaseModel | str) -> FakeProvider:
         self.decisions.extend(decisions)
         return self
 
-    def models(self, *, schema_model: str, prose_model: str) -> Models:
+    def models(
+        self,
+        *,
+        schema_model: str,
+        prose_model: str,
+        embedding_model: str = "gemini-embedding-001",
+    ) -> Models:
         return Models(
             factory=lambda model: _FakeChat(self, model),
             schema_model=schema_model,
             prose_model=prose_model,
+            embedding_factory=lambda model: _FakeEmbeddings(self, model),
+            embedding_model=embedding_model,
         )
 
-    def _next(self) -> RouterDecision | str:
+    def vector(self, text: str) -> list[float]:
+        """What the provider returns: 3072 dimensions, and deliberately not unit
+        length, so truncation and the hand re-normalization are what make the
+        stored vector usable. Deterministic, so a test can repeat a query."""
+        self.embedded.append(text)
+        rng = random.Random(text)
+        return [rng.uniform(-1.0, 1.0) * 7.0 for _ in range(PROVIDER_DIMENSIONS)]
+
+    def _next(self) -> BaseModel | str:
         return self.decisions.popleft() if self.decisions else self.default
 
 
@@ -137,6 +186,21 @@ class _FakeChat:
         found = NAME_PLACEHOLDER.search(call.sent)
         who = f"{found.group()}, " if found else ""
         return _message(f"{who}what did you mean by that?")
+
+
+@dataclass
+class _FakeEmbeddings:
+    """Faked one layer below the redaction wrapper, exactly like the chat model,
+    so a test reads what Google would have seen."""
+
+    provider: FakeProvider
+    model: str
+
+    async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self.provider.vector(text) for text in texts]
+
+    async def aembed_query(self, text: str) -> list[float]:
+        return self.provider.vector(text)
 
 
 @dataclass

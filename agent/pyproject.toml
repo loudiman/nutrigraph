@@ -15,6 +15,9 @@ dependencies = [
     # The provider is a configuration string. Swapping it is one line in `.env`
     # and the matching package here; no code path names a vendor.
     "langchain-google-genai>=3.0",
+    # The Corpus ingest: fetch, and read the PDFs among the forty documents.
+    "httpx>=0.28",
+    "pypdf>=6.1",
 ]
 
 [project.optional-dependencies]
@@ -27,6 +30,8 @@ ner = ["spacy>=3.8"]
 [project.scripts]
 nutrigraph-migrate = "nutrigraph_agent.migrate:main"
 nutrigraph-seed = "nutrigraph_agent.seed:main"
+# The slow step of the seed sequence, and therefore its own command.
+nutrigraph-ingest = "nutrigraph_agent.ingest:main"
 
 [build-system]
 requires = ["setuptools>=68"]

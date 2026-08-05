@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from nutrigraph_agent.models import RouterDecision
+from nutrigraph_agent.models import Answer, Citation, RouterDecision
 
 from .conftest import SCHEMA_MODEL
 
@@ -32,12 +32,22 @@ IDENTIFIERS = (
     "42 Katipunan Avenue",
 )
 
-# Every shape of Turn: one that dispatches, one that clarifies, and one whose
-# first router answer failed the schema and had to be asked again.
+# Every shape of Turn: one that dispatches, one that clarifies, one that
+# retrieves from the Corpus and answers, and one whose first router answer
+# failed the schema and had to be asked again.
 SHAPES = {
     "dispatch": [RouterDecision(intents=["log_meal"], confidence=0.95)],
     "clarify": [RouterDecision(intents=[], confidence=0.1)],
     "retry": ["intents had three entries", RouterDecision(intents=["log_meal"], confidence=0.9)],
+    "ask_question": [
+        RouterDecision(intents=["ask_question"], confidence=0.95),
+        Answer(
+            text="Eggs count as a protein food.",
+            citations=[
+                Citation(document="Dietary Guidelines for Americans, 2025-2030", locator="page 3")
+            ],
+        ),
+    ],
 }
 
 
@@ -48,10 +58,13 @@ async def test_no_unredacted_identifier_ever_reaches_the_provider(seam, shape):
     await seam.turn(LOADED)
 
     assert seam.provider.seen, "the Turn made no provider call at all"
-    for call in seam.provider.seen:
+    # The chat calls and the embedding calls, which are the same wrapper's job.
+    sent = [(call.model, call.sent) for call in seam.provider.seen]
+    sent += [("the embedding model", text) for text in seam.provider.embedded]
+    for model, text in sent:
         for identifier in IDENTIFIERS:
-            assert identifier not in call.sent, f"{identifier} reached {call.model}"
-        assert re.search(r"\bLou\b", call.sent) is None, f"the name reached {call.model}"
+            assert identifier not in text, f"{identifier} reached {model}"
+        assert re.search(r"\bLou\b", text) is None, f"the name reached {model}"
 
 
 @pytest.mark.parametrize("shape", list(SHAPES))
@@ -82,13 +95,16 @@ async def test_the_raw_text_is_what_the_database_kept(seam):
 
 
 def test_only_one_module_reaches_a_model_provider():
-    """A new node calls `fill` or `write`; it does not build a chat model. If
-    this fails, a call site was added that the redaction wrapper does not cover.
+    """A new node calls `fill`, `write`, or one of the two embedding methods; it
+    does not build a model of its own. If this fails, a call site was added that
+    the redaction wrapper does not cover — including the vector half of the
+    system, where the User's question is what gets embedded.
     """
     reaching = {
         path.name
         for path in SOURCE.glob("*.py")
-        if re.search(r"init_chat_model|langchain_google_genai|ChatGoogle|ChatOpenAI|ChatAnthropic",
+        if re.search(r"init_chat_model|init_embeddings|langchain_google_genai"
+                     r"|ChatGoogle|ChatOpenAI|ChatAnthropic|Embeddings\(",
                      path.read_text(encoding="utf-8"))
     }
 

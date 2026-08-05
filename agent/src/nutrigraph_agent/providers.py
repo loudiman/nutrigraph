@@ -20,7 +20,8 @@ provider to leave behind.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+import math
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol, TypeVar
 
@@ -31,6 +32,11 @@ from .redaction import Redacted, Redactor
 log = logging.getLogger("nutrigraph.agent.models")
 
 Schema = TypeVar("Schema", bound=BaseModel)
+
+# `gemini-embedding-001` returns 3072 dimensions; pgvector's HNSW index accepts
+# at most 2000, so the full output cannot be indexed (ADR 0001).
+HNSW_MAX_DIMENSIONS = 2000
+EMBEDDING_DIMENSIONS = 768
 
 
 class SchemaFailure(RuntimeError):
@@ -58,6 +64,14 @@ class ModelCall:
         per_in, per_out = PRICES.get(self.model, (0.0, 0.0))
         return (self.input_tokens * per_in + self.output_tokens * per_out) / 1_000_000
 
+    def __add__(self, other: ModelCall) -> ModelCall:
+        """Two calls one node made, on one `interaction_event` row."""
+        return ModelCall(
+            model=self.model,
+            input_tokens=self.input_tokens + other.input_tokens,
+            output_tokens=self.output_tokens + other.output_tokens,
+        )
+
 
 class ChatModel(Protocol):
     """The slice of a LangChain chat model this codebase uses."""
@@ -67,8 +81,34 @@ class ChatModel(Protocol):
     async def ainvoke(self, input: Any) -> Any: ...
 
 
-# A model name in, a chat model out. `init_chat_model` is one of these.
+class EmbeddingModel(Protocol):
+    """The slice of a LangChain embedding model this codebase uses."""
+
+    async def aembed_documents(self, texts: list[str]) -> list[list[float]]: ...
+
+    async def aembed_query(self, text: str) -> list[float]: ...
+
+
+# A model name in, a model out. `init_chat_model` and `init_embeddings` are these.
 ModelFactory = Callable[[str], ChatModel]
+EmbeddingFactory = Callable[[str], EmbeddingModel]
+
+
+def truncate_and_normalize(
+    vector: Sequence[float], dimensions: int = EMBEDDING_DIMENSIONS
+) -> list[float]:
+    """Matryoshka truncation to what an HNSW index accepts, then unit length by
+    hand — version 1 of `gemini-embedding-001` does not re-normalize a truncated
+    vector, so cosine distance would be wrong without this (ADR 0001)."""
+    if dimensions > HNSW_MAX_DIMENSIONS:
+        raise ValueError(f"HNSW accepts at most {HNSW_MAX_DIMENSIONS} dimensions")
+    head = list(vector[:dimensions])
+    if len(head) < dimensions:
+        raise ValueError(f"the embedding has {len(head)} dimensions, fewer than {dimensions}")
+    norm = math.sqrt(sum(value * value for value in head))
+    if norm == 0.0:
+        raise ValueError("the embedding truncated to a zero vector")
+    return [value / norm for value in head]
 
 
 def langchain_factory(provider: str, *, temperature: float = 0.0) -> ModelFactory:
@@ -84,6 +124,14 @@ def langchain_factory(provider: str, *, temperature: float = 0.0) -> ModelFactor
     return lambda model: init_chat_model(
         model, model_provider=provider, temperature=temperature
     )
+
+
+def langchain_embedding_factory(provider: str) -> EmbeddingFactory:
+    """The same rule for the vector half of the system: one line, one provider
+    string, no code path per vendor."""
+    from langchain.embeddings import init_embeddings
+
+    return lambda model: init_embeddings(model, provider=provider)
 
 
 def _usage(raw: Any, model: str) -> ModelCall:
@@ -102,6 +150,10 @@ class Models:
     factory: ModelFactory
     schema_model: str
     prose_model: str
+    # The vector tier. Ingestion and retrieval both reach it through `TurnModels`,
+    # so an embedding call redacts exactly like a chat call does.
+    embedding_factory: EmbeddingFactory | None = None
+    embedding_model: str = "gemini-embedding-001"
 
     def for_turn(self, *, known_names: list[str]) -> TurnModels:
         return TurnModels(self, Redactor(known_names=known_names))
@@ -120,6 +172,19 @@ class TurnModels:
         redacted = self.redactor.redact(*texts)
         self.mapping.update(redacted.mapping)
         return redacted
+
+    def restore(self, text: str) -> str:
+        """Put back every identifier this Turn hid, so an answer the provider
+        filled into a schema can still name the User and the document."""
+        for placeholder, original in self.mapping.items():
+            text = text.replace(placeholder, original)
+        return text
+
+    def _embedder(self) -> EmbeddingModel:
+        factory = self.models.embedding_factory
+        if factory is None:
+            raise RuntimeError("no embedding provider is configured")
+        return factory(self.models.embedding_model)
 
     async def fill(
         self, schema: type[Schema], *, system: str, user: str, retries: int = 1
@@ -141,12 +206,7 @@ class TurnModels:
                     {"role": "user", "content": redacted.texts[1]},
                 ]
             )
-            call = _usage(result.get("raw"), model_name)
-            total = ModelCall(
-                model=model_name,
-                input_tokens=total.input_tokens + call.input_tokens,
-                output_tokens=total.output_tokens + call.output_tokens,
-            )
+            total = total + _usage(result.get("raw"), model_name)
             parsed, error = result.get("parsed"), result.get("parsing_error")
             if parsed is not None and error is None:
                 return parsed, total
@@ -174,3 +234,22 @@ class TurnModels:
         # The answer comes back holding placeholders, so the Coach can address
         # the User by name without the provider ever having seen it.
         return redacted.restore(text).strip(), _usage(message, model_name)
+
+    async def embed_documents(
+        self, texts: Sequence[str]
+    ) -> tuple[list[list[float]], ModelCall]:
+        """Corpus text, for the index. The Corpus is public guidance rather than
+        user data, but the route to the provider is the same one — there is no
+        second way out of the process (ADR 0002)."""
+        redacted = self._redact(*texts)
+        vectors = await self._embedder().aembed_documents(list(redacted.texts))
+        return (
+            [truncate_and_normalize(vector) for vector in vectors],
+            ModelCall(model=self.models.embedding_model),
+        )
+
+    async def embed_query(self, text: str) -> tuple[list[float], ModelCall]:
+        """The User's question, which is exactly the text redaction is for."""
+        redacted = self._redact(text)
+        vector = await self._embedder().aembed_query(redacted.text)
+        return truncate_and_normalize(vector), ModelCall(model=self.models.embedding_model)

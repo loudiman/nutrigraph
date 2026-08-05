@@ -22,9 +22,16 @@ from uuid import UUID
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 
-from .db import InteractionEvent
+from .db import InteractionEvent, RetrievedChunk
 from .deps import Deps
-from .models import INTENTS, CoachReply, Profile, ReplyPart, RouterDecision
+from .models import (
+    INTENTS,
+    Answer,
+    CoachReply,
+    Profile,
+    ReplyPart,
+    RouterDecision,
+)
 from .providers import ModelCall, TurnModels
 
 # The key is underscore-prefixed so LangGraph keeps it out of checkpoint metadata.
@@ -62,6 +69,32 @@ Ask exactly one short question that would let you classify it. One sentence, no
 preamble, no list, no apology. Address the User by the placeholder you are given,
 written exactly as it appears."""
 
+# How many Corpus passages one question is answered from.
+PASSAGES = 5
+# Cosine similarity below which the Corpus does not cover the question. Under
+# it the Coach says so and makes no provider call at all, so there is no room
+# for an answer from the model's memory.
+RELEVANCE_FLOOR = 0.55
+
+NOT_IN_THE_CORPUS = (
+    "That is not in the nutrition guidance I cite from, so I would rather point "
+    "you at a dietitian than guess at it."
+)
+
+ANSWER_SYSTEM = """You are a nutrition Coach answering one question from the
+Corpus passages given to you, and from nothing else.
+
+Answer in at most three short sentences: the User is reading this while cooking.
+
+Every nutrition claim you make carries a Citation. A Citation names the
+passage's document and its section or page, copied exactly as they are written
+above the passage. An answer that asserts a nutrition fact with no Citation is
+rejected, so cite or do not claim.
+
+If the passages do not answer the question, say so plainly in one sentence, set
+makes_a_nutrition_claim to false, give no citations, and invent nothing. Never
+answer a nutrition question from your own memory."""
+
 
 class TurnState(TypedDict):
     user_id: str
@@ -82,6 +115,9 @@ class TurnContext:
     models: TurnModels | None = None
     decision: RouterDecision | None = None
     reply: CoachReply | None = None
+    # What retrieval found this Turn. Rebuilt every Turn, so it never enters the
+    # checkpoint — a Corpus passage is not part of the Thread.
+    passages: list[RetrievedChunk] = field(default_factory=list)
     nodes_run: list[str] = field(default_factory=list)
     # What the node currently running has to report on its metric row.
     call: ModelCall | None = None
@@ -142,7 +178,14 @@ async def route(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
 def next_node(state: TurnState, config: RunnableConfig) -> str:
     decision = turn_context(config).decision
     assert decision is not None
-    return "clarify" if decision.confidence < CONFIDENCE_FLOOR else "dispatch"
+    if decision.confidence < CONFIDENCE_FLOOR:
+        return "clarify"
+    # The first Intent, not any Intent: the order matters, because the second
+    # reads what the first produced, and no other Intent path is built yet. A
+    # message that logs a Meal and then asks about it still goes to the stub.
+    # ponytail: this becomes an ordered walk of `decision.intents` when the
+    # second path lands; the router already keeps them in the order to run.
+    return "retrieve" if decision.intents[:1] == ["ask_question"] else "dispatch"
 
 
 async def clarify(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
@@ -159,6 +202,67 @@ async def clarify(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
         "pending_clarification": question,
         "messages": [{"role": "coach", "text": question}],
     }
+
+
+async def retrieve(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
+    """The question becomes a vector and the Corpus answers with passages. One
+    embedding call, through the same wrapper every other provider call uses."""
+    ctx = turn_context(config)
+    ctx.intent = "ask_question"
+    vector, call = await models(ctx).embed_query(ctx.raw_message)
+    ctx.record(call)
+    found = await ctx.deps.db.search_corpus(vector, limit=PASSAGES)
+    ctx.passages = [chunk for chunk in found if chunk.score >= RELEVANCE_FLOOR]
+    return {}
+
+
+def _passages(ctx: TurnContext) -> str:
+    return "\n\n".join(
+        f"document: {chunk.document}\nsection or page: {chunk.locator}\n{chunk.text}"
+        for chunk in ctx.passages
+    )
+
+
+async def answer_question(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
+    """The cited Answer. When nothing was retrieved the Coach says so, and no
+    provider call is made — there is nowhere for an invented claim to come from."""
+    ctx = turn_context(config)
+    ctx.intent = "ask_question"
+    if not ctx.passages:
+        answer = Answer(text=NOT_IN_THE_CORPUS, makes_a_nutrition_claim=False)
+    else:
+        turn = models(ctx)
+        answer, call = await turn.fill(
+            Answer,
+            system=ANSWER_SYSTEM,
+            user=f"Question: {ctx.raw_message}\n\nPassages:\n\n{_passages(ctx)}",
+        )
+        ctx.record(call)
+        # `fill` hands back what the provider wrote, which still holds the
+        # placeholders. Put the identifiers back before the User reads it.
+        answer = answer.model_copy(
+            update={
+                "text": turn.restore(answer.text),
+                "citations": [
+                    citation.model_copy(
+                        update={
+                            "document": turn.restore(citation.document),
+                            "locator": turn.restore(citation.locator),
+                        }
+                    )
+                    for citation in answer.citations
+                ],
+            }
+        )
+    ctx.reply = CoachReply(
+        text=answer.text,
+        parts=[
+            ReplyPart(
+                intent="ask_question", text=answer.text, citations=answer.citations
+            )
+        ],
+    )
+    return {"messages": [{"role": "coach", "text": answer.text}]}
 
 
 async def dispatch(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
@@ -218,12 +322,16 @@ def build_graph(checkpointer: Any):
         ("load_profile", load_profile),
         ("route", route),
         ("clarify", clarify),
+        ("retrieve", retrieve),
+        ("answer_question", answer_question),
         ("dispatch", dispatch),
     ):
         builder.add_node(name, measured(name, node))
     builder.add_edge(START, "load_profile")
     builder.add_edge("load_profile", "route")
-    builder.add_conditional_edges("route", next_node, ["clarify", "dispatch"])
+    builder.add_conditional_edges("route", next_node, ["clarify", "retrieve", "dispatch"])
     builder.add_edge("clarify", END)
+    builder.add_edge("retrieve", "answer_question")
+    builder.add_edge("answer_question", END)
     builder.add_edge("dispatch", END)
     return builder.compile(checkpointer=checkpointer)
