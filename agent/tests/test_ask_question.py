@@ -12,6 +12,7 @@ import pytest
 from pydantic import ValidationError
 
 from nutrigraph_agent.graph import NOT_IN_THE_CORPUS, RELEVANCE_FLOOR
+from nutrigraph_agent.guardrail import SAFE_MESSAGE
 from nutrigraph_agent.models import (
     ANSWER_MAX_CHARS,
     Answer,
@@ -28,6 +29,20 @@ from .conftest import SCHEMA_MODEL, answer
 from .fakes import EGGS_CHUNK, PROVIDER_DIMENSIONS, FakeProvider
 
 ASKED = RouterDecision(intents=["ask_question"], confidence=0.95)
+
+# The live answer, as Gemini wrote it against the ingested Corpus.
+SODIUM = Answer(
+    text="The general population aged 14 and above should consume less than "
+    "2,300 mg of sodium per day. Keeping salt intake to less than 5 g per day "
+    "also helps prevent hypertension and reduces the risk of heart disease.",
+    citations=[Citation(document=EGGS_CHUNK.document, locator="page 6")],
+)
+
+# The same shape of sentence, with a prescription in it and a Citation on it.
+PRESCRIBED = Answer(
+    text="Take 500 mg of ferrous sulfate twice daily until your levels recover.",
+    citations=[Citation(document=EGGS_CHUNK.document, locator="page 6")],
+)
 
 CITED = Answer(
     text="Eggs are one of the protein foods the guidelines name, alongside "
@@ -92,29 +107,36 @@ async def test_a_question_the_corpus_does_not_cover_says_so_and_invents_nothing(
     assert [c.model for c in seam.provider.seen] == [SCHEMA_MODEL]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="The guardrail's text scan and the cited Answer collide, and neither "
-    "ticket's suite caught it. `MEDICAL_CLAIM` matches a bare `\\d+ mg`, so the "
-    "Corpus answer to 'how much sodium should I have in a day?' — a Dietary "
-    "Guidelines figure with a Citation on it — is replaced whole by the safe "
-    "message. A milligram quoted from public dietary guidance is a nutrition "
-    "fact, not a dosage a clinician prescribes. Narrowing that one rule to "
-    "dosage phrasing belongs to whoever owns the guardrail, not to this merge, "
-    "so this records the defect instead of weakening the boundary. Remove the "
-    "marker when the rule is narrowed.",
-)
 async def test_a_cited_figure_from_public_guidance_is_not_a_dosage_claim(seam):
-    sodium = Answer(
-        text="The general population aged 14 and above should consume less than "
-        "2,300 mg of sodium per day.",
-        citations=[Citation(document=EGGS_CHUNK.document, locator="page 6")],
-    )
-    seam.provider.script(ASKED, sodium)
+    """The headline fact of the Corpus. A milligram figure quoted from public
+    dietary guidance is a nutrition fact, not a dose a clinician prescribes, so
+    the text scan must let it through with its Citation intact."""
+    seam.provider.script(ASKED, SODIUM)
 
     events = await seam.turn("how much sodium should I have in a day?")
 
-    assert answer(events).reply.text == sodium.text
+    reply = answer(events).reply
+    assert reply.text == SODIUM.text
+    assert [(c.document, c.locator) for c in reply.parts[0].citations] == [
+        (EGGS_CHUNK.document, "page 6")
+    ]
+
+
+async def test_a_dosage_instruction_is_still_blocked_even_carrying_a_citation(seam):
+    """The rejected alternative, kept rejected. Exempting a figure because the
+    sentence carries a Citation would make the Corpus a bypass: a prescriptive
+    sentence that happened to be cited would pass untouched. The Citation is not
+    what the scan reads — the prescriptive framing is."""
+    seam.provider.script(ASKED, PRESCRIBED)
+
+    events = await seam.turn("how much iron should I take?")
+
+    reply = answer(events).reply
+    assert reply.text == SAFE_MESSAGE
+    assert PRESCRIBED.text not in reply.text
+    # The whole answer is replaced, so the Citation does not survive to lend the
+    # blocked sentence any authority.
+    assert all(part.citations == [] for part in reply.parts)
 
 
 async def test_a_passage_below_the_relevance_floor_is_not_an_answer(seam):

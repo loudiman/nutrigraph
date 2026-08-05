@@ -89,6 +89,8 @@ Four subjects sit outside the Coach's job: diagnosis, treatment, and dosage; eat
 
 Two detectors, and either one produces a Refusal. `guard` runs a deterministic rule list — `agent/src/nutrigraph_agent/guardrail.py`, readable by a reviewer and provable by a test — before the router and with no model, so a message it catches never reaches an Intent path. The router's `out_of_scope` flag catches meaning no word list predicts. Both end at `refuse`, the only node that writes a Refusal.
 
+**A figure with a unit is not a clinical claim by itself.** Both detectors read one shared `DOSAGE` pattern, which needs a prescriptive marker — *take*, *dose*, *tablet*, *supplement*, a counted frequency like *twice daily* — standing in the same sentence as the amount. So "less than 2,300 mg of sodium per day" is a nutrition fact the Corpus may state and a User may ask about, and "take 500 mg twice daily" is refused on the way in and blocked on the way out. A Citation is not an exemption: a prescriptive sentence that carries one is still blocked, or the Corpus would be a bypass.
+
 The Refusal is a template in code: it names the boundary, gives the disclaimer, points to a professional, and offers what the Coach can do instead. Eating-disorder content additionally carries a help-line. Because it is assembled from those strings, it cannot drift.
 
 After the composer, `scan_reply` reads the finished text for medical claims, before the answer event is sent. A text that fails ends the Turn with the fixed safe message, never with a partial answer. A Refusal is not scanned — it is the codebase's own words. The allergen half of the scan lands in that same function when the allergy-check slice arrives, and the stream contract does not change.
