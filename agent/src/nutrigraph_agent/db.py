@@ -4,13 +4,13 @@ PostgreSQL; the turn seam swaps a fake in for it."""
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
-from .models import Profile
+from .models import UPDATABLE_FIELDS, Profile
 
 PROFILE_COLUMNS = """
     user_id, name, sex, age, height_cm, weight_kg, target_weight_kg,
@@ -20,6 +20,8 @@ PROFILE_COLUMNS = """
 
 class Database(Protocol):
     async def load_profile(self, user_id: str) -> Profile | None: ...
+
+    async def update_profile(self, user_id: str, *, field: str, value: Any) -> None: ...
 
     async def store_message(
         self, *, user_id: str, turn_id: UUID, role: str, raw_text: str
@@ -60,6 +62,23 @@ class PostgresDatabase:
             )
             row = await cur.fetchone()
         return Profile.model_validate(row) if row else None
+
+    async def update_profile(self, user_id: str, *, field: str, value: Any) -> None:
+        """The Profile lives in PostgreSQL alone, so a change is written here and
+        nowhere else. The next Turn reads it back, in this Session or another.
+
+        A column name cannot be a query parameter, so it is whitelisted against
+        the same tuple the extractor's schema is built from — a value that did
+        not come from there never reaches this string.
+        """
+        if field not in UPDATABLE_FIELDS:
+            raise ValueError(f"{field!r} is not a Profile field a User may change")
+        async with self._pool.connection() as conn:
+            await conn.execute(
+                f"update user_profile set {field} = %s, updated_at = now() "
+                f"where user_id = %s",
+                (value, user_id),
+            )
 
     async def store_message(
         self, *, user_id: str, turn_id: UUID, role: str, raw_text: str

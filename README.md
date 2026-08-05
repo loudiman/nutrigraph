@@ -2,7 +2,7 @@
 
 A conversational nutrition coach built on LangGraph, with a Node.js/Express API gateway in front of a Python/FastAPI agent service.
 
-**Status: guarded.** One Gemini call classifies each message into Intents, and the Turn dispatches to a stub, asks one clarifying question, or refuses what is outside the Coach's job. The work is charted as a Wayfinder map: [Map: NutriGraph build spec](https://github.com/loudiman/nutrigraph/issues/1). The vocabulary is fixed by [`CONTEXT.md`](CONTEXT.md) and the hard-to-reverse choices by [`docs/adr/`](docs/adr/).
+**Status: guarded, and the first Intent path.** One Gemini call classifies each message into Intents. The Turn refuses what is outside the Coach's job, runs `update_profile` — the User changes a Profile fact by saying it — dispatches every other Intent to a stub, or asks one clarifying question. The work is charted as a Wayfinder map: [Map: NutriGraph build spec](https://github.com/loudiman/nutrigraph/issues/1). The vocabulary is fixed by [`CONTEXT.md`](CONTEXT.md) and the hard-to-reverse choices by [`docs/adr/`](docs/adr/).
 
 ## Layout
 
@@ -56,11 +56,11 @@ The gateway issues a signed cookie carrying a seeded `user_id`, creates the one 
 
 ## The router
 
-`load_profile` → `guard` → `route` → `dispatch`, `clarify`, or `refuse`. `route` is one call to Gemini 3.5 Flash-Lite at temperature 0, filling a fixed `RouterDecision`: at most two Intents from the five, a confidence, and an out-of-scope flag. No keyword list is maintained for routing, and the router never writes a Refusal — it detects, and the guardrail gives the wording.
+`load_profile` → `guard` → `route` → an Intent path, `dispatch`, `clarify`, or `refuse`. `route` is one call to Gemini 3.5 Flash-Lite at temperature 0, filling a fixed `RouterDecision`: at most two Intents from the five, a confidence, and an out-of-scope flag. No keyword list is maintained for routing, and the router never writes a Refusal — it detects, and the guardrail gives the wording.
 
 Below a confidence of 0.6 the Turn goes to `clarify`, which asks one short question and ends. That question is `pending_clarification`, the only place the Coach stops and waits for the User. It survives until a Turn is classified at 0.6 or higher, and `route` clears it there. A second clarify Turn replaces the value rather than adding a second one, and a Refusal turn leaves it standing.
 
-`dispatch` is a stub: no Intent path is built yet, so it says what the router decided and stops.
+`dispatch` is the stub the remaining Intent paths replace: it says what the router decided and stops.
 
 ## The guardrail
 
@@ -73,6 +73,20 @@ The Refusal is a template in code: it names the boundary, gives the disclaimer, 
 After the composer, `scan_reply` reads the finished text for medical claims, before the answer event is sent. A text that fails ends the Turn with the fixed safe message, never with a partial answer. A Refusal is not scanned — it is the codebase's own words. The allergen half of the scan lands in that same function when the allergy-check slice arrives, and the stream contract does not change.
 
 The split this makes real: deterministic are the rule list, the redaction patterns, the final text scan, the schema validation, and the Refusal wording; the model does the Intent classification, the meaning-level scope flag, the name and address detection, and every answer. Nothing that decides safety is left to the model. It is checked by plain assertions at the agent turn seam in `agent/tests/test_guardrail.py`, never by a model judge — a judge can flake, an assertion cannot.
+
+## `update_profile`
+
+The User changes a Profile fact by saying it — "I am allergic to shrimp", "my target is 70 kilograms". No settings page, no onboarding questionnaire. The Profile starts as seeded fixture data so the Coach works from the first message, and this is what lets the conversation change it.
+
+`guard` → `route` → `update_profile` → either the confirmation or `clarify`. The Intent path sits after both guardrail detectors, so a message the rule list catches, or one the router flags out of scope, never reaches it. One schema call fills a `ProfileUpdate` — `field`, `old_value`, `new_value` — and the field name is a `Literal` over the ten Profile fields a User may change. `user_id` and `name` are not among them.
+
+**The Profile lives in PostgreSQL alone.** The change is written there and nowhere else, so no second copy can drift and the checkpoint never holds a Profile. `load_profile` reads it back on the next Turn, in this Session or in a new one. The cost is one small read on each Turn, and it is accepted. The prototype exposed the failure this rule prevents: a Profile change that lived only in the graph state did not survive to the next Turn.
+
+The confirmation is written, not generated — the three values are known, so nothing can hallucinate one into the sentence, and the old value reported is the Profile's own rather than the extractor's. A statement the extractor cannot pin to exactly one field, or a value the field cannot hold, goes to `clarify` instead of to a guessed field.
+
+**The allergy check must not run on this path.** It belongs to `recommend` and `log_meal`, which is what `ALLERGY_CHECKED_INTENTS` says. A correct confirmation of "I am allergic to shrimp" contains the word shrimp, and a check here reads the Coach's own answer as a violation and destroys it — the prototype showed exactly that. There are two places it can arrive: a node on this path, and the allergen half of `scan_reply`. Tests in `agent/tests/test_update_profile.py` fail at both, and that was checked by adding each in turn and watching them go red.
+
+A column name cannot be a query parameter, so `Database.update_profile` whitelists the field against the same tuple the extractor's schema is built from, before it takes a connection.
 
 ## The model routing rule
 

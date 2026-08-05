@@ -26,6 +26,46 @@ class Profile(BaseModel):
     disliked_foods: list[str] = Field(default_factory=list)
 
 
+# The Profile fields the User may change by saying so. `user_id` and `name` are
+# not among them: one identifies the row, the other is what the Redactor is
+# built from. The database seam whitelists against this same tuple, so no field
+# name reaches SQL that did not come from here.
+UPDATABLE_FIELDS = (
+    "sex", "age", "height_cm", "weight_kg", "target_weight_kg",
+    "activity_level", "diet_pattern", "units", "allergies", "disliked_foods",
+)
+
+ProfileField = Literal[
+    "sex", "age", "height_cm", "weight_kg", "target_weight_kg",
+    "activity_level", "diet_pattern", "units", "allergies", "disliked_foods",
+]
+
+# The two Profile fields that hold a list rather than one value. A statement
+# adds to them; it does not replace them.
+LIST_FIELDS = ("allergies", "disliked_foods")
+
+
+class ProfileUpdate(BaseModel):
+    """One Profile fact the User changed by saying it.
+
+    `old_value` is what makes the confirmation useful — the User can see the
+    Coach changed the right thing — so the extractor is asked for it, and the
+    node then reports the Profile's own value, which cannot be hallucinated.
+    """
+
+    field: ProfileField | None = Field(
+        default=None,
+        description="The one Profile field this message changes. Null when the "
+        "message does not clearly change exactly one of them.",
+    )
+    old_value: str = Field(default="", description="What the Profile holds now.")
+    new_value: str = Field(
+        default="",
+        description="The value alone: a number with no unit for a number field, "
+        "and for allergies and disliked_foods the single food being added.",
+    )
+
+
 INTENTS = ("log_meal", "ask_question", "review_day", "recommend", "update_profile")
 
 Intent = Literal["log_meal", "ask_question", "review_day", "recommend", "update_profile"]
