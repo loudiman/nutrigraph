@@ -12,10 +12,12 @@ import psycopg
 import pytest
 
 from nutrigraph_agent.app import open_checkpointer
-from nutrigraph_agent.config import CHECKPOINT_SCHEMA
+from nutrigraph_agent.config import CHECKPOINT_TABLES
 from nutrigraph_agent.graph import build_graph
 from nutrigraph_agent.migrate import MIGRATIONS_DIR, migrate, pending
 from nutrigraph_agent.seed import seed_profiles
+
+OUR_TABLES = {"schema_migration", "user_profile", "message"}
 
 
 @pytest.fixture
@@ -23,13 +25,13 @@ def empty_database(integration_database_url: str) -> str:
     with psycopg.connect(integration_database_url, autocommit=True) as conn:
         conn.execute("drop schema if exists public cascade")
         conn.execute("create schema public")
-        conn.execute(f"drop schema if exists {CHECKPOINT_SCHEMA} cascade")
     return integration_database_url
 
 
-def test_no_migration_file_references_the_langgraph_schema():
+def test_no_migration_file_names_a_table_the_checkpointer_owns():
     for path in Path(MIGRATIONS_DIR).glob("*.sql"):
-        assert CHECKPOINT_SCHEMA not in path.read_text(encoding="utf-8").lower()
+        sql = path.read_text(encoding="utf-8").lower()
+        assert not [table for table in CHECKPOINT_TABLES if table in sql]
 
 
 def test_the_first_migration_creates_the_version_table_and_the_two_tables(empty_database):
@@ -62,7 +64,7 @@ def test_the_seed_is_safe_to_run_twice(empty_database):
     assert count == len(seeded)
 
 
-async def test_the_checkpointer_writes_to_the_langgraph_schema(empty_database):
+async def test_the_checkpointer_makes_its_own_tables_and_leaves_ours_alone(empty_database):
     migrate(empty_database)
     seed_profiles(empty_database)
     saver, pool = await open_checkpointer(empty_database)
@@ -76,10 +78,6 @@ async def test_the_checkpointer_writes_to_the_langgraph_schema(empty_database):
         await pool.close()
 
     with psycopg.connect(empty_database) as conn:
-        rows = conn.execute(
-            "select table_name from information_schema.tables where table_schema = %s",
-            (CHECKPOINT_SCHEMA,),
-        ).fetchall()
         public_tables = {
             r[0]
             for r in conn.execute(
@@ -87,5 +85,6 @@ async def test_the_checkpointer_writes_to_the_langgraph_schema(empty_database):
                 "where table_schema = 'public'"
             ).fetchall()
         }
-    assert "checkpoints" in {r[0] for r in rows}
-    assert public_tables == {"schema_migration", "user_profile", "message"}
+    assert "checkpoints" in public_tables
+    assert OUR_TABLES <= public_tables
+    assert public_tables - OUR_TABLES <= CHECKPOINT_TABLES

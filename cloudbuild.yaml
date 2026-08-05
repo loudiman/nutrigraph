@@ -1,0 +1,125 @@
+# Every merge to `main`: build both images, apply the migrations, then deploy
+# both services, in that order. The migration runs before the deployment and is
+# add-only (see `agent/migrations/README.md`), so the running old code keeps
+# working and a deployment that fails leaves a healthy system behind.
+#
+# A rollback is `gcloud run deploy --image` with the previous tag. A migration
+# is never reversed.
+
+substitutions:
+  _REGION: asia-southeast1
+  _REPO: asia-southeast1-docker.pkg.dev/nutrigraph-2026ldm/nutrigraph
+
+steps:
+  # Which service directories moved in this commit. A directory that did not
+  # move is not rebuilt: the image already in the registry is retagged instead.
+  - name: gcr.io/cloud-builders/git
+    id: changed
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -eu
+        for dir in agent gateway; do
+          if ! git rev-parse HEAD~1 >/dev/null 2>&1 || ! git diff --quiet HEAD~1 HEAD -- "$$dir"; then
+            echo "$$dir changed"
+            touch "/workspace/build-$$dir"
+          else
+            echo "$$dir unchanged"
+          fi
+        done
+
+  - name: gcr.io/cloud-builders/docker
+    id: agent image
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -eu
+        IMAGE=${_REPO}/agent
+        if [ -f /workspace/build-agent ] || ! docker pull "$$IMAGE:current"; then
+          docker build -t "$$IMAGE:$SHORT_SHA" -t "$$IMAGE:current" agent
+        else
+          docker tag "$$IMAGE:current" "$$IMAGE:$SHORT_SHA"
+        fi
+        docker push "$$IMAGE:$SHORT_SHA"
+        docker push "$$IMAGE:current"
+
+  - name: gcr.io/cloud-builders/docker
+    id: gateway image
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -eu
+        IMAGE=${_REPO}/gateway
+        if [ -f /workspace/build-gateway ] || ! docker pull "$$IMAGE:current"; then
+          docker build -t "$$IMAGE:$SHORT_SHA" -t "$$IMAGE:current" gateway
+        else
+          docker tag "$$IMAGE:current" "$$IMAGE:$SHORT_SHA"
+        fi
+        docker push "$$IMAGE:$SHORT_SHA"
+        docker push "$$IMAGE:current"
+
+  # The migrations are the agent's, and they run from the agent's own image.
+  - name: gcr.io/cloud-builders/docker
+    id: migrate
+    entrypoint: bash
+    args:
+      - -c
+      - docker run --rm -e DATABASE_URL="$$DATABASE_URL" ${_REPO}/agent:$SHORT_SHA nutrigraph-migrate
+    secretEnv: ['DATABASE_URL']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy agent
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - nutrigraph-agent
+      - --image=${_REPO}/agent:$SHORT_SHA
+      - --region=${_REGION}
+      - --service-account=nutrigraph-agent@$PROJECT_ID.iam.gserviceaccount.com
+      # No public ingress and no unauthenticated caller: an unauthenticated
+      # request is refused by the platform and never reaches the application.
+      - --ingress=internal
+      - --no-allow-unauthenticated
+      - --min-instances=0
+      - --max-instances=3
+      - --memory=512Mi
+      - --set-secrets=DATABASE_URL=neon-connection-string:latest,GEMINI_API_KEY=gemini-api-key:latest,FDC_API_KEY=fdc-api-key:latest,LANGSMITH_API_KEY=langsmith-api-key:latest
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy gateway
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -eu
+        AGENT_URL=$$(gcloud run services describe nutrigraph-agent --region ${_REGION} --format='value(status.url)')
+        # Direct VPC egress: a call to an internal-ingress service is only
+        # internal if it leaves through a VPC network in the same project.
+        gcloud run deploy nutrigraph-gateway \
+          --image=${_REPO}/gateway:$SHORT_SHA \
+          --region=${_REGION} \
+          --service-account=nutrigraph-gateway@$PROJECT_ID.iam.gserviceaccount.com \
+          --ingress=all \
+          --allow-unauthenticated \
+          --min-instances=0 \
+          --max-instances=3 \
+          --memory=512Mi \
+          --network=default \
+          --subnet=default \
+          --vpc-egress=all-traffic \
+          --set-env-vars="AGENT_URL=$$AGENT_URL" \
+          --set-secrets=SESSION_SECRET=cookie-signing-secret:latest
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/nutrigraph-2026ldm/secrets/neon-connection-string/versions/latest
+      env: DATABASE_URL
+
+serviceAccount: projects/nutrigraph-2026ldm/serviceAccounts/nutrigraph-build@nutrigraph-2026ldm.iam.gserviceaccount.com
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1800s
