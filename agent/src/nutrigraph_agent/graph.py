@@ -1,6 +1,10 @@
-"""The graph. `load_profile` reads the Profile, `route` classifies the message
-into Intents with one model call, and the Turn either dispatches or asks one
-clarifying question.
+"""The graph. `load_profile` reads the Profile, `guard` runs the deterministic
+rule list with no model, `route` classifies the message into Intents with one
+model call, and the Turn refuses, dispatches, or asks one clarifying question.
+
+`guard` sits before `route` because a message the rule list catches must never
+reach an Intent path. `refuse` is the only node that writes a Refusal, and both
+detectors — the rule list and the router's `out_of_scope` flag — end there.
 
 The state holds only what survives the Turn. Everything rebuilt every Turn
 lives on the `TurnContext`, which travels in the config and therefore never
@@ -24,6 +28,7 @@ from langgraph.graph import END, START, StateGraph
 
 from .db import InteractionEvent
 from .deps import Deps
+from .guardrail import OUT_OF_SCOPE, Subject, match_rule, refusal
 from .models import INTENTS, CoachReply, Profile, ReplyPart, RouterDecision
 from .providers import ModelCall, TurnModels
 
@@ -82,6 +87,10 @@ class TurnContext:
     models: TurnModels | None = None
     decision: RouterDecision | None = None
     reply: CoachReply | None = None
+    # What the rule list caught, if anything, and whether the Turn was refused.
+    # A Refusal is this codebase's own words, so the text scan does not read it.
+    subject: Subject | None = None
+    refused: bool = False
     nodes_run: list[str] = field(default_factory=list)
     # What the node currently running has to report on its metric row.
     call: ModelCall | None = None
@@ -121,6 +130,18 @@ async def load_profile(state: TurnState, config: RunnableConfig) -> dict[str, An
     return {}
 
 
+async def guard(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
+    """The deterministic detector, before the router and with no model. What it
+    catches goes straight to `refuse`, so no Intent path runs for it."""
+    ctx = turn_context(config)
+    ctx.subject = match_rule(ctx.raw_message)
+    return {}
+
+
+def after_guard(state: TurnState, config: RunnableConfig) -> str:
+    return "refuse" if turn_context(config).subject else "route"
+
+
 async def route(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     """One call, one schema. No keyword list is maintained for routing."""
     ctx = turn_context(config)
@@ -132,9 +153,9 @@ async def route(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     ctx.decision = decision
     ctx.record(call)
     ctx.intent = decision.intents[0] if decision.intents else None
-    if decision.confidence >= CONFIDENCE_FLOOR:
+    if decision.confidence >= CONFIDENCE_FLOOR and not decision.out_of_scope:
         # The Turn was understood, so the pending Clarification is answered. A
-        # Refusal turn never reaches here, so a Refusal does not clear it.
+        # Refusal turn takes neither branch, so a Refusal does not clear it.
         return {"pending_clarification": None}
     return {}
 
@@ -142,7 +163,22 @@ async def route(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
 def next_node(state: TurnState, config: RunnableConfig) -> str:
     decision = turn_context(config).decision
     assert decision is not None
+    # Out of scope beats an unsure classification: refusing is the safer answer
+    # to a request the Coach may not take either way.
+    if decision.out_of_scope:
+        return "refuse"
     return "clarify" if decision.confidence < CONFIDENCE_FLOOR else "dispatch"
+
+
+async def refuse(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
+    """The only node that writes a Refusal, and it writes a template. Whichever
+    detector fired, the wording comes from `guardrail`, never from a model."""
+    ctx = turn_context(config)
+    ctx.reply = refusal(ctx.subject or OUT_OF_SCOPE)
+    ctx.refused = True
+    ctx.intent = "refusal"
+    # `pending_clarification` is not returned, so a Refusal leaves it standing.
+    return {"messages": [{"role": "coach", "text": ctx.reply.text}]}
 
 
 async def clarify(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
@@ -216,14 +252,18 @@ def build_graph(checkpointer: Any):
     builder = StateGraph(TurnState)
     for name, node in (
         ("load_profile", load_profile),
+        ("guard", guard),
         ("route", route),
         ("clarify", clarify),
         ("dispatch", dispatch),
+        ("refuse", refuse),
     ):
         builder.add_node(name, measured(name, node))
     builder.add_edge(START, "load_profile")
-    builder.add_edge("load_profile", "route")
-    builder.add_conditional_edges("route", next_node, ["clarify", "dispatch"])
+    builder.add_edge("load_profile", "guard")
+    builder.add_conditional_edges("guard", after_guard, ["refuse", "route"])
+    builder.add_conditional_edges("route", next_node, ["clarify", "dispatch", "refuse"])
     builder.add_edge("clarify", END)
     builder.add_edge("dispatch", END)
+    builder.add_edge("refuse", END)
     return builder.compile(checkpointer=checkpointer)
