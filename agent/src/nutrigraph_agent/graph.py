@@ -1,15 +1,19 @@
 """The graph. `load_profile` reads the Profile, `guard` runs the deterministic
 rule list with no model, `route` classifies the message into Intents with one
-model call, and the Turn refuses, dispatches, or asks one clarifying question.
+model call, and the Turn refuses, runs an Intent path, dispatches, or asks one
+clarifying question.
 
 `guard` sits before `route` because a message the rule list catches must never
 reach an Intent path — including the Corpus, which an out-of-scope question is
 never allowed to search. `refuse` is the only node that writes a Refusal, and
 both detectors — the rule list and the router's `out_of_scope` flag — end there.
 
-The one Intent path that is built is `ask_question`: `retrieve` then
-`answer_question`. A question the guardrail permits, a chronic-disease question
-among them, passes through `guard` untouched and is answered from the Corpus.
+Two Intent paths are built, both after both detectors, and `INTENT_PATHS` names
+the node each starts at. `update_profile` writes the change to PostgreSQL and to
+nothing else, so the Profile the next Turn reads is the changed one.
+`ask_question` is `retrieve` then `answer_question`: a question the guardrail
+permits, a general chronic-disease question among them, passes through `guard`
+untouched and is answered from the Corpus with a Citation on every claim.
 
 The state holds only what survives the Turn. Everything rebuilt every Turn
 lives on the `TurnContext`, which travels in the config and therefore never
@@ -30,15 +34,19 @@ from uuid import UUID
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
+from pydantic import ValidationError
 
 from .db import InteractionEvent, RetrievedChunk
 from .deps import Deps
 from .guardrail import OUT_OF_SCOPE, Subject, match_rule, refusal
 from .models import (
     INTENTS,
+    LIST_FIELDS,
+    UPDATABLE_FIELDS,
     Answer,
     CoachReply,
     Profile,
+    ProfileUpdate,
     ReplyPart,
     RouterDecision,
 )
@@ -53,6 +61,22 @@ CHECKPOINTED = ("user_id", "messages", "pending_clarification")
 
 # Below this the Turn cannot be classified, so the Coach asks instead of guessing.
 CONFIDENCE_FLOOR = 0.6
+
+# The Intent paths that are built, and the node each one starts at. An Intent
+# with no entry here goes to the stub, so adding a path is one line and a node.
+INTENT_PATHS = {"update_profile": "update_profile", "ask_question": "retrieve"}
+
+# The Intents whose answer is scanned against the Profile's allergies.
+#
+# `update_profile` is absent, and must stay absent. A correct confirmation of
+# "I am allergic to shrimp" names shrimp, and an allergy check on that path
+# destroys the very answer the User asked for. The prototype found this.
+#
+# There are two places the allergen check can arrive: a node on this path, and
+# the allergen half of `guardrail.scan_reply`, which `run_turn` runs on the
+# finished text of every answer that is not a Refusal. Neither may see an
+# `update_profile` confirmation. `tests/test_update_profile.py` fails at both.
+ALLERGY_CHECKED_INTENTS = ("recommend", "log_meal")
 
 ROUTER_SYSTEM = f"""You classify one message from a User to a nutrition Coach.
 
@@ -72,6 +96,27 @@ a mental-health crisis, or something unrelated to food. Still classify it; the
 Coach decides what to say about it, not you.
 
 Return no Intents when the message carries none."""
+
+UPDATE_PROFILE_SYSTEM = f"""You read one message in which a User states a stable
+fact about themselves, and you report the single Profile field it changes.
+
+The fields: {", ".join(UPDATABLE_FIELDS)}.
+
+age is whole years. height_cm, weight_kg and target_weight_kg are numbers in
+those units. activity_level is one of sedentary, light, moderate, active.
+diet_pattern is one of omnivore, pescatarian, vegetarian, vegan, halal. units is
+metric or imperial. allergies and disliked_foods each hold a list of foods, and
+a message adds one food to the list.
+
+new_value is the value alone, with no unit and no sentence around it. For
+allergies and disliked_foods it is the single food being added, lowercase and
+singular. Convert to the field's unit when the User uses another one.
+
+old_value is what the Profile holds now, which you are given.
+
+Name no field when the message does not clearly change exactly one of them —
+when it is vague, when it changes two, or when the value is missing. The Coach
+then asks the User rather than guessing a field."""
 
 CLARIFY_SYSTEM = """You are a nutrition Coach who did not understand one message.
 
@@ -204,19 +249,20 @@ async def route(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
 def next_node(state: TurnState, config: RunnableConfig) -> str:
     decision = turn_context(config).decision
     assert decision is not None
-    # Out of scope beats an unsure classification, and beats retrieval: refusing
-    # is the safer answer to a request the Coach may not take either way, and a
-    # question it may not take must not reach the Corpus.
+    # Out of scope beats an unsure classification, and beats every Intent path:
+    # refusing is the safer answer to a request the Coach may not take either
+    # way. Both this and the rule list in `guard` are decided before a path is
+    # chosen, so an out-of-scope message never reaches one — the Corpus among
+    # them, which such a question is never allowed to search.
     if decision.out_of_scope:
         return "refuse"
     if decision.confidence < CONFIDENCE_FLOOR:
         return "clarify"
-    # The first Intent, not any Intent: the order matters, because the second
-    # reads what the first produced, and no other Intent path is built yet. A
-    # message that logs a Meal and then asks about it still goes to the stub.
-    # ponytail: this becomes an ordered walk of `decision.intents` when the
-    # second path lands; the router already keeps them in the order to run.
-    return "retrieve" if decision.intents[:1] == ["ask_question"] else "dispatch"
+    # The first Intent is the one that runs, because the order matters and the
+    # second reads what the first produced. Chaining a second one onto the first
+    # is a later slice; until then the stub says what was decided.
+    first = decision.intents[0] if decision.intents else None
+    return INTENT_PATHS.get(first, "dispatch")
 
 
 async def refuse(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
@@ -307,9 +353,92 @@ async def answer_question(state: TurnState, config: RunnableConfig) -> dict[str,
     return {"messages": [{"role": "coach", "text": answer.text}]}
 
 
+def _say(value: Any) -> str:
+    """One Profile value as the User should read it back."""
+    if isinstance(value, list):
+        return ", ".join(value) or "nothing"
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))  # a target weight is 70, not 70.0
+    return "not set" if value in (None, "") else str(value)
+
+
+def _held(profile: Profile) -> str:
+    """What the Profile holds now, for the extractor to report as the old value."""
+    return "\n".join(f"{name}: {_say(getattr(profile, name))}" for name in UPDATABLE_FIELDS)
+
+
+def _changed(profile: Profile, update: ProfileUpdate) -> tuple[Any, Any]:
+    """The old value and the new one, typed as the Profile holds them.
+
+    `Profile` does the coercion, so "70" becomes 70.0 and a value the field
+    cannot hold raises instead of reaching PostgreSQL.
+    """
+    assert update.field is not None
+    old = getattr(profile, update.field)
+    if update.field in LIST_FIELDS:
+        item = update.new_value.strip().lower()
+        if not item:
+            raise ValueError("no food named")
+        # ponytail: a statement adds to the list. Removing an allergy by saying
+        # so is its own slice, and needs the extractor to report the direction.
+        candidate: Any = old if item in old else [*old, item]
+    else:
+        candidate = update.new_value
+    validated = Profile.model_validate({**profile.model_dump(), update.field: candidate})
+    return old, getattr(validated, update.field)
+
+
+async def update_profile(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
+    """The User changes a Profile fact by saying it.
+
+    The write goes to PostgreSQL and to nothing else. The Profile is not in the
+    state and never enters the checkpoint, so there is no second copy to drift,
+    and the next Turn's `load_profile` reads the change back — in this Session
+    or in a new one.
+
+    Leaving `ctx.reply` unset sends the Turn to `clarify`: an ambiguous Profile
+    statement is a question to the User, not a guessed field.
+    """
+    ctx = turn_context(config)
+    ctx.intent = "update_profile"
+    profile = ctx.profile
+    assert profile is not None
+    update, call = await models(ctx).fill(
+        ProfileUpdate,
+        system=UPDATE_PROFILE_SYSTEM,
+        user=f"The Profile holds:\n{_held(profile)}\n\nThe User wrote: {ctx.raw_message}",
+    )
+    ctx.record(call)
+    if update.field is None:
+        log.info("no Profile field named", extra={"turn_id": str(ctx.turn_id)})
+        return {}
+    try:
+        # The extractor reports an old value too; this is the Profile's own,
+        # so the confirmation cannot name a value the User never had.
+        old, new = _changed(profile, update)
+    except (ValidationError, ValueError):
+        log.info("value does not fit the field", extra={"field": update.field})
+        return {}
+    await ctx.deps.db.update_profile(profile.user_id, field=update.field, value=new)
+    text = (
+        f"{ctx.name}, I changed your {update.field.replace('_', ' ')} "
+        f"from {_say(old)} to {_say(new)}."
+    )
+    ctx.reply = CoachReply(
+        text=text, parts=[ReplyPart(intent="update_profile", text=text)]
+    )
+    return {"messages": [{"role": "coach", "text": text}]}
+
+
+def after_update(state: TurnState, config: RunnableConfig) -> str:
+    """A Profile statement the extractor could not pin to one field goes to the
+    clarify path rather than to a guess."""
+    return END if turn_context(config).reply is not None else "clarify"
+
+
 async def dispatch(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
-    """The stub each Intent path replaces. No Intent path is built yet, so this
-    says what the router decided and stops."""
+    """The stub each remaining Intent path replaces. It says what the router
+    decided and stops."""
     ctx = turn_context(config)
     decision = ctx.decision
     assert decision is not None
@@ -365,6 +494,7 @@ def build_graph(checkpointer: Any):
         ("guard", guard),
         ("route", route),
         ("clarify", clarify),
+        ("update_profile", update_profile),
         ("retrieve", retrieve),
         ("answer_question", answer_question),
         ("dispatch", dispatch),
@@ -375,8 +505,11 @@ def build_graph(checkpointer: Any):
     builder.add_edge("load_profile", "guard")
     builder.add_conditional_edges("guard", after_guard, ["refuse", "route"])
     builder.add_conditional_edges(
-        "route", next_node, ["clarify", "retrieve", "dispatch", "refuse"]
+        "route",
+        next_node,
+        ["clarify", "update_profile", "retrieve", "dispatch", "refuse"],
     )
+    builder.add_conditional_edges("update_profile", after_update, ["clarify", END])
     builder.add_edge("clarify", END)
     builder.add_edge("retrieve", "answer_question")
     builder.add_edge("answer_question", END)

@@ -19,7 +19,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from nutrigraph_agent.db import InteractionEvent, RetrievedChunk
-from nutrigraph_agent.models import Profile, RouterDecision
+from nutrigraph_agent.models import UPDATABLE_FIELDS, Profile, RouterDecision
 from nutrigraph_agent.providers import Models
 
 # What `gemini-embedding-001` returns before truncation.
@@ -71,6 +71,9 @@ class FakeDatabase:
     messages: list[StoredMessage] = field(default_factory=list)
     events: list[InteractionEvent] = field(default_factory=list)
     redaction_maps: dict[UUID, dict[str, str]] = field(default_factory=dict)
+    # Every Profile handed to a Turn, in order, so a test can read exactly what
+    # a later Turn was given rather than what the store happens to hold now.
+    loaded: list[Profile] = field(default_factory=list)
     fail_on_load: bool = False
     # What the Corpus returns for any query vector. Empty means the Corpus does
     # not cover the question.
@@ -80,7 +83,15 @@ class FakeDatabase:
     async def load_profile(self, user_id: str) -> Profile | None:
         if self.fail_on_load:
             raise ConnectionError("database is gone")
-        return self.profiles.get(user_id)
+        profile = self.profiles.get(user_id)
+        if profile is not None:
+            self.loaded.append(profile)
+        return profile
+
+    async def update_profile(self, user_id: str, *, field: str, value: Any) -> None:
+        if field not in UPDATABLE_FIELDS:
+            raise ValueError(f"{field!r} is not a Profile field a User may change")
+        self.profiles[user_id] = self.profiles[user_id].model_copy(update={field: value})
 
     async def store_message(
         self, *, user_id: str, turn_id: UUID, role: str, raw_text: str
@@ -125,7 +136,10 @@ def _message(content: str) -> SimpleNamespace:
 @dataclass
 class FakeProvider:
     """Records every prompt that reached the provider, and answers from a
-    script. A `str` in the script is a schema failure, which forces the retry."""
+    script. A `str` in the script is a schema failure, which forces the retry.
+
+    The script is in call order, and a Turn may now make more than one schema
+    call: the router first, then the Intent path's own."""
 
     decisions: deque[BaseModel | str] = field(default_factory=deque)
     default: RouterDecision = field(
@@ -217,6 +231,12 @@ class _FakeStructured:
         answer = self.chat.provider._next()
         if isinstance(answer, str):
             return {"raw": _message(""), "parsed": None, "parsing_error": ValueError(answer)}
+        # A real provider cannot answer with the wrong schema, so a script that
+        # does says the test is out of step with the calls the Turn makes.
+        assert isinstance(answer, self.schema), (
+            f"the script's next answer is a {type(answer).__name__}, but the Turn "
+            f"asked for a {self.schema.__name__}"
+        )
         return {
             "raw": _message(answer.model_dump_json()),
             "parsed": answer,
