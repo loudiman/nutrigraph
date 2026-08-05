@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .db import Database
+from .providers import Models
 
 
 class NotWired:
@@ -25,5 +26,7 @@ class NotWired:
 @dataclass
 class Deps:
     db: Database
-    models: object = field(default_factory=lambda: NotWired("Gemini"))
+    # The provider seam. A node never reaches a chat model directly: it asks
+    # this for a Turn-bound `TurnModels`, which redacts before every call.
+    models: Models
     food: object = field(default_factory=lambda: NotWired("FoodData Central"))

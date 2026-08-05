@@ -33,13 +33,14 @@ export function fakeAgent(
 export function echoEvents(request: TurnRequest): TurnEvent[] {
   return [
     { type: "node", turn_id: request.turnId, node: "load_profile" },
-    { type: "node", turn_id: request.turnId, node: "compose" },
+    { type: "node", turn_id: request.turnId, node: "route" },
+    { type: "node", turn_id: request.turnId, node: "dispatch" },
     {
       type: "answer",
       turn_id: request.turnId,
       reply: {
-        text: `Lou, you said: ${request.message}`,
-        parts: [{ intent: "echo", text: `Lou, you said: ${request.message}` }],
+        text: "Lou, I read that as: log_meal.",
+        parts: [{ intent: "log_meal", text: "Lou, I read that as: log_meal." }],
         disclaimers: [],
       },
     },

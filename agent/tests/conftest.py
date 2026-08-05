@@ -13,15 +13,20 @@ from nutrigraph_agent.graph import build_graph
 from nutrigraph_agent.models import AnswerEvent, TurnEvent
 from nutrigraph_agent.turn import run_turn
 
-from .fakes import FakeDatabase
+from .fakes import FakeDatabase, FakeProvider
+
+SCHEMA_MODEL = "gemini-3.5-flash-lite"
+PROSE_MODEL = "gemini-3.5-flash"
 
 
 @dataclass
 class TurnSeam:
     """The agent turn seam: a `user_id` and a message in, a validated
-    `CoachReply` and the emitted node events out. Everything below is real."""
+    `CoachReply` and the emitted node events out. Everything below is real —
+    including the redaction wrapper, which sits above the faked provider."""
 
     db: FakeDatabase
+    provider: FakeProvider
     checkpointer: InMemorySaver
 
     def reconnect(self) -> None:
@@ -29,7 +34,12 @@ class TurnSeam:
         self.graph = build_graph(self.checkpointer)
 
     def __post_init__(self) -> None:
-        self.deps = Deps(db=self.db)
+        self.deps = Deps(
+            db=self.db,
+            models=self.provider.models(
+                schema_model=SCHEMA_MODEL, prose_model=PROSE_MODEL
+            ),
+        )
         self.reconnect()
 
     async def turn(self, message: str, user_id: str = "demo-user-1",
@@ -55,7 +65,9 @@ def event_loop_policy():
 
 @pytest.fixture
 def seam() -> TurnSeam:
-    return TurnSeam(db=FakeDatabase(), checkpointer=InMemorySaver())
+    return TurnSeam(
+        db=FakeDatabase(), provider=FakeProvider(), checkpointer=InMemorySaver()
+    )
 
 
 def answer(events: list[TurnEvent]) -> AnswerEvent:

@@ -28,10 +28,21 @@ class Settings:
     # instead — behind this one variable, which production never sets.
     dev_auth: bool
     dev_token: str
+    # The provider is a configuration string, not a code path. Changing these
+    # three values moves every model call; nothing else in the codebase knows
+    # which vendor answers. The provider's own key variable (GOOGLE_API_KEY,
+    # OPENAI_API_KEY, ANTHROPIC_API_KEY) is read from the environment by
+    # LangChain and never enters this object, a log line, or a trace.
+    model_provider: str = "google_genai"
+    schema_model: str = "gemini-3.5-flash-lite"
+    prose_model: str = "gemini-3.5-flash"
 
     @staticmethod
     def from_env(env: dict[str, str] | None = None) -> Settings:
         if env is None:
+            # This also puts GOOGLE_API_KEY and the two LANGSMITH_ variables in
+            # the environment, where LangChain and LangSmith read them. Turning
+            # tracing on is those two variables and no code change.
             load_dotenv(_dotenv_path())
             env = dict(os.environ)
         settings = Settings(
@@ -40,6 +51,9 @@ class Settings:
             port=int(env.get("AGENT_PORT", "8080")),
             dev_auth=env.get("AGENT_DEV_AUTH", "").strip().lower() in {"1", "true", "yes"},
             dev_token=env.get("AGENT_DEV_TOKEN", ""),
+            model_provider=env.get("MODEL_PROVIDER", "google_genai"),
+            schema_model=env.get("MODEL_SCHEMA", "gemini-3.5-flash-lite"),
+            prose_model=env.get("MODEL_PROSE", "gemini-3.5-flash"),
         )
         settings.check()
         return settings
