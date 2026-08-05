@@ -13,6 +13,7 @@ from pathlib import Path
 import psycopg
 
 from .config import Settings
+from .retention import DEMO_WARNING
 
 MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
 VERSION_TABLE = "schema_migration"
@@ -50,6 +51,8 @@ def main() -> int:
     settings = Settings.from_env()
     applied = migrate(settings.database_url)
     print("\n".join(f"applied {name}" for name in applied) or "nothing to apply")
+    # The warning, where a developer first connects to a database (ADR 0002).
+    print(DEMO_WARNING)
     return 0
 
 

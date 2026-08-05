@@ -11,13 +11,19 @@ gateway/                  Node and Express: the session, the turn identifier, th
 agent/                    Python and FastAPI: the graph, the nodes, the migrations
 agent/migrations/         numbered SQL files, owned by the agent service
 agent/seeds/              demo Profiles
+gateway/public/           the minimal test client, and the demo-data-only warning above the box
 gateway/src/generated/    TypeScript types, generated from the agent's OpenAPI document
+deploy/                   the scheduled jobs the pipeline does not own
 docs/adr/                 the decision records
 prototypes/               throwaway code, never imported
 compose.yaml              PostgreSQL with pgvector, and nothing else
 ```
 
 ## Running it locally
+
+> **Demo data only. What you type is stored as written and kept for 90 days, so do not enter real personal or health details, yours or anyone else's.**
+>
+> The database holds the raw message unredacted on purpose ([ADR 0002](docs/adr/0002-redact-before-the-provider-not-before-storage.md)), so this warning, and not the schema, is what protects it. It is printed by `nutrigraph-migrate` and `nutrigraph-seed`, and it is on the page before a User can type.
 
 One container. Both services run natively with file reloading, so a graph change is visible in about a second.
 
@@ -36,7 +42,7 @@ npm install
 npm run dev
 ```
 
-Then:
+Then open `http://127.0.0.1:3000` for the minimal test client — the warning is above the box — or drive it by hand:
 
 ```sh
 curl -N -c cookies.txt -H 'Content-Type: application/json' \
@@ -86,6 +92,20 @@ Open-ended entities — the names of other people, addresses no regular expressi
 ```
 
 Without it, only names the Coach already holds are redacted.
+
+## Retention, and the warning it rests on
+
+The store of raw text ADR 0002 accepts is bounded by a scheduled job, not by a promise:
+
+```sh
+.venv/bin/nutrigraph-purge    # nulls message.raw_text after 90 days; safe to run twice
+```
+
+One statement nulls `message.raw_text` and stamps `purged_at` on every message older than 90 days. It writes those two columns of that one table, so the row, its identifiers, its timestamps, and every Meal, Item, Recommendation and `interaction_event` row survive — the day review still reports correct totals over a purged period, and a harvested eval case keeps everything except the words. A second run purges nothing, because a purged row has no `raw_text` left to match.
+
+In the deployed environment it is a Cloud Run job on the agent image, running at 03:00 Asia/Manila every day, created by [`deploy/retention-job.sh`](deploy/retention-job.sh). Running it is not a manual step.
+
+**The warning is the other half.** ADR 0002 says plainly that during those 90 days the warning, and not the schema, is what protects the raw text. So it is one sentence held in one constant, `retention.DEMO_WARNING`, and it appears in the three places that matter: above the box in the test client, on the way out of `nutrigraph-migrate`, and on the way out of `nutrigraph-seed`. A test fails if a copy drifts.
 
 ## The metric record
 
