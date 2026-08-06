@@ -13,10 +13,10 @@
       "proxy": "The PhilFCT entry stands in for the dish and is something else — usually a canned or commercial product, or a differently-cooked form. source_note states exactly what it is. Never present a proxy row as the home-cooked dish.",
       "calculated": "PhilFCT holds no entry for the dish. The row is computed from component foods; the calculation object records components, PhilFCT Food IDs, gram weights and the arithmetic so a checker can recompute it."
     },
-    "calculated_row_assumption": "No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated. The component gram weights and the added-water figures on calculated rows are DECLARED, not sourced: FNRI publishes no recipe weights and no yield factors for any dish, and docs/research/filipino-dish-values.md section 4 records that even the Pinggang Pinoy serving grams could not be sourced. Every NUTRIENT number in this file, on every row, is transcribed from PhilFCT. No figure anywhere has been adjusted to compensate for the assumption.",
+    "calculated_row_assumption": "No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated. That applies to the four calculated rows that add water — sinigang, tinola, bulalo and pinakbet. Sisig and chicken inasal add no water, so the water mechanism cannot apply to them; each of those two states its own mechanism in its calculation.assumption, and the direction is the same both times: energy per 100 g is likely understated rather than overstated. Read each row's own assumption, not this paragraph alone. The component gram weights and the added-water figures on calculated rows are DECLARED, not sourced: FNRI publishes no recipe weights and no yield factors for any dish, and docs/research/filipino-dish-values.md section 4 records that even the Pinggang Pinoy serving grams could not be sourced. Every NUTRIENT number in this file, on every row, is transcribed from PhilFCT. No figure anywhere has been adjusted to compensate for the assumption.",
     "nulls": "fibre_g and sodium_mg are null wherever PhilFCT prints '-'. Never zero, never estimated. The 1997 base tables carried no fibre, sugar or sodium at all; the later indirect-method retrofit reached only about 1,246 items for fibre and 1,298 for sodium out of roughly 1,600.",
-    "audit_file": "filipino_dishes_audit.json — the verbatim PhilFCT panels for every Food ID used here, for a second agent to re-fetch and diff.",
-    "row_count": 20
+    "audit_file": "filipino_dishes_audit.json — the verbatim PhilFCT panels for every Food ID used here, including the ones a source_note quotes a figure from, for a second agent to re-fetch and diff.",
+    "row_count": 21
   },
   "dishes": [
     {
@@ -258,13 +258,88 @@
     {
       "name": "Lechon",
       "aliases": [
-        "lechon manok",
         "litson",
+        "lechon baboy",
+        "lechon liempo",
         "roast pig",
-        "whole roast"
+        "roasted pork belly",
+        "litson baboy"
+      ],
+      "philfct_food_id": "F269",
+      "value_kind": "proxy",
+      "per_100g": {
+        "proximates": {
+          "Water (g)": "41.8",
+          "Energy, calculated (kcal)": "385",
+          "Protein (g)": "21.0",
+          "Total Fat (g)": "31.6",
+          "Carbohydrate, total (g)": "4.1",
+          "Ash, total (g)": "1.5"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.0",
+          "Sugars, total (g)": "0.3"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "10",
+          "Phosphorus, P (mg)": "286",
+          "Iron, Fe (mg)": "1.4",
+          "Potassium, K (mg)": "255",
+          "Sodium, Na (mg)": "350",
+          "Zinc, Zn (mg)": "2.50"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "12",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "12",
+          "Thiamin, Vitamin B1 (mg)": "0.31",
+          "Riboflavin, Vitamin B2 (mg)": "0.31",
+          "Niacin (mg)": "6.3",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "12.44",
+          "Caproic, C6 (g)": "0",
+          "Caprylic, C8 (g)": "0",
+          "Capric, C10 (g)": "0.06",
+          "Lauric, C12 (g)": "0.80",
+          "Myristic, C14 (g)": "1.74",
+          "Palmitic, C16 (g)": "6.95",
+          "Stearic, C18 (g)": "2.89",
+          "Arachidic, C20 (g)": "0",
+          "Behenic, C22 (g)": "0",
+          "Lignoceric, C24 (g)": "0",
+          "Fatty acids, monounsaturated, total (g)": "9.71",
+          "Oleic , C18:1 (g)": "9.71",
+          "Fatty acids, polyunsaturated, total(g)": "3.36",
+          "Linoleic, C18:2 (g)": "3.11",
+          "Linolenic, C18:3 (g)": "0.25",
+          "Cholesterol (mg)": "96"
+        }
+      },
+      "kcal": 385,
+      "protein_g": 21.0,
+      "fat_g": 31.6,
+      "carb_g": 4.1,
+      "fibre_g": 0.0,
+      "sodium_mg": 350,
+      "tags": [
+        "pork",
+        "roast",
+        "festive"
+      ],
+      "source_note": "PROXY: PhilFCT F269 is 'Pork belly, seasoned, roasted' (Baboy liempo, litson) — the belly cut of roast pork. PhilFCT holds no whole-roast-pig entry; it splits lechon by cut, and the cuts differ sharply: F268 pork back with skin and visible fat removed, F270 the same belly with skin and fat removed (299 kcal), F271 roasted pork skin. A plate carved off a whole lechon mixes cuts, so read this as the belly a household is usually served rather than an average of the animal. Edible portion 99%. PhilFCT entry: 'Pork belly, seasoned, roasted' (Baboy liempo, litson), Food ID F269, edible portion 99%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+    },
+    {
+      "name": "Lechon manok",
+      "aliases": [
+        "litson manok",
+        "roast chicken",
+        "lechon na manok",
+        "whole roasted chicken"
       ],
       "philfct_food_id": "F265",
-      "value_kind": "proxy",
+      "value_kind": "direct",
       "per_100g": {
         "proximates": {
           "Water (g)": "56.0",
@@ -324,10 +399,9 @@
       "tags": [
         "poultry",
         "chicken",
-        "roast",
-        "festive"
+        "roast"
       ],
-      "source_note": "PROXY: PhilFCT F265 is 'Chicken, whole, seasoned, roasted' (lechon manok) — roast CHICKEN, not the whole roast pig that 'lechon' usually names. Same cooking style, different animal; pork lechon is markedly fattier. Edible portion 70%. PhilFCT entry: 'Chicken, whole, seasoned, roasted' (Lechon manok), Food ID F265, edible portion 70%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+      "source_note": "PhilFCT F265 'Chicken, whole, seasoned, roasted' (Lechon manok) is the dish itself. It is roast CHICKEN and must not be served for pork lechon, which is markedly fattier — see the separate Lechon row. Edible portion 70%. PhilFCT entry: 'Chicken, whole, seasoned, roasted' (Lechon manok), Food ID F265, edible portion 70%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
     },
     {
       "name": "Tapa (pork)",
@@ -755,10 +829,9 @@
     {
       "name": "Pancit molo",
       "aliases": [
-        "pancit",
         "pansit molo",
-        "wonton soup",
-        "pansit"
+        "molo soup",
+        "wonton soup"
       ],
       "philfct_food_id": "R100",
       "value_kind": "proxy",
@@ -806,19 +879,17 @@
       "tags": [
         "soup",
         "pork",
-        "noodle",
         "wheat",
         "gluten"
       ],
-      "source_note": "PROXY: PhilFCT R100 'Wonton soup, prep, w/ MLP' (Pancit molo, w/ MLP) is the only pancit variant in PhilFCT and is made with meat-like protein (MLP), a meat analogue. It is NOT pancit canton, bihon, or palabok — do not serve these figures for a stir-fried noodle pancit. PhilFCT entry: 'Wonton soup, prep, w/ MLP' (Pancit molo, w/ MLP), Food ID R100, edible portion 100%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+      "source_note": "PROXY: PhilFCT R100 'Wonton soup, prep, w/ MLP' (Pancit molo, w/ MLP) is made with meat-like protein (MLP), a meat analogue, not the pork-and-shrimp filling a household uses. PhilFCT holds a second pansit molo entry, R079 'Soup, pansit molo, cond, cnd' (54 kcal), a condensed canned soup — its panel is in the audit file for comparison. What PhilFCT holds no prepared entry for is stir-fried noodle pancit: there is no pancit canton, bihon, palabok or guisado dish, only the plain noodles themselves (A137 Bihon, A140 Canton, A146 Miki, A134 Sotanghon). Do not serve this row for a noodle pancit. PhilFCT entry: 'Wonton soup, prep, w/ MLP' (Pancit molo, w/ MLP), Food ID R100, edible portion 100%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
     },
     {
       "name": "Lumpiang Shanghai",
       "aliases": [
         "lumpia shanghai",
-        "lumpia",
-        "spring roll",
-        "shanghai rolls"
+        "shanghai rolls",
+        "shanghai roll"
       ],
       "philfct_food_id": "R064",
       "value_kind": "proxy",
@@ -870,7 +941,7 @@
         "gluten",
         "appetiser"
       ],
-      "source_note": "PROXY: PhilFCT R064 'Spring roll, Shanghai, unckd' (Lumpia, Shanghai, hindi luto) is the UNCOOKED filling-and-wrapper mix, not the deep-fried finished lumpia. Frying adds oil, so the fat and energy columns understate the served dish. PhilFCT entry: 'Spring roll, Shanghai, unckd' (Lumpia, Shanghai, hindi luto), Food ID R064, edible portion 100%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
+      "source_note": "PROXY: PhilFCT R064 'Spring roll, Shanghai, unckd' (Lumpia, Shanghai, hindi luto) is the UNCOOKED filling-and-wrapper mix, not the deep-fried finished lumpia. Frying adds oil, so the fat and energy columns understate the served dish. This row is the Shanghai roll only — it is not lumpiang sariwa or any other lumpia. PhilFCT holds separate uncooked entries for the beef (R062), chicken (R063), crab (R023), fish (R024) and shrimp (R025) fillings, and a fresh vegetable roll (R107); do not serve this row for those. PhilFCT entry: 'Spring roll, Shanghai, unckd' (Lumpia, Shanghai, hindi luto), Food ID R064, edible portion 100%. Values per 100 g edible portion, transcribed verbatim from https://i.fnri.dost.gov.ph/fct/library/search_item fetched 2026-08-06."
     },
     {
       "name": "Sinigang na baboy",
@@ -1798,7 +1869,7 @@
       ],
       "calculation": {
         "method": "Recipe calculation. For each component: contribution = PhilFCT per-100 g value * grams / 100. The contributions are summed and divided by the finished dish weight, then multiplied by 100. Finished dish weight = sum of component grams + water added. A column is null when any component's PhilFCT panel prints '-' for it; nothing is estimated to fill a gap.",
-        "assumption": "No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated.",
+        "assumption": "No water is added to this dish, so the added-water caveat that applies to the soup rows does not apply here. Two other things push the same way: the chicken liver is counted at its raw weight and loses water when it is cooked into the dish, and the oil, mayonnaise and egg a sizzling plate usually carries are not modelled at all. Energy per 100 g is therefore likely understated rather than overstated. The size of that understatement is UNQUANTIFIED: PhilFCT holds no cooked chicken-liver entry and no sisig entry to measure it against, so no figure is offered here rather than a guess.",
         "recipe_weights_sourced": false,
         "recipe_weights_note": "The component gram weights and the added-water figure are declared here, NOT taken from FNRI. PhilFCT publishes no recipe weights and no yield factors for any dish. Every NUTRIENT number below is transcribed from PhilFCT.",
         "components": [
@@ -1955,15 +2026,14 @@
         "rounding": "kcal and sodium_mg to whole numbers; protein, fat, carbohydrate and fibre to one decimal.",
         "columns_null_because_source_has_no_value": []
       },
-      "source_note": "CALCULATED: PhilFCT holds no entry for sisig under any name searched in the full 1542-item dataset, so this row is computed from component foods. Every component nutrient value is transcribed from PhilFCT (https://i.fnri.dost.gov.ph/fct/library/search_item, fetched 2026-08-06); the component gram weights are declared, not sourced — FNRI publishes none. No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated. PhilFCT has no entry for pork face, jowl or maskara; F166 'Pork head' exists but PhilFCT prints no fibre and no sodium for it, so F164 'Pork ear, bbq' — a cooked, grilled pork offcut with a complete panel — stands in for the whole pork portion. No mayonnaise or egg is modelled. See the calculation object for components, PhilFCT Food IDs, grams and the arithmetic."
+      "source_note": "CALCULATED: PhilFCT holds no entry for sisig under any name searched in the full 1542-item dataset, so this row is computed from component foods. Every component nutrient value is transcribed from PhilFCT (https://i.fnri.dost.gov.ph/fct/library/search_item, fetched 2026-08-06); the component gram weights are declared, not sourced — FNRI publishes none. No water is added to this dish, so the added-water caveat that applies to the soup rows does not apply here. Two other things push the same way: the chicken liver is counted at its raw weight and loses water when it is cooked into the dish, and the oil, mayonnaise and egg a sizzling plate usually carries are not modelled at all. Energy per 100 g is therefore likely understated rather than overstated. The size of that understatement is UNQUANTIFIED: PhilFCT holds no cooked chicken-liver entry and no sisig entry to measure it against, so no figure is offered here rather than a guess. PhilFCT has no entry for pork face, jowl or maskara; F166 'Pork head' exists but PhilFCT prints no fibre and no sodium for it, so F164 'Pork ear, bbq' — a cooked, grilled pork offcut with a complete panel — stands in for the whole pork portion. Because F164 is already a cooked PhilFCT entry, the pork here does NOT carry a raw-for-cooked gap. See the calculation object for components, PhilFCT Food IDs, grams and the arithmetic."
     },
     {
       "name": "Chicken inasal",
       "aliases": [
         "inasal",
         "inasal na manok",
-        "bacolod grilled chicken",
-        "chicken inasal"
+        "bacolod grilled chicken"
       ],
       "philfct_food_id": null,
       "value_kind": "calculated",
@@ -1983,7 +2053,7 @@
       ],
       "calculation": {
         "method": "Recipe calculation. For each component: contribution = PhilFCT per-100 g value * grams / 100. The contributions are summed and divided by the finished dish weight, then multiplied by 100. Finished dish weight = sum of component grams + water added. A column is null when any component's PhilFCT panel prints '-' for it; nothing is estimated to fill a gap.",
-        "assumption": "No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated.",
+        "assumption": "No water is added to this dish, so the added-water caveat that applies to the soup rows does not apply here. The mechanism here is different: the chicken is counted at its RAW weight, because PhilFCT holds no grilled chicken MEAT entry. It does hold four barbecued chicken offal entries — F095 feet, F098 head, F101 intestine and F264 blood — but none of them is a cut of meat, so none can stand in for an inasal thigh. Grilling drives off water the dish weight above still counts. Energy per 100 g is therefore likely understated rather than overstated, by roughly 32 percent. That size is reproducible from PhilFCT's own water figures: F108 (raw thigh and leg) is 69.4 g water per 100 g and F265 (whole seasoned roasted chicken — a roast, not a grill, borrowed here only to bound the water loss, and the nearest cooked-chicken entry in the database) is 56.0 g, so the non-water mass, which cooking conserves, implies a cooked yield of (100 - 69.4) / (100 - 56.0) = 0.695. The 200 g of raw chicken becomes about 139 g grilled, the finished dish about 192 g rather than the 253 g used above, and the per-100 g figures rise by 253 / 192 = 1.32. NO FIGURE IN THIS ROW HAS BEEN ADJUSTED BY THAT FACTOR; it is stated so a reader knows the direction and the size.",
         "recipe_weights_sourced": false,
         "recipe_weights_note": "The component gram weights and the added-water figure are declared here, NOT taken from FNRI. PhilFCT publishes no recipe weights and no yield factors for any dish. Every NUTRIENT number below is transcribed from PhilFCT.",
         "components": [
@@ -2117,7 +2187,7 @@
         "rounding": "kcal and sodium_mg to whole numbers; protein, fat, carbohydrate and fibre to one decimal.",
         "columns_null_because_source_has_no_value": []
       },
-      "source_note": "CALCULATED: PhilFCT holds no entry for chicken inasal under any name searched in the full 1542-item dataset, so this row is computed from component foods. Every component nutrient value is transcribed from PhilFCT (https://i.fnri.dost.gov.ph/fct/library/search_item, fetched 2026-08-06); the component gram weights are declared, not sourced — FNRI publishes none. No evaporation assumed. Water added during cooking is counted in the dish weight, so energy and nutrients per 100 g are likely understated rather than overstated. The chicken component is a RAW weight because PhilFCT holds no grilled-chicken entry, and grilling drives off a large share of that water. Annatto basting oil is not modelled. Of the six calculated rows this one and sisig carry the least added water, but this one carries the largest un-modelled cooking loss. See the calculation object for components, PhilFCT Food IDs, grams and the arithmetic."
+      "source_note": "CALCULATED: PhilFCT holds no entry for chicken inasal under any name searched in the full 1542-item dataset, so this row is computed from component foods. Every component nutrient value is transcribed from PhilFCT (https://i.fnri.dost.gov.ph/fct/library/search_item, fetched 2026-08-06); the component gram weights are declared, not sourced — FNRI publishes none. No water is added to this dish, so the added-water caveat that applies to the soup rows does not apply here. The mechanism here is different: the chicken is counted at its RAW weight, because PhilFCT holds no grilled chicken MEAT entry. It does hold four barbecued chicken offal entries — F095 feet, F098 head, F101 intestine and F264 blood — but none of them is a cut of meat, so none can stand in for an inasal thigh. Grilling drives off water the dish weight above still counts. Energy per 100 g is therefore likely understated rather than overstated, by roughly 32 percent. That size is reproducible from PhilFCT's own water figures: F108 (raw thigh and leg) is 69.4 g water per 100 g and F265 (whole seasoned roasted chicken — a roast, not a grill, borrowed here only to bound the water loss, and the nearest cooked-chicken entry in the database) is 56.0 g, so the non-water mass, which cooking conserves, implies a cooked yield of (100 - 69.4) / (100 - 56.0) = 0.695. The 200 g of raw chicken becomes about 139 g grilled, the finished dish about 192 g rather than the 253 g used above, and the per-100 g figures rise by 253 / 192 = 1.32. NO FIGURE IN THIS ROW HAS BEEN ADJUSTED BY THAT FACTOR; it is stated so a reader knows the direction and the size. Annatto basting oil is not modelled. Of the six calculated rows this one and sisig add no water at all, but this one carries the largest un-modelled cooking loss. See the calculation object for components, PhilFCT Food IDs, grams and the arithmetic."
     }
   ]
 }

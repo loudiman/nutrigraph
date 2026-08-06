@@ -42,6 +42,8 @@
       "F243",
       "F257",
       "F265",
+      "F269",
+      "F270",
       "N019",
       "N021",
       "N027",
@@ -52,6 +54,7 @@
       "R050",
       "R053",
       "R064",
+      "R079",
       "R100"
     ]
   },
@@ -1487,6 +1490,120 @@
         }
       }
     },
+    "F269": {
+      "food_id": "F269",
+      "english_name": "Pork belly, seasoned, roasted",
+      "scientific_name": "Sus scrofa scrofa",
+      "filipino_name": "Baboy liempo, litson",
+      "edible_portion": "99%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "41.8",
+          "Energy, calculated (kcal)": "385",
+          "Protein (g)": "21.0",
+          "Total Fat (g)": "31.6",
+          "Carbohydrate, total (g)": "4.1",
+          "Ash, total (g)": "1.5"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.0",
+          "Sugars, total (g)": "0.3"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "10",
+          "Phosphorus, P (mg)": "286",
+          "Iron, Fe (mg)": "1.4",
+          "Potassium, K (mg)": "255",
+          "Sodium, Na (mg)": "350",
+          "Zinc, Zn (mg)": "2.50"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "12",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "12",
+          "Thiamin, Vitamin B1 (mg)": "0.31",
+          "Riboflavin, Vitamin B2 (mg)": "0.31",
+          "Niacin (mg)": "6.3",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "12.44",
+          "Caproic, C6 (g)": "0",
+          "Caprylic, C8 (g)": "0",
+          "Capric, C10 (g)": "0.06",
+          "Lauric, C12 (g)": "0.80",
+          "Myristic, C14 (g)": "1.74",
+          "Palmitic, C16 (g)": "6.95",
+          "Stearic, C18 (g)": "2.89",
+          "Arachidic, C20 (g)": "0",
+          "Behenic, C22 (g)": "0",
+          "Lignoceric, C24 (g)": "0",
+          "Fatty acids, monounsaturated, total (g)": "9.71",
+          "Oleic , C18:1 (g)": "9.71",
+          "Fatty acids, polyunsaturated, total(g)": "3.36",
+          "Linoleic, C18:2 (g)": "3.11",
+          "Linolenic, C18:3 (g)": "0.25",
+          "Cholesterol (mg)": "96"
+        }
+      }
+    },
+    "F270": {
+      "food_id": "F270",
+      "english_name": "Pork belly, seasoned, roasted, skin and visible fat removed",
+      "scientific_name": "Sus scrofa scrofa",
+      "filipino_name": "Baboy liempo, litson, walang balat at taba",
+      "edible_portion": "69%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "52.8",
+          "Energy, calculated (kcal)": "299",
+          "Protein (g)": "24.0",
+          "Total Fat (g)": "22.6",
+          "Carbohydrate, total (g)": "0.0",
+          "Ash, total (g)": "1.7"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.0",
+          "Sugars, total (g)": "-"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "8",
+          "Phosphorus, P (mg)": "232",
+          "Iron, Fe (mg)": "1.4",
+          "Potassium, K (mg)": "301",
+          "Sodium, Na (mg)": "364",
+          "Zinc, Zn (mg)": "3.20"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "13",
+          "beta-Carotene (µg)": "1",
+          "Retinol Activity Equivalent, RAE (µg)": "13",
+          "Thiamin, Vitamin B1 (mg)": "0.25",
+          "Riboflavin, Vitamin B2 (mg)": "0.25",
+          "Niacin (mg)": "5.1",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "8.22",
+          "Caproic, C6 (g)": "0",
+          "Caprylic, C8 (g)": "0",
+          "Capric, C10 (g)": "0.04",
+          "Lauric, C12 (g)": "0.53",
+          "Myristic, C14 (g)": "1.14",
+          "Palmitic, C16 (g)": "4.58",
+          "Stearic, C18 (g)": "1.94",
+          "Arachidic, C20 (g)": "0",
+          "Behenic, C22 (g)": "0",
+          "Lignoceric, C24 (g)": "0",
+          "Fatty acids, monounsaturated, total (g)": "6.24",
+          "Oleic , C18:1 (g)": "6.24",
+          "Fatty acids, polyunsaturated, total(g)": "2.20",
+          "Linoleic, C18:2 (g)": "2.03",
+          "Linolenic, C18:3 (g)": "0.17",
+          "Cholesterol (mg)": "101"
+        }
+      }
+    },
     "N019": {
       "food_id": "N019",
       "english_name": "Salt, coarse",
@@ -1904,6 +2021,48 @@
           "Fatty acids, monounsaturated, total (g)": "4.28",
           "Fatty acids, polyunsaturated, total(g)": "0.98",
           "Cholesterol (mg)": "50"
+        }
+      }
+    },
+    "R079": {
+      "food_id": "R079",
+      "english_name": "Soup, pansit molo, cond, cnd",
+      "scientific_name": "N/A",
+      "filipino_name": "N/A",
+      "edible_portion": "100%",
+      "panels": {
+        "proximates": {
+          "Water (g)": "87.7",
+          "Energy, calculated (kcal)": "54",
+          "Protein (g)": "2.4",
+          "Total Fat (g)": "2.4",
+          "Carbohydrate, total (g)": "5.6",
+          "Ash, total (g)": "1.9"
+        },
+        "other_carbohydrate": {
+          "Fiber, total dietary (g)": "0.3",
+          "Sugars, total (g)": "0.5"
+        },
+        "minerals": {
+          "Calcium, Ca (mg)": "42",
+          "Phosphorus, P (mg)": "22",
+          "Iron, Fe (mg)": "1.2",
+          "Sodium, Na (mg)": "566"
+        },
+        "vitamins": {
+          "Retinol, Vitamin A (µg)": "25",
+          "beta-Carotene (µg)": "0",
+          "Retinol Activity Equivalent, RAE (µg)": "-",
+          "Thiamin, Vitamin B1 (mg)": "0.02",
+          "Riboflavin, Vitamin B2 (mg)": "0.01",
+          "Niacin (mg)": "0.8",
+          "Ascorbic Acid, Vitamin C (mg)": "0"
+        },
+        "lipids": {
+          "Fatty acids, saturated, total (g)": "-",
+          "Fatty acids, monounsaturated, total (g)": "-",
+          "Fatty acids, polyunsaturated, total(g)": "-",
+          "Cholesterol (mg)": "-"
         }
       }
     },

@@ -50,6 +50,27 @@ def test_proxy_rows_say_what_the_proxy_actually_is():
             assert d["source_note"].startswith("PROXY:"), d["name"]
 
 
+def test_no_alias_names_two_different_dishes():
+    # 'lechon manok' on a pork row would hand roast-chicken figures to someone
+    # eating roast pig, or the reverse.
+    seen = {}
+    for d in DISHES:
+        for alias in [d["name"].lower()] + [a.lower() for a in d["aliases"]]:
+            assert alias not in seen, (alias, seen.get(alias), d["name"])
+            seen[alias] = d["name"]
+
+
+def test_a_calculated_row_only_blames_water_it_actually_added():
+    for d in DISHES:
+        if d["value_kind"] != "calculated":
+            continue
+        calc = d["calculation"]
+        assert "understated rather than overstated" in calc["assumption"], d["name"]
+        assert calc["assumption"] in d["source_note"], d["name"]
+        if calc["water_added_g"] == 0:
+            assert "Water added during cooking" not in calc["assumption"], d["name"]
+
+
 def test_calculated_rows_record_components_grams_and_arithmetic():
     for d in DISHES:
         if d["value_kind"] != "calculated":
