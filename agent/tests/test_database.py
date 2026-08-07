@@ -29,10 +29,11 @@ from nutrigraph_agent.db import (
     RetrievedChunk,
 )
 from nutrigraph_agent.graph import build_graph
-from nutrigraph_agent.ingest import ingest
+from nutrigraph_agent.ingest import embed_local_foods, ingest
 from nutrigraph_agent.meal import MANILA, day_bounds
 from nutrigraph_agent.migrate import MIGRATIONS_DIR, migrate, pending
 from nutrigraph_agent.providers import EMBEDDING_DIMENSIONS
+from nutrigraph_agent.recommend import DIET_CONFLICTS
 from nutrigraph_agent.seed import seed_local_foods, seed_profiles
 
 from .conftest import PROSE_MODEL, SCHEMA_MODEL
@@ -632,3 +633,297 @@ async def test_retrieval_finds_the_nearest_chunk_and_names_its_document(corpus):
     assert found[0].document == ENTRIES[0].title
     assert found[0].locator == "page 1"
     assert found[0].score > 0.99
+
+
+# --- the recommend path -------------------------------------------------------
+#
+# The filters run in the query, so this is where that claim is checked: against
+# a real PostgreSQL, holding the real dish table, through the real statements.
+
+
+@pytest.fixture
+def embedded(seeded):
+    """The dish table with its names embedded, which is the seed step the
+    recommend path's similarity query rests on."""
+    asyncio.run(embed_local_foods(seeded, fake_models()))
+    return seeded
+
+
+def test_the_food_vector_column_is_vector_768_with_an_hnsw_cosine_index(seeded):
+    with psycopg.connect(seeded) as conn:
+        column = conn.execute(
+            "select format_type(atttypid, atttypmod) from pg_attribute "
+            "where attrelid = 'food_embedding'::regclass and attname = 'embedding'"
+        ).fetchone()[0]
+        index = conn.execute(
+            "select indexdef from pg_indexes "
+            "where indexname = 'food_embedding_embedding_idx'"
+        ).fetchone()[0].lower()
+
+    assert column == f"vector({EMBEDDING_DIMENSIONS})"
+    assert "using hnsw" in index and "vector_cosine_ops" in index
+
+
+def test_local_food_carries_the_tags_array_the_diet_filter_reads(seeded):
+    with psycopg.connect(seeded) as conn:
+        column = conn.execute(
+            "select format_type(atttypid, atttypmod) from pg_attribute "
+            "where attrelid = 'local_food'::regclass and attname = 'tags'"
+        ).fetchone()[0]
+        tagged = conn.execute(
+            "select count(*) from local_food where 'pork' = any (tags)"
+        ).fetchone()[0]
+
+    assert column == "text[]"
+    assert tagged > 0
+
+
+def test_the_dish_name_seed_step_embeds_every_dish_and_is_safe_to_run_twice(seeded):
+    first = asyncio.run(embed_local_foods(seeded, fake_models()))
+    second = asyncio.run(embed_local_foods(seeded, fake_models()))
+
+    with psycopg.connect(seeded) as conn:
+        rows = conn.execute(
+            "select count(*) from food_embedding where source = 'local'"
+        ).fetchone()[0]
+        dishes = conn.execute("select count(*) from local_food").fetchone()[0]
+        stored = conn.execute("select embedding::text from food_embedding").fetchall()
+
+    assert len(first) == dishes and rows == dishes
+    # The second run found nothing to embed, so it made no provider call at all.
+    assert second == []
+    for (literal,) in stored:
+        values = [float(v) for v in literal.strip("[]").split(",")]
+        assert len(values) == EMBEDDING_DIMENSIONS
+        assert math.isclose(math.sqrt(sum(v * v for v in values)), 1.0, rel_tol=1e-5)
+
+
+async def test_an_allergen_and_a_disliked_food_are_removed_by_the_query(food_log):
+    """Kare-kare's name says no peanut at all; the dish table's `peanut` tag is
+    the only structured place that knows, and the query reads it."""
+    found = await food_log.candidate_foods(
+        "demo-user-1", blocked=["peanut", "sisig"], conflicts=[],
+        nutrient="kcal", gap=1800.0, limit=50,
+    )
+
+    names = [c.name for c in found]
+    assert names
+    assert "Kare-kare (beef)" not in names
+    assert "Sisig" not in names
+    assert "Lechon" in names
+
+
+@pytest.mark.parametrize(
+    ("pattern", "gone", "kept"),
+    [("vegan", "Champorado", "Sinangag"), ("vegetarian", "Sisig", "Pandesal"),
+     ("pescatarian", "Tinola", "Sinangag"), ("halal", "Dinuguan", "Lechon manok")],
+)
+async def test_a_diet_pattern_conflict_is_removed_by_the_tags_in_sql(
+    food_log, pattern, gone, kept
+):
+    found = await food_log.candidate_foods(
+        "demo-user-1", blocked=[], conflicts=DIET_CONFLICTS[pattern],
+        nutrient="kcal", gap=1800.0, limit=50,
+    )
+
+    names = [c.name for c in found]
+    assert gone not in names
+    assert kept in names
+
+
+async def test_a_diet_conflict_never_strikes_a_food_on_its_name(food_log):
+    """'egg' inside 'eggplant' is the case a substring match on the name gets
+    wrong: it would take a vegetable off a vegan's list. So the conflict filter
+    reads the tags and the source category, and never the name."""
+    found = await food_log.candidate_foods(
+        "demo-user-1", blocked=[], conflicts=["rice", "lechon"],
+        nutrient="kcal", gap=1800.0, limit=50,
+    )
+
+    # 'lechon' is not a tag, so the dish called Lechon survives a conflict named
+    # after it; 'rice' is a tag, so Sinangag does not.
+    names = [c.name for c in found]
+    assert "Lechon" in names
+    assert "Sinangag" not in names
+
+
+async def test_the_candidates_come_from_the_dish_table_and_from_what_was_logged(
+    food_log,
+):
+    """The second source, on the per-100 g basis the first is read on: a logged
+    Item holds the values for the portion that was eaten."""
+    await food_log.store_meal(
+        user_id="demo-user-1", turn_id=uuid4(), eaten_at=datetime.now(MANILA),
+        meal_type="lunch",
+        items=[
+            MealItemRow(
+                ordinal=0, said_as="cheddar", status="matched", grams=200.0,
+                source="fdc", fdc_id="328637", food_name="Cheese, cheddar",
+                nutrients={"foodCategory": "Dairy and Egg Products"},
+                values={"kcal": 806.0, "protein_g": 46.0},
+            )
+        ],
+    )
+
+    found = await food_log.candidate_foods(
+        "demo-user-1", blocked=[], conflicts=[], nutrient="kcal",
+        gap=1800.0, limit=50,
+    )
+
+    by_name = {c.name: c for c in found}
+    assert "Lechon" in by_name and by_name["Lechon"].source == "local"
+    cheddar = by_name["Cheese, cheddar"]
+    assert cheddar.source == "fdc"
+    assert cheddar.per_100g["kcal"] == pytest.approx(403.0)
+    assert cheddar.category == "Dairy and Egg Products"
+
+
+async def test_a_logged_food_is_filtered_on_its_source_category(food_log):
+    """A FoodData Central item carries no tags, so its category is what the diet
+    filter reads instead."""
+    await food_log.store_meal(
+        user_id="demo-user-1", turn_id=uuid4(), eaten_at=datetime.now(MANILA),
+        meal_type="lunch",
+        items=[
+            MealItemRow(
+                ordinal=0, said_as="cheddar", status="matched", grams=100.0,
+                source="fdc", fdc_id="328637", food_name="Cheese, cheddar",
+                nutrients={"foodCategory": "Dairy and Egg Products"},
+                values={"kcal": 403.0},
+            )
+        ],
+    )
+
+    found = await food_log.candidate_foods(
+        "demo-user-1", blocked=[], conflicts=DIET_CONFLICTS["vegan"],
+        nutrient="kcal", gap=1800.0, limit=50,
+    )
+
+    assert "Cheese, cheddar" not in [c.name for c in found]
+
+
+async def test_the_ordering_carries_a_similarity_to_what_this_user_ate(embedded):
+    """The personalisation, as a query. The centroid of the foods this User
+    actually ate is `avg(embedding)`, and the candidate list is ordered against
+    it â€” so a User who has eaten nothing has no centroid and no similarity."""
+    pool = AsyncConnectionPool(embedded, open=False)
+    await pool.open()
+    try:
+        db = PostgresDatabase(pool)
+        cold = await db.candidate_foods(
+            "demo-user-1", blocked=[], conflicts=[], nutrient=None, gap=0.0, limit=50
+        )
+        assert cold and all(c.similarity is None for c in cold)
+
+        with psycopg.connect(embedded) as conn:
+            local_food_id, name = conn.execute(
+                "select local_food_id, name from local_food order by name limit 1"
+            ).fetchone()
+        await db.store_meal(
+            user_id="demo-user-1", turn_id=uuid4(), eaten_at=datetime.now(MANILA),
+            meal_type="lunch",
+            items=[
+                MealItemRow(
+                    ordinal=0, said_as=name.lower(), status="matched", grams=100.0,
+                    source="local", local_food_id=local_food_id, food_name=name,
+                    values={"kcal": 100.0},
+                )
+            ],
+        )
+
+        warm = await db.candidate_foods(
+            "demo-user-1", blocked=[], conflicts=[], nutrient=None, gap=0.0, limit=50
+        )
+    finally:
+        await pool.close()
+
+    assert warm[0].name == name
+    assert warm[0].similarity == pytest.approx(1.0, abs=1e-5)
+    assert all(c.similarity is not None for c in warm)
+
+
+async def test_an_accepted_suggestion_feeds_the_same_similarity_query(embedded):
+    """The other half of 'ate or accepted'. A suggestion the User said yes to is
+    a food they chose, and it counts with no Meal behind it."""
+    pool = AsyncConnectionPool(embedded, open=False)
+    await pool.open()
+    try:
+        db = PostgresDatabase(pool)
+        with psycopg.connect(embedded) as conn:
+            name = conn.execute(
+                "select name from local_food order by name desc limit 1"
+            ).fetchone()[0]
+        recommendation_id = await db.store_recommendation(
+            user_id="demo-user-1", turn_id=uuid4(), gap_nutrient="kcal",
+            gap_amount=800.0, suggestion="try it", reason="it closes the gap",
+            foods=[name],
+        )
+        # Unanswered, so it is not yet a food this User chose.
+        assert all(
+            c.similarity is None
+            for c in await db.candidate_foods(
+                "demo-user-1", blocked=[], conflicts=[], nutrient=None, gap=0.0,
+                limit=50,
+            )
+        )
+
+        await db.answer_recommendation(recommendation_id, accepted=True)
+        ordered = await db.candidate_foods(
+            "demo-user-1", blocked=[], conflicts=[], nutrient=None, gap=0.0, limit=50
+        )
+    finally:
+        await pool.close()
+
+    assert ordered[0].name == name
+
+
+async def test_accepting_writes_the_column_and_a_second_answer_does_not(food_log):
+    recommendation_id = await food_log.store_recommendation(
+        user_id="demo-user-1", turn_id=uuid4(), gap_nutrient="protein_g",
+        gap_amount=90.0, suggestion="try Lechon manok", reason="it is the protein",
+        foods=["Lechon manok"],
+    )
+
+    assert await food_log.answer_recommendation(recommendation_id, accepted=True)
+    # Answered once: what the User said the first time is the measurement.
+    assert not await food_log.answer_recommendation(recommendation_id, accepted=False)
+
+    outcomes = await food_log.recommendation_outcomes("demo-user-1")
+    assert [o.accepted for o in outcomes] == [True]
+    assert [o.gap_nutrient for o in outcomes] == ["protein_g"]
+
+
+async def test_the_following_signal_is_a_query_over_foods_and_meal_item(food_log):
+    """The second signal, and it needed no new column: a Meal holding one of
+    `recommendation.foods` inside the window. Acceptance alone cannot tell a
+    polite yes from a real change, which is why this exists."""
+    now = datetime.now(MANILA)
+    recommendation_id = await food_log.store_recommendation(
+        user_id="demo-user-1", turn_id=uuid4(), gap_nutrient="protein_g",
+        gap_amount=90.0, suggestion="try Lechon manok", reason="it is the protein",
+        foods=["Lechon manok"],
+    )
+    assert [o.followed for o in
+            await food_log.recommendation_outcomes("demo-user-1")] == [False]
+
+    await food_log.store_meal(
+        user_id="demo-user-1", turn_id=uuid4(), eaten_at=now + timedelta(hours=6),
+        meal_type="dinner",
+        items=[
+            MealItemRow(
+                ordinal=0, said_as="lechon manok", status="matched", grams=200.0,
+                source="local", food_name="Lechon manok", values={"kcal": 452.0},
+            )
+        ],
+    )
+
+    followed = await food_log.recommendation_outcomes("demo-user-1")
+    assert [o.followed for o in followed] == [True]
+    assert followed[0].recommendation_id == recommendation_id
+    # Never answered, and still measurably followed.
+    assert followed[0].accepted is None
+    # And a Meal outside the window is not following it.
+    assert [o.followed for o in
+            await food_log.recommendation_outcomes(
+                "demo-user-1", within=timedelta(hours=1)
+            )] == [False]

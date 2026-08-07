@@ -255,12 +255,12 @@ FILTERS = """
 #
 # ponytail: one weight each. A weight worth tuning is one the eval can measure,
 # and the eval set is issue #39.
-SCORED = "least(coalesce(c.{column}, 0) / %(gap)s, 1.0) + coalesce(similarity, 0)"
+SCORED = "least(coalesce({column}, 0) / %(gap)s, 1.0) + coalesce(similarity, 0)"
 
 # Nothing is short today, or no target could be worked out. The nearest food to
 # what this User eats, and the lightest of those, which is the honest ordering
 # when there is no gap to close.
-UNSCORED = "coalesce(similarity, 0) desc, c.kcal asc nulls last"
+UNSCORED = "coalesce(similarity, 0) desc, kcal asc nulls last"
 
 
 def candidate_query(nutrient: str | None) -> str:
@@ -272,16 +272,21 @@ def candidate_query(nutrient: str | None) -> str:
     if nutrient is not None and nutrient not in COLUMNS:
         raise ValueError(f"{nutrient!r} is not a nutrient column")
     order = f"({SCORED.format(column=nutrient)}) desc" if nutrient else UNSCORED
+    # The similarity is named in its own step, because a select-list alias
+    # cannot be used inside an expression in the same statement's `order by`.
     return f"""
-with taste as ({TASTE}), candidate as ({CANDIDATE_ROWS})
-select c.*,
-       case when t.v is null then null
-            else 1 - (e.embedding <=> t.v) end as similarity
-  from candidate c
-  cross join taste t
-  left join food_embedding e
-         on e.source = c.source and e.source_id = c.source_id
- where true {FILTERS}
+with taste as ({TASTE}), candidate as ({CANDIDATE_ROWS}),
+surviving as (
+    select c.*,
+           case when t.v is null then null
+                else 1 - (e.embedding <=> t.v) end as similarity
+      from candidate c
+      cross join taste t
+      left join food_embedding e
+             on e.source = c.source and e.source_id = c.source_id
+     where true {FILTERS}
+)
+select * from surviving
  order by {order}
  limit %(limit)s
 """
