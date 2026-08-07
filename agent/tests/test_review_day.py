@@ -26,7 +26,7 @@ from nutrigraph_agent.models import (
 from nutrigraph_agent.review import DAILY_SHIFT, review_day, targets_for
 
 from .conftest import PROSE_MODEL, SCHEMA_MODEL, answer
-from .fakes import DEMO_PROFILE, FakeDatabase, FakeProvider
+from .fakes import DEMO_PROFILE, SUGGESTED, FakeDatabase, FakeProvider
 
 # A fixed clock, so "today" is the same day every time this file runs and a
 # test can put a Meal on the day before it.
@@ -337,6 +337,7 @@ async def test_a_marking_the_composer_dropped_is_put_back(seam):
     seam.provider.script(
         RouterDecision(intents=["review_day", "recommend"], confidence=0.95),
         DayRequest(days_ago=0),
+        SUGGESTED,
         # Every marking gone, and a total presented as if it were the whole day.
         ComposedReply(text="Lou, you have had 618 kcal today. Have some fish."),
     )
@@ -357,6 +358,7 @@ async def test_a_day_with_no_meals_says_so_even_when_the_composer_writes_the_wor
     seam.provider.script(
         RouterDecision(intents=["review_day", "recommend"], confidence=0.95),
         DayRequest(days_ago=0),
+        SUGGESTED,
         ComposedReply(text="Lou, your day is at 0 kcal. Try 2 eggs."),
     )
 

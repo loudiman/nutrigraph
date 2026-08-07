@@ -19,7 +19,7 @@ from .db import PostgresDatabase
 from .deps import Deps, NotWired
 from .food import FoodDataCentral
 from .graph import build_graph
-from .models import TurnEventEnvelope, TurnRequest
+from .models import RecommendationResponse, TurnEventEnvelope, TurnRequest
 from .providers import Models, langchain_embedding_factory, langchain_factory
 from .turn import run_turn
 
@@ -128,5 +128,34 @@ def create_app(settings: Settings) -> FastAPI:
                 yield TurnEventEnvelope(event).model_dump_json().encode() + b"\n"
 
         return StreamingResponse(lines(), media_type=NDJSON)
+
+    @app.post(
+        "/recommendation/{recommendation_id}",
+        responses={
+            404: {"description": "no such suggestion, or it was already answered"},
+            401: {"description": "internal caller not recognised"},
+        },
+        dependencies=[Depends(require_internal_caller)],
+    )
+    async def answer_recommendation(
+        request: Request, recommendation_id: UUID, body: RecommendationResponse
+    ) -> dict[str, bool]:
+        """The acceptance signal: `recommendation.accepted` turns from null.
+
+        It is a route and not a Turn because it is not a message — the User
+        pressed yes or no on a suggestion the Coach already made, and putting it
+        through the router would spend a model call classifying a boolean.
+
+        A second answer to the same suggestion is a 404 rather than a rewrite:
+        what the User said the first time is the measurement.
+        """
+        written = await request.app.state.deps.db.answer_recommendation(
+            recommendation_id, accepted=body.accepted
+        )
+        if not written:
+            raise HTTPException(
+                status_code=404, detail="no unanswered suggestion with that identifier"
+            )
+        return {"accepted": body.accepted}
 
     return app
