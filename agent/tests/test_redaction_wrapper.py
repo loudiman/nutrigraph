@@ -14,9 +14,17 @@ from pathlib import Path
 
 import pytest
 
-from nutrigraph_agent.models import Answer, Citation, RouterDecision
+from nutrigraph_agent.models import (
+    Answer,
+    Citation,
+    FoodChoice,
+    ParsedItem,
+    ParsedMeal,
+    RouterDecision,
+)
 
 from .conftest import SCHEMA_MODEL
+from .fakes import EGG
 
 SOURCE = Path(__file__).resolve().parents[1] / "src" / "nutrigraph_agent"
 
@@ -32,13 +40,24 @@ IDENTIFIERS = (
     "42 Katipunan Avenue",
 )
 
-# Every shape of Turn: one that dispatches, one that clarifies, one that
+# Every shape of Turn: one that dispatches, one that clarifies, one that logs a
+# Meal — which is the shape with the most provider calls in it — one that
 # retrieves from the Corpus and answers, and one whose first router answer
 # failed the schema and had to be asked again.
 SHAPES = {
-    "dispatch": [RouterDecision(intents=["log_meal"], confidence=0.95)],
+    "dispatch": [RouterDecision(intents=["review_day"], confidence=0.95)],
     "clarify": [RouterDecision(intents=[], confidence=0.1)],
-    "retry": ["intents had three entries", RouterDecision(intents=["log_meal"], confidence=0.9)],
+    "retry": ["intents had three entries", RouterDecision(intents=["review_day"], confidence=0.9)],
+    "log_meal": [
+        RouterDecision(intents=["log_meal"], confidence=0.95),
+        ParsedMeal(
+            items=[
+                ParsedItem(name="egg", quantity=2, unit="piece"),
+                ParsedItem(name="pandesal", quantity=1, unit="piece"),
+            ]
+        ),
+        FoodChoice(fdc_id="748967", reason="the plain whole egg"),
+    ],
     "ask_question": [
         RouterDecision(intents=["ask_question"], confidence=0.95),
         Answer(
@@ -54,6 +73,7 @@ SHAPES = {
 @pytest.mark.parametrize("shape", list(SHAPES))
 async def test_no_unredacted_identifier_ever_reaches_the_provider(seam, shape):
     seam.provider.script(*SHAPES[shape])
+    seam.food.results = {"egg": [EGG]}
 
     await seam.turn(LOADED)
 
@@ -70,6 +90,7 @@ async def test_no_unredacted_identifier_ever_reaches_the_provider(seam, shape):
 @pytest.mark.parametrize("shape", list(SHAPES))
 async def test_what_the_coach_cannot_work_without_still_reaches_the_provider(seam, shape):
     seam.provider.script(*SHAPES[shape])
+    seam.food.results = {"egg": [EGG]}
 
     await seam.turn(LOADED)
 

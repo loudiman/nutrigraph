@@ -7,20 +7,31 @@ would have seen.
 
 from __future__ import annotations
 
+import json
 import random
 import re
 from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel
 
-from nutrigraph_agent.db import InteractionEvent, RetrievedChunk
+from nutrigraph_agent.db import (
+    DayTotal,
+    InteractionEvent,
+    LocalFood,
+    MealItemRow,
+    RetrievedChunk,
+    UnmatchedItem,
+)
+from nutrigraph_agent.food import CANDIDATES, COLUMNS, FoodCandidate, candidate
 from nutrigraph_agent.models import UPDATABLE_FIELDS, Profile, RouterDecision
 from nutrigraph_agent.providers import Models
+from nutrigraph_agent.seed import DISHES_FILE, aliases_for
 
 # What `gemini-embedding-001` returns before truncation.
 PROVIDER_DIMENSIONS = 3072
@@ -64,6 +75,81 @@ class StoredMessage:
 
 
 @dataclass
+class StoredMeal:
+    meal_id: UUID
+    user_id: str
+    turn_id: UUID
+    eaten_at: datetime
+    meal_type: str
+
+
+@dataclass
+class StoredItem:
+    meal_item_id: UUID
+    meal_id: UUID
+    user_id: str
+    eaten_at: datetime
+    row: MealItemRow
+
+
+def local_table() -> dict[str, LocalFood]:
+    """The real dish table, keyed exactly as the loader keys it.
+
+    The seed file is the fixture, so a seam test reads the values the Coach will
+    actually give a User — the proxy rows, the calculated rows, and the nulls
+    among them — rather than numbers invented for a test.
+    """
+    dishes = json.loads(DISHES_FILE.read_text(encoding="utf-8"))["dishes"]
+    table: dict[str, LocalFood] = {}
+    for dish in dishes:
+        food = LocalFood(
+            local_food_id=uuid4(),
+            name=dish["name"],
+            value_kind=dish["value_kind"],
+            source_note=dish["source_note"],
+            per_100g={c: float(dish[c]) for c in COLUMNS if dish.get(c) is not None},
+            source=dish,
+        )
+        for alias in aliases_for(dish):
+            table[alias] = food
+    return table
+
+
+# One `foods[]` entry as FoodData Central returns it, so the nutrient-number
+# mapping is exercised rather than assumed. An egg is not in the local dish
+# table, so this is the food that takes the search-then-choose path.
+EGG_FOOD = {
+    "fdcId": 748967,
+    "description": "Egg, whole, raw, fresh",
+    "dataType": "Foundation",
+    "foodNutrients": [
+        {"nutrientNumber": "208", "nutrientName": "Energy", "value": 143.0},
+        {"nutrientNumber": "203", "nutrientName": "Protein", "value": 12.6},
+        {"nutrientNumber": "204", "nutrientName": "Total lipid (fat)", "value": 9.51},
+        {"nutrientNumber": "205", "nutrientName": "Carbohydrate", "value": 0.72},
+        {"nutrientNumber": "291", "nutrientName": "Fiber", "value": 0.0},
+        {"nutrientNumber": "307", "nutrientName": "Sodium", "value": 142.0},
+    ],
+}
+EGG = candidate(EGG_FOOD)
+
+
+@dataclass
+class FakeFoodSearch:
+    """FoodData Central, faked at the web request. `results` is keyed by the
+    food word; anything not in it is a food FoodData Central does not know."""
+
+    results: dict[str, list[FoodCandidate]] = field(default_factory=dict)
+    searched: list[str] = field(default_factory=list)
+
+    async def search(
+        self, query: str, *, limit: int = CANDIDATES
+    ) -> list[FoodCandidate]:
+        self.searched.append(query)
+        return self.results.get(query.lower(), [])[:limit]
+
+
+@dataclass
 class FakeDatabase:
     profiles: dict[str, Profile] = field(
         default_factory=lambda: {DEMO_PROFILE.user_id: DEMO_PROFILE}
@@ -79,6 +165,11 @@ class FakeDatabase:
     # not cover the question.
     corpus: list[RetrievedChunk] = field(default_factory=lambda: [EGGS_CHUNK])
     searched: list[list[float]] = field(default_factory=list)
+    # The food log. The dish table is the real seed file.
+    local_foods: dict[str, LocalFood] = field(default_factory=local_table)
+    looked_up: list[str] = field(default_factory=list)
+    meals: list[StoredMeal] = field(default_factory=list)
+    items: list[StoredItem] = field(default_factory=list)
 
     async def load_profile(self, user_id: str) -> Profile | None:
         if self.fail_on_load:
@@ -109,6 +200,71 @@ class FakeDatabase:
     ) -> list[RetrievedChunk]:
         self.searched.append(list(embedding))
         return self.corpus[:limit]
+
+    # --- the food log ---------------------------------------------------------
+
+    async def match_local_food(self, name: str) -> LocalFood | None:
+        self.looked_up.append(name)
+        if name in self.local_foods:
+            return self.local_foods[name]
+        # The prefix half of the real query, shortest alias first.
+        near = sorted((a for a in self.local_foods if a.startswith(name)), key=len)
+        return self.local_foods[near[0]] if near else None
+
+    async def store_meal(
+        self,
+        *,
+        user_id: str,
+        turn_id: UUID,
+        eaten_at: datetime,
+        meal_type: str,
+        items: Sequence[MealItemRow],
+    ) -> UUID:
+        meal = StoredMeal(uuid4(), user_id, turn_id, eaten_at, meal_type)
+        self.meals.append(meal)
+        self.items += [
+            StoredItem(uuid4(), meal.meal_id, user_id, eaten_at, row) for row in items
+        ]
+        return meal.meal_id
+
+    async def open_unmatched_items(
+        self, user_id: str, *, since: datetime
+    ) -> list[UnmatchedItem]:
+        return [
+            UnmatchedItem(item.meal_item_id, item.row.said_as)
+            for item in self.items
+            if item.user_id == user_id
+            and item.row.status == "unmatched"
+            and item.eaten_at >= since
+        ]
+
+    async def correct_meal_item(self, meal_item_id: UUID, item: MealItemRow) -> None:
+        stored = next(i for i in self.items if i.meal_item_id == meal_item_id)
+        # The Meal it belongs to does not move, so the day it counts against is
+        # still the day it was eaten on.
+        stored.row = item
+
+    async def day_total(
+        self, user_id: str, *, start: datetime, end: datetime
+    ) -> DayTotal:
+        rows = [
+            i.row
+            for i in self.items
+            if i.user_id == user_id and start <= i.eaten_at < end
+        ]
+        matched = [r for r in rows if r.status == "matched"]
+        return DayTotal(
+            counted=len(matched),
+            not_counted=len(rows) - len(matched),
+            values={
+                c: sum(r.values[c] for r in matched if c in r.values)
+                for c in COLUMNS
+                if any(c in r.values for r in matched)
+            },
+            missing={
+                c: sum(1 for r in matched if c not in r.values) for c in COLUMNS
+            },
+        )
 
 
 @dataclass
@@ -142,8 +298,10 @@ class FakeProvider:
     call: the router first, then the Intent path's own."""
 
     decisions: deque[BaseModel | str] = field(default_factory=deque)
+    # An Intent with no path of its own, so an unscripted Turn ends at the stub
+    # and makes exactly one call. A scripted Turn names the Intent it wants.
     default: RouterDecision = field(
-        default_factory=lambda: RouterDecision(intents=["log_meal"], confidence=0.92)
+        default_factory=lambda: RouterDecision(intents=["review_day"], confidence=0.92)
     )
     seen: list[ProviderCall] = field(default_factory=list)
     # Every text that reached the embedding model, as it reached it.

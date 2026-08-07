@@ -28,6 +28,7 @@ from __future__ import annotations
 import logging
 import operator
 from dataclasses import dataclass, field
+from datetime import datetime
 from time import perf_counter
 from typing import Annotated, Any, TypedDict
 from uuid import UUID
@@ -39,6 +40,8 @@ from pydantic import ValidationError
 from .db import InteractionEvent, RetrievedChunk
 from .deps import Deps
 from .guardrail import OUT_OF_SCOPE, Subject, match_rule, refusal
+from .meal import MANILA
+from .meal import log_meal as run_log_meal
 from .models import (
     INTENTS,
     LIST_FIELDS,
@@ -64,7 +67,11 @@ CONFIDENCE_FLOOR = 0.6
 
 # The Intent paths that are built, and the node each one starts at. An Intent
 # with no entry here goes to the stub, so adding a path is one line and a node.
-INTENT_PATHS = {"update_profile": "update_profile", "ask_question": "retrieve"}
+INTENT_PATHS = {
+    "update_profile": "update_profile",
+    "ask_question": "retrieve",
+    "log_meal": "log_meal",
+}
 
 # The Intents whose answer is scanned against the Profile's allergies.
 #
@@ -436,6 +443,35 @@ def after_update(state: TurnState, config: RunnableConfig) -> str:
     return END if turn_context(config).reply is not None else "clarify"
 
 
+async def log_meal(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
+    """The User says what they ate, and it is written down.
+
+    This node has one edge, and it goes to END. A food the Coach could not match
+    does not send the Turn to `clarify`: the answer names it and invites a
+    correction instead, because `clarify` is the only interrupt in the graph and
+    meal logging is not it.
+    """
+    ctx = turn_context(config)
+    ctx.intent = "log_meal"
+    profile = ctx.profile
+    assert profile is not None
+    logged = await run_log_meal(
+        db=ctx.deps.db,
+        food=ctx.deps.food,
+        turn=models(ctx),
+        profile=profile,
+        message=ctx.raw_message,
+        turn_id=ctx.turn_id,
+        # One clock for the Meal Type, the `eaten_at` stamp and the day it counts
+        # against, so the three cannot disagree about which day it was.
+        now=datetime.now(MANILA),
+    )
+    # Both schema calls the node made — the parse and any choice — on one row.
+    ctx.record(logged.call)
+    ctx.reply = logged.reply
+    return {"messages": [{"role": "coach", "text": logged.reply.text}]}
+
+
 async def dispatch(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     """The stub each remaining Intent path replaces. It says what the router
     decided and stops."""
@@ -495,6 +531,7 @@ def build_graph(checkpointer: Any):
         ("route", route),
         ("clarify", clarify),
         ("update_profile", update_profile),
+        ("log_meal", log_meal),
         ("retrieve", retrieve),
         ("answer_question", answer_question),
         ("dispatch", dispatch),
@@ -507,10 +544,12 @@ def build_graph(checkpointer: Any):
     builder.add_conditional_edges(
         "route",
         next_node,
-        ["clarify", "update_profile", "retrieve", "dispatch", "refuse"],
+        ["clarify", "update_profile", "log_meal", "retrieve", "dispatch", "refuse"],
     )
     builder.add_conditional_edges("update_profile", after_update, ["clarify", END])
     builder.add_edge("clarify", END)
+    # One edge, and it goes to END. Logging a Meal never interrupts the Turn.
+    builder.add_edge("log_meal", END)
     builder.add_edge("retrieve", "answer_question")
     builder.add_edge("answer_question", END)
     builder.add_edge("dispatch", END)

@@ -45,6 +45,11 @@ class Settings:
     # The vector tier. Changing it forces a re-ingest of the whole Corpus, and
     # changing the dimension count re-indexes it (ADR 0001).
     embedding_model: str = "gemini-embedding-001"
+    # FoodData Central. The free data.gov key allows 1,000 requests an hour; the
+    # demo key allows far fewer and is not what this runs on. Empty leaves the
+    # search seam unwired, so a Turn that needs it fails loudly instead of
+    # quietly counting nothing.
+    fdc_api_key: str = ""
 
     @staticmethod
     def from_env(env: dict[str, str] | None = None) -> Settings:
@@ -64,6 +69,7 @@ class Settings:
             schema_model=env.get("MODEL_SCHEMA", "gemini-3.5-flash-lite"),
             prose_model=env.get("MODEL_PROSE", "gemini-3.5-flash"),
             embedding_model=env.get("MODEL_EMBEDDING", "gemini-embedding-001"),
+            fdc_api_key=env.get("FDC_API_KEY", ""),
         )
         settings.check()
         return settings

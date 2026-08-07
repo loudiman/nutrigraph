@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import math
+from datetime import datetime, timedelta
 from pathlib import Path
+from uuid import uuid4
 
 import psycopg
 import pytest
@@ -17,15 +19,17 @@ from psycopg_pool import AsyncConnectionPool
 from nutrigraph_agent.app import open_checkpointer
 from nutrigraph_agent.config import CHECKPOINT_TABLES
 from nutrigraph_agent.corpus import CorpusEntry
-from nutrigraph_agent.db import COMMERCIAL_ONLY, PostgresDatabase
+from nutrigraph_agent.db import COMMERCIAL_ONLY, MealItemRow, PostgresDatabase
 from nutrigraph_agent.graph import build_graph
 from nutrigraph_agent.ingest import ingest
+from nutrigraph_agent.meal import MANILA, day_bounds
 from nutrigraph_agent.migrate import MIGRATIONS_DIR, migrate, pending
 from nutrigraph_agent.providers import EMBEDDING_DIMENSIONS
-from nutrigraph_agent.seed import seed_profiles
+from nutrigraph_agent.seed import seed_local_foods, seed_profiles
 
 from .conftest import PROSE_MODEL, SCHEMA_MODEL
 from .fakes import FakeProvider
+from .test_filipino_dishes import DISHES
 
 TABLES = (
     "schema_migration",
@@ -35,10 +39,19 @@ TABLES = (
     "redaction_placeholder",
     "corpus_document",
     "corpus_chunk",
+    "local_food",
+    "local_food_alias",
+    "meal",
+    "meal_item",
 )
 OUR_TABLES = set(TABLES)
 
-MIGRATION_FILES = ["001_init.sql", "002_router.sql", "003_corpus.sql"]
+# 004, 005 and 006 were reserved by tickets that were never written. A number is
+# never reused: the runner records the file name, so a reused number would
+# silently skip a file that had already been applied under it.
+MIGRATION_FILES = [
+    "001_init.sql", "002_router.sql", "003_corpus.sql", "007_meal.sql"
+]
 
 # Two documents on different licences, so one predicate has something to exclude.
 ENTRIES = [
@@ -267,6 +280,172 @@ def test_a_document_that_cannot_be_fetched_does_not_lose_the_others(corpus):
 
     assert list(report.failed) == ["dga-2025-2030"]
     assert report.ingested == {"who-healthy-diet-factsheet": 1}
+
+
+# --- the food log -------------------------------------------------------------
+
+
+@pytest.fixture
+def seeded(empty_database):
+    """A migrated database holding the demo Profiles and the real dish table."""
+    migrate(empty_database)
+    seed_profiles(empty_database)
+    seed_local_foods(empty_database)
+    return empty_database
+
+
+@pytest.fixture
+async def food_log(seeded):
+    pool = AsyncConnectionPool(seeded, open=False)
+    await pool.open()
+    try:
+        yield PostgresDatabase(pool)
+    finally:
+        await pool.close()
+
+
+def test_the_dish_table_seed_is_safe_to_run_twice(seeded):
+    seed_local_foods(seeded)
+
+    with psycopg.connect(seeded) as conn:
+        dishes = conn.execute("select count(*) from local_food").fetchone()[0]
+        aliases = conn.execute("select count(*) from local_food_alias").fetchone()[0]
+        kinds = dict(
+            conn.execute(
+                "select value_kind, count(*) from local_food group by value_kind"
+            ).fetchall()
+        )
+    assert dishes == len(DISHES)
+    assert aliases > dishes, "a dish answers to more than its own name"
+    assert kinds == {"direct": 5, "proxy": 10, "calculated": 6}
+
+
+def test_the_lookup_the_matcher_runs_first_is_a_text_pattern_index(seeded):
+    """`text_pattern_ops` is what lets `alias like 'kare kare%'` use an index
+    under any collation, which is what makes the local table cheap enough to
+    run before every FoodData Central call."""
+    with psycopg.connect(seeded) as conn:
+        definitions = {
+            name: definition
+            for name, definition in conn.execute(
+                "select indexname, indexdef from pg_indexes "
+                "where tablename in ('local_food', 'local_food_alias')"
+            ).fetchall()
+        }
+        plan = "\n".join(
+            row[0]
+            for row in conn.execute(
+                "explain select * from local_food_alias where alias like 'kare kare%'"
+            ).fetchall()
+        )
+
+    assert "text_pattern_ops" in definitions["local_food_alias_pattern_idx"]
+    assert "text_pattern_ops" in definitions["local_food_name_pattern_idx"]
+    assert "Seq Scan" not in plan
+
+
+async def test_a_dish_is_matched_from_the_local_table_with_its_value_kind(food_log):
+    adobo = await food_log.match_local_food("pork adobo")
+
+    assert adobo.name == "Adobo (pork)"
+    assert adobo.value_kind == "proxy"
+    assert adobo.source_note.startswith("PROXY:")
+    # The whole seed row travelled with it, so nothing transcribed is lost.
+    assert adobo.source["philfct_food_id"] == "R050"
+
+
+async def test_a_prefix_finds_the_dish_a_user_named_without_its_qualifier(food_log):
+    assert (await food_log.match_local_food("kare kare")).name == "Kare-kare (beef)"
+    assert await food_log.match_local_food("not a food at all") is None
+
+
+async def test_a_value_the_source_does_not_print_comes_back_absent_never_zero(food_log):
+    dinuguan = await food_log.match_local_food("dinuguan")
+
+    assert "sodium_mg" not in dinuguan.per_100g
+    assert dinuguan.per_100g["kcal"] > 0
+
+
+async def test_a_meal_is_written_with_its_items_and_a_day_total_is_one_sum(food_log):
+    now = datetime.now(MANILA)
+    await food_log.store_meal(
+        user_id="demo-user-1",
+        turn_id=uuid4(),
+        eaten_at=now,
+        meal_type="breakfast",
+        items=[
+            MealItemRow(
+                ordinal=0, said_as="pandesal", status="matched", quantity=2,
+                unit="piece", grams=200.0, portion_assumed=True, source="local",
+                food_name="Pandesal", value_kind="direct", match_note="the local table",
+                nutrients={"panel": "kept whole"},
+                values={"kcal": 618.0, "protein_g": 18.0},
+            ),
+            MealItemRow(ordinal=1, said_as="kwek kwek", status="unmatched", quantity=3),
+        ],
+    )
+
+    start, end = day_bounds(now)
+    total = await food_log.day_total("demo-user-1", start=start, end=end)
+
+    assert (total.counted, total.not_counted) == (1, 1)
+    assert total.values["kcal"] == 618.0
+    # The six columns are populated where values exist and null where they do
+    # not, so the total says it is short rather than reading as complete.
+    assert total.missing["fibre_g"] == 1
+    assert total.complete("kcal") and not total.complete("fibre_g")
+
+
+async def test_the_whole_source_response_is_kept_as_jsonb(seeded, food_log):
+    await food_log.store_meal(
+        user_id="demo-user-1", turn_id=uuid4(), eaten_at=datetime.now(MANILA),
+        meal_type="lunch",
+        items=[
+            MealItemRow(
+                ordinal=0, said_as="adobo", status="matched", grams=100.0,
+                source="local", food_name="Adobo (pork)", value_kind="proxy",
+                nutrients={"per_100g": {"proximates": {"Protein (g)": "9.9"}}},
+                values={"kcal": 199.0},
+            )
+        ],
+    )
+
+    with psycopg.connect(seeded) as conn:
+        row = conn.execute(
+            "select nutrients, kcal, fibre_g from meal_item"
+        ).fetchone()
+
+    assert row[0]["per_100g"]["proximates"]["Protein (g)"] == "9.9"
+    assert row[1] == 199
+    assert row[2] is None, "a value the source did not state is null, not zero"
+
+
+async def test_a_correction_fills_in_the_item_that_was_already_written(food_log):
+    now = datetime.now(MANILA)
+    await food_log.store_meal(
+        user_id="demo-user-1", turn_id=uuid4(), eaten_at=now, meal_type="snack",
+        items=[MealItemRow(ordinal=0, said_as="kwek kwek", status="unmatched")],
+    )
+    open_items = await food_log.open_unmatched_items(
+        "demo-user-1", since=now - timedelta(hours=24)
+    )
+
+    assert [o.said_as for o in open_items] == ["kwek kwek"]
+    await food_log.correct_meal_item(
+        open_items[0].meal_item_id,
+        MealItemRow(
+            ordinal=0, said_as="quail egg", status="matched", grams=100.0,
+            source="fdc", fdc_id="172194", food_name="Egg, quail, whole, fresh, raw",
+            match_note="chosen from 10 candidates", nutrients={"fdcId": 172194},
+            values={"kcal": 158.0},
+        ),
+    )
+
+    start, end = day_bounds(now)
+    total = await food_log.day_total("demo-user-1", start=start, end=end)
+    assert (total.counted, total.not_counted) == (1, 0)
+    assert total.values["kcal"] == 158.0
+    assert await food_log.open_unmatched_items("demo-user-1", since=start) == []
 
 
 async def test_retrieval_finds_the_nearest_chunk_and_names_its_document(corpus):

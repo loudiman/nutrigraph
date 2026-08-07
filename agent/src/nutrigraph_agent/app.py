@@ -16,7 +16,8 @@ from psycopg_pool import AsyncConnectionPool
 
 from .config import Settings
 from .db import PostgresDatabase
-from .deps import Deps
+from .deps import Deps, NotWired
+from .food import FoodDataCentral
 from .graph import build_graph
 from .models import TurnEventEnvelope, TurnRequest
 from .providers import Models, langchain_embedding_factory, langchain_factory
@@ -71,6 +72,11 @@ def create_app(settings: Settings) -> FastAPI:
                 prose_model=settings.prose_model,
                 embedding_factory=langchain_embedding_factory(settings.model_provider),
                 embedding_model=settings.embedding_model,
+            ),
+            food=(
+                FoodDataCentral(settings.fdc_api_key)
+                if settings.fdc_api_key
+                else NotWired("FoodData Central")
             ),
         )
         app.state.graph = build_graph(saver)
