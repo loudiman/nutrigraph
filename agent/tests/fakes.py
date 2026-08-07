@@ -12,8 +12,8 @@ import random
 import re
 from collections import deque
 from collections.abc import Sequence
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any
 from uuid import UUID, uuid4
@@ -21,6 +21,8 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel
 
 from nutrigraph_agent.db import (
+    FOOD_MATCH_DAYS,
+    RETRIEVAL_SIMILARITY,
     DayTotal,
     InteractionEvent,
     LocalFood,
@@ -90,6 +92,29 @@ class StoredItem:
     user_id: str
     eaten_at: datetime
     row: MealItemRow
+
+
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+@dataclass
+class CacheEntry:
+    """One `lookup_cache` row, with the table's own check constraint on it: a
+    retrieval is keyed on a vector, a food match is keyed on a name and holds
+    none. A fake that let both through would hide the rule the table enforces."""
+
+    kind: str
+    key_text: str
+    value: Any
+    key_embedding: list[float] | None = None
+    corpus_version: str | None = None
+    created_at: datetime = field(default_factory=now_utc)
+    hits: int = 0
+
+    def __post_init__(self) -> None:
+        assert self.kind in ("retrieval", "food_match"), self.kind
+        assert (self.kind == "retrieval") == (self.key_embedding is not None)
 
 
 def local_table() -> dict[str, LocalFood]:
@@ -170,6 +195,10 @@ class FakeDatabase:
     looked_up: list[str] = field(default_factory=list)
     meals: list[StoredMeal] = field(default_factory=list)
     items: list[StoredItem] = field(default_factory=list)
+    # The lookup cache. A test reads every row of it and asserts what is not
+    # there, which is the point of the table.
+    cache: list[CacheEntry] = field(default_factory=list)
+    corpus_version: str = "corpus-1"
 
     async def load_profile(self, user_id: str) -> Profile | None:
         if self.fail_on_load:
@@ -200,6 +229,61 @@ class FakeDatabase:
     ) -> list[RetrievedChunk]:
         self.searched.append(list(embedding))
         return self.corpus[:limit]
+
+    # --- the lookup cache -----------------------------------------------------
+
+    def reingest(self) -> None:
+        """The Corpus was re-ingested. Every retrieval entry was written against
+        the Corpus as it was, and the read refuses it from here on."""
+        self.corpus_version = f"corpus-{len(self.corpus_version)}"
+
+    async def cached_retrieval(
+        self, embedding: Sequence[float]
+    ) -> list[RetrievedChunk] | None:
+        # Both vectors are unit length, so the dot product is the cosine.
+        scored = [
+            (sum(a * b for a, b in zip(entry.key_embedding or [], embedding)), entry)
+            for entry in self.cache
+            if entry.kind == "retrieval" and entry.corpus_version == self.corpus_version
+        ]
+        near = [pair for pair in scored if pair[0] >= RETRIEVAL_SIMILARITY]
+        if not near:
+            return None
+        entry = max(near, key=lambda pair: pair[0])[1]
+        entry.hits += 1
+        return [RetrievedChunk(**chunk) for chunk in entry.value]
+
+    async def store_cached_retrieval(
+        self, *, key_text: str, embedding: Sequence[float], chunks: Sequence[RetrievedChunk]
+    ) -> None:
+        self.cache.append(
+            CacheEntry(
+                kind="retrieval",
+                key_text=key_text,
+                value=[asdict(chunk) for chunk in chunks],
+                key_embedding=list(embedding),
+                corpus_version=self.corpus_version,
+            )
+        )
+
+    async def cached_food_match(self, name: str) -> dict[str, Any] | None:
+        fresh = now_utc() - timedelta(days=FOOD_MATCH_DAYS)
+        for entry in self.cache:
+            if (
+                entry.kind == "food_match"
+                and entry.key_text == name
+                and entry.created_at > fresh
+            ):
+                entry.hits += 1
+                return entry.value
+        return None
+
+    async def store_cached_food_match(self, name: str, value: dict[str, Any]) -> None:
+        for entry in self.cache:
+            if entry.kind == "food_match" and entry.key_text == name:
+                entry.value, entry.created_at, entry.hits = value, now_utc(), 0
+                return
+        self.cache.append(CacheEntry(kind="food_match", key_text=name, value=value))
 
     # --- the food log ---------------------------------------------------------
 
@@ -289,6 +373,16 @@ def _message(content: str) -> SimpleNamespace:
     )
 
 
+class ResourceExhausted(Exception):
+    """A rate-limit stop, named as Google's client names it. The ladder reads
+    the class name rather than importing a vendor's exception type, so this is
+    exactly what it will see in production."""
+
+
+class BadApiKey(Exception):
+    """A stop that is not transient. Retrying it three times changes nothing."""
+
+
 @dataclass
 class FakeProvider:
     """Records every prompt that reached the provider, and answers from a
@@ -298,6 +392,11 @@ class FakeProvider:
     call: the router first, then the Intent path's own."""
 
     decisions: deque[BaseModel | str] = field(default_factory=deque)
+    # What the next calls raise before answering, one for each. The call is
+    # recorded in `seen` first, so a test can read which model each rung used.
+    failures: deque[BaseException] = field(default_factory=deque)
+    # Every wait the retry ladder asked for, in order, instead of sat through.
+    slept: list[float] = field(default_factory=list)
     # An Intent with no path of its own, so an unscripted Turn ends at the stub
     # and makes exactly one call. A scripted Turn names the Intent it wants.
     default: RouterDecision = field(
@@ -313,6 +412,14 @@ class FakeProvider:
         self.decisions.extend(decisions)
         return self
 
+    def fail(self, *failures: BaseException) -> FakeProvider:
+        """The next calls stop, in this order, before they answer."""
+        self.failures.extend(failures)
+        return self
+
+    async def sleep(self, seconds: float) -> None:
+        self.slept.append(seconds)
+
     def models(
         self,
         *,
@@ -326,7 +433,13 @@ class FakeProvider:
             prose_model=prose_model,
             embedding_factory=lambda model: _FakeEmbeddings(self, model),
             embedding_model=embedding_model,
+            sleep=self.sleep,
         )
+
+    def _stop(self) -> None:
+        """Raise the next scripted failure, if there is one."""
+        if self.failures:
+            raise self.failures.popleft()
 
     def vector(self, text: str) -> list[float]:
         """What the provider returns: 3072 dimensions, and deliberately not unit
@@ -355,6 +468,7 @@ class _FakeChat:
 
     async def ainvoke(self, messages: list[dict[str, str]]) -> SimpleNamespace:
         call = self._record(messages)
+        self.provider._stop()
         if self.provider.prose is not None:
             return _message(self.provider.prose)
         # A Coach answering a redacted prompt writes the placeholder back, which
@@ -373,9 +487,11 @@ class _FakeEmbeddings:
     model: str
 
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
+        self.provider._stop()
         return [self.provider.vector(text) for text in texts]
 
     async def aembed_query(self, text: str) -> list[float]:
+        self.provider._stop()
         return self.provider.vector(text)
 
 
@@ -386,6 +502,9 @@ class _FakeStructured:
 
     async def ainvoke(self, messages: list[dict[str, str]]) -> dict[str, Any]:
         self.chat._record(messages)
+        # The stop happens before the script is read, so a failed rung does not
+        # consume the answer the next rung is supposed to give.
+        self.chat.provider._stop()
         answer = self.chat.provider._next()
         if isinstance(answer, str):
             return {"raw": _message(""), "parsed": None, "parsing_error": ValueError(answer)}

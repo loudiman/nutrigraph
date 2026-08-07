@@ -12,10 +12,15 @@ from .deps import Deps
 from .graph import TURN_CONTEXT_KEY, TurnContext, UnknownUser
 from .guardrail import safe_reply, scan_reply
 from .models import AnswerEvent, ErrorEvent, NodeEvent, TurnEvent
+from .providers import ProviderUnavailable
 
 log = logging.getLogger("nutrigraph.agent.turn")
 
 FALLBACK_ERROR = "The Coach could not finish that. Nothing was saved. Please try again."
+
+# The failures that have a name of their own on the error event. Everything else
+# is `turn_failed`, and the User reads the same fixed message either way.
+CODES = {UnknownUser: "unknown_user", ProviderUnavailable: "provider_unavailable"}
 
 
 async def run_turn(
@@ -76,6 +81,10 @@ async def run_turn(
         log.info("turn finished", extra={"turn_id": str(turn_id)})
         yield AnswerEvent(turn_id=turn_id, reply=reply)
     except Exception as exc:
-        code = "unknown_user" if isinstance(exc, UnknownUser) else "turn_failed"
+        # The retry ladder ran out: two retries on the first model and one on
+        # the weaker tier, all of them stopped. The Turn ends here with the
+        # fixed fallback message, which is what makes the ladder's bound the
+        # guarantee that a Turn can never hang.
+        code = CODES.get(type(exc), "turn_failed")
         log.exception("turn failed", extra={"turn_id": str(turn_id), "code": code})
         yield ErrorEvent(turn_id=turn_id, code=code, message=FALLBACK_ERROR)

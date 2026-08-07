@@ -37,6 +37,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from pydantic import ValidationError
 
+from .budget import fit, render_history
 from .db import InteractionEvent, RetrievedChunk
 from .deps import Deps
 from .guardrail import OUT_OF_SCOPE, Subject, match_rule, refusal
@@ -188,6 +189,9 @@ class TurnContext:
     # What the node currently running has to report on its metric row.
     call: ModelCall | None = None
     intent: str | None = None
+    # The node's prompt was still over the token budget after trimming. It ran
+    # anyway; the row says so.
+    over_budget: bool = False
 
     def record(self, call: ModelCall) -> None:
         self.call = call
@@ -240,8 +244,23 @@ async def route(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     ctx = turn_context(config)
     pending = state.get("pending_clarification")
     asked = f"\n\nYou last asked the User: {pending}" if pending else ""
+    # The Thread, because a message that only makes sense after the last one
+    # cannot be classified without it. The current message is already the last
+    # entry, so the history is everything before it — trimmed to the last six
+    # turns when the Turn is over budget, and never summarised.
+    fitted = fit(
+        keep=[ROUTER_SYSTEM, asked, ctx.raw_message],
+        history=state.get("messages", [])[:-1],
+    )
+    ctx.over_budget = fitted.over_budget
+    user = ctx.raw_message
+    if fitted.history:
+        user = (
+            f"Earlier in this Thread:\n{render_history(fitted.history)}\n\n"
+            f"The message to classify: {ctx.raw_message}"
+        )
     decision, call = await models(ctx).fill(
-        RouterDecision, system=ROUTER_SYSTEM + asked, user=ctx.raw_message
+        RouterDecision, system=ROUTER_SYSTEM + asked, user=user
     )
     ctx.decision = decision
     ctx.record(call)
@@ -301,12 +320,25 @@ async def clarify(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
 
 async def retrieve(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     """The question becomes a vector and the Corpus answers with passages. One
-    embedding call, through the same wrapper every other provider call uses."""
+    embedding call, through the same wrapper every other provider call uses.
+
+    The lookup cache sits between the vector and the Corpus. It holds the
+    passages a near-enough question already found — public guidance, keyed on
+    the embedding of the question and on nothing this User has — so a repeat
+    skips the search entirely. It never holds the answer written from them: the
+    Profile is what makes an answer this User's, and nothing that read the
+    Profile is ever cached.
+    """
     ctx = turn_context(config)
     ctx.intent = "ask_question"
-    vector, call = await models(ctx).embed_query(ctx.raw_message)
+    vector, key_text, call = await models(ctx).embed_query(ctx.raw_message)
     ctx.record(call)
-    found = await ctx.deps.db.search_corpus(vector, limit=PASSAGES)
+    found = await ctx.deps.db.cached_retrieval(vector)
+    if found is None:
+        found = await ctx.deps.db.search_corpus(vector, limit=PASSAGES)
+        await ctx.deps.db.store_cached_retrieval(
+            key_text=key_text, embedding=vector, chunks=found
+        )
     ctx.passages = [chunk for chunk in found if chunk.score >= RELEVANCE_FLOOR]
     return {}
 
@@ -323,6 +355,11 @@ async def answer_question(state: TurnState, config: RunnableConfig) -> dict[str,
     provider call is made — there is nowhere for an invented claim to come from."""
     ctx = turn_context(config)
     ctx.intent = "ask_question"
+    # The passages are what the budget trims here; the question is not, and
+    # neither is the instruction that every claim carries a Citation.
+    fitted = fit(keep=[ANSWER_SYSTEM, ctx.raw_message], passages=ctx.passages)
+    ctx.over_budget = fitted.over_budget
+    ctx.passages = fitted.passages
     if not ctx.passages:
         answer = Answer(text=NOT_IN_THE_CORPUS, makes_a_nutrition_claim=False)
     else:
@@ -496,7 +533,7 @@ def measured(name: str, node: Any) -> Any:
 
     async def run(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
         ctx = turn_context(config)
-        ctx.call, ctx.intent = None, None
+        ctx.call, ctx.intent, ctx.over_budget = None, None, False
         started = perf_counter()
         try:
             return await node(state, config)
@@ -512,6 +549,7 @@ def measured(name: str, node: Any) -> Any:
                 input_tokens=ctx.call.input_tokens if ctx.call else 0,
                 output_tokens=ctx.call.output_tokens if ctx.call else 0,
                 cost_usd=ctx.call.cost_usd if ctx.call else 0.0,
+                over_budget=ctx.over_budget,
             )
             try:
                 await ctx.deps.db.store_interaction_event(event)

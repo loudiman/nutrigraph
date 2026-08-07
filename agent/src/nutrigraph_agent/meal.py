@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
@@ -231,8 +231,15 @@ def _candidates(candidates: list[FoodCandidate]) -> str:
 async def match_food(
     name: str, *, db: Database, food: FoodSearch, turn: TurnModels
 ) -> Attempt:
-    """The local table, then FoodData Central, then one choice from what it
-    returned.
+    """The local table, then the lookup cache, then FoodData Central, then one
+    choice from what it returned.
+
+    The cache is keyed on the exact lowercased name and holds the food that name
+    matched, so the second 'pandesal' anyone logs skips both the FoodData
+    Central search and the Gemini choice. It is independent of the User by
+    construction — the key is a food word, and the value is a public food record
+    — so nothing that read the Profile or today's Meals goes into it, and the
+    portion, the grams and the Meal are still worked out for this User alone.
 
     Nothing raises out of here. A food data source that is down, rate-limited or
     answering with an error leaves the food uncounted and says so, because the
@@ -256,6 +263,11 @@ async def match_food(
             )
         )
 
+    cached = await db.cached_food_match(key)
+    if cached is not None:
+        log.info("the lookup cache answered for %r", key)
+        return Attempt(match=Match(**cached))
+
     try:
         candidates = await food.search(name, limit=CANDIDATES)
     except Exception as exc:
@@ -277,18 +289,20 @@ async def match_food(
             call=call,
             why=f"none of the {len(candidates)} candidates was it: {choice.reason}",
         )
-    return Attempt(
-        match=Match(
-            source="fdc",
-            food_name=chosen.description,
-            per_100g=chosen.per_100g,
-            nutrients=chosen.source,
-            note=f"FoodData Central {chosen.fdc_id} '{chosen.description}', chosen "
-            f"from {len(candidates)} candidates: {choice.reason}",
-            fdc_id=chosen.fdc_id,
-        ),
-        call=call,
+    match = Match(
+        source="fdc",
+        food_name=chosen.description,
+        per_100g=chosen.per_100g,
+        nutrients=chosen.source,
+        note=f"FoodData Central {chosen.fdc_id} '{chosen.description}', chosen "
+        f"from {len(candidates)} candidates: {choice.reason}",
+        fdc_id=chosen.fdc_id,
     )
+    # Only a match is written. A food nothing matched is looked for again next
+    # time, because the catalogue may have gained it and a cached 'no' would
+    # keep the Coach from ever counting it.
+    await db.store_cached_food_match(key, asdict(match))
+    return Attempt(match=match, call=call)
 
 
 def item_row(item: ParsedItem, attempt: Attempt, *, ordinal: int) -> MealItemRow:
