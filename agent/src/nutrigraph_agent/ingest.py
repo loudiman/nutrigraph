@@ -159,6 +159,15 @@ async def ingest(
                 conn.rollback()
                 report.failed[entry.slug] = f"{type(exc).__name__}: {exc}"
                 log.warning("could not ingest %s: %s", entry.slug, exc)
+
+        if report.ingested:
+            # Every retrieval entry in the lookup cache was written against the
+            # Corpus as it was, so a re-ingest invalidates all of them. The read
+            # already refuses an entry whose `corpus_version` is not the current
+            # one; this is what stops the rows accumulating behind it.
+            conn.execute("delete from lookup_cache where kind = 'retrieval'")
+            conn.commit()
+            log.info("the retrieval half of the lookup cache was invalidated")
     return report
 
 

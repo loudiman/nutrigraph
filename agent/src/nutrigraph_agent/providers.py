@@ -21,13 +21,26 @@ line, here, and nowhere else in the codebase — a test asserts that. Changing
 `MODEL_PROVIDER` in `.env` from `google_genai` to `openai` or `anthropic`, and
 the two model names beside it, moves every call. There is no code path per
 provider to leave behind.
+
+**The retry ladder, bounded at four attempts.** Every call `fill`, `compose`,
+`write` and the two embedding methods make climbs it, for the same reason a node
+cannot skip the Redactor: it is on the way out, not something a call site opts
+into. On a free tier a rate-limit stop
+is normal traffic, not an exception, and the ladder treats it that way: two
+retries about a second and then three seconds apart, then the same call on the
+weaker tier, because a slightly worse answer beats no answer. A stop that is not
+transient — a schema the provider could not fill, a bad key — is raised at once
+rather than retried three times for nothing. Because the ladder is bounded, a
+Turn can never hang; when it runs out, `ProviderUnavailable` reaches `run_turn`,
+which ends the Turn with the fixed fallback message and an `error` event.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol, TypeVar
 
@@ -38,6 +51,7 @@ from .redaction import Redacted, Redactor
 log = logging.getLogger("nutrigraph.agent.models")
 
 Schema = TypeVar("Schema", bound=BaseModel)
+Result = TypeVar("Result")
 
 # `gemini-embedding-001` returns 3072 dimensions; pgvector's HNSW index accepts
 # at most 2000, so the full output cannot be indexed (ADR 0001).
@@ -47,6 +61,55 @@ EMBEDDING_DIMENSIONS = 768
 
 class SchemaFailure(RuntimeError):
     """The provider could not fill the schema, and the retry did not either."""
+
+
+class ProviderUnavailable(RuntimeError):
+    """Every rung of the ladder failed. The Turn ends with the fallback."""
+
+
+# How long the two retries wait, in seconds. About one, and then about three.
+BACKOFF_SECONDS = (1.0, 3.0)
+
+# The hard bound: three on the first model, one on the weaker tier. A Turn can
+# never hang, because there is no fifth attempt to make.
+MAX_ATTEMPTS = 4
+
+# What is worth retrying, read off the exception rather than off an imported
+# vendor type: the provider is a configuration string, and importing
+# `google.api_core.exceptions` here would be the code path per vendor that this
+# module exists not to have. Every provider names these stops much the same way,
+# and an HTTP status settles the rest.
+TRANSIENT_NAMES = frozenset({
+    "APIConnectionError", "APITimeoutError", "DeadlineExceeded", "InternalError",
+    "InternalServerError", "OverloadedError", "RateLimitError", "ReadTimeout",
+    "ResourceExhausted", "ServerError", "ServiceUnavailable",
+    "ServiceUnavailableError", "TooManyRequests", "UnavailableError",
+})
+TRANSIENT_STATUS = frozenset({408, 429, 500, 502, 503, 504})
+
+
+def is_transient(exc: BaseException) -> bool:
+    """A rate-limit stop, a timeout, or a transient provider error."""
+    if isinstance(exc, (TimeoutError, ConnectionError, asyncio.TimeoutError)):
+        return True
+    for attribute in ("status_code", "http_status", "code"):
+        status = getattr(exc, attribute, None)
+        if isinstance(status, int) and status in TRANSIENT_STATUS:
+            return True
+    return any(base.__name__ in TRANSIENT_NAMES for base in type(exc).__mro__)
+
+
+def ladder(primary: str, fallback: str | None) -> list[tuple[str, float]]:
+    """The four rungs: the model to call, and how long to wait first.
+
+    The fallback rung is dropped when it names the model that already failed —
+    the schema tier is the weaker tier, so there is nothing below it to fall to,
+    and a fourth identical attempt would only spend another second.
+    """
+    plan = [(primary, 0.0)] + [(primary, wait) for wait in BACKOFF_SECONDS]
+    if fallback and fallback != primary:
+        plan.append((fallback, 0.0))
+    return plan[:MAX_ATTEMPTS]
 
 # US dollars per million tokens, input then output, from
 # https://ai.google.dev/gemini-api/docs/pricing. The free tier bills nothing;
@@ -160,6 +223,16 @@ class Models:
     # so an embedding call redacts exactly like a chat call does.
     embedding_factory: EmbeddingFactory | None = None
     embedding_model: str = "gemini-embedding-001"
+    # What the ladder waits with. A test hands in a recorder, so the two waits
+    # are asserted rather than sat through.
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
+
+    @property
+    def fallback_model(self) -> str:
+        """The rung below Flash. The routing rule already names two tiers and
+        the schema tier is the cheaper one, so the weaker model is configured
+        and there is no third name to keep in step with the other two."""
+        return self.schema_model
 
     def for_turn(self, *, known_names: list[str]) -> TurnModels:
         return TurnModels(self, Redactor(known_names=known_names))
@@ -192,6 +265,34 @@ class TurnModels:
             raise RuntimeError("no embedding provider is configured")
         return factory(self.models.embedding_model)
 
+    async def _climb(
+        self,
+        primary: str,
+        fallback: str | None,
+        run: Callable[[str], Awaitable[Result]],
+    ) -> tuple[Result, str]:
+        """Run one call up the ladder. Returns what came back and which model
+        answered, because the weaker tier bills at its own price."""
+        failure: BaseException | None = None
+        for model, wait in ladder(primary, fallback):
+            if wait:
+                await self.models.sleep(wait)
+            try:
+                return await run(model), model
+            except Exception as exc:
+                if not is_transient(exc):
+                    # A schema the provider could not fill, or a bad key. Three
+                    # more attempts would fail the same way.
+                    raise
+                failure = exc
+                log.warning(
+                    "provider stopped, climbing the ladder",
+                    extra={"model": model, "error": f"{type(exc).__name__}: {exc}"},
+                )
+        raise ProviderUnavailable(
+            f"{primary} did not answer in {len(ladder(primary, fallback))} attempts"
+        ) from failure
+
     async def fill(
         self, schema: type[Schema], *, system: str, user: str, retries: int = 1
     ) -> tuple[Schema, ModelCall]:
@@ -208,46 +309,63 @@ class TurnModels:
         The one retry is `fill`'s: the failure and the corrected attempt are two
         provider calls, so both appear in the trace rather than the first one
         disappearing behind the second.
+
+        The retry ladder is `fill`'s too, because both go through `_fill`. The
+        composer starts on Flash, so it has a rung below it: a rate-limit stop
+        there falls to Flash-Lite rather than ending a Turn whose Intent paths
+        have already done their work and written it down.
         """
         return await self._fill(
             schema, self.models.prose_model, system=system, user=user, retries=retries
         )
 
     async def _fill(
-        self, schema: type[Schema], model_name: str, *, system: str, user: str, retries: int
+        self, schema: type[Schema], primary: str, *, system: str, user: str, retries: int
     ) -> tuple[Schema, ModelCall]:
-        chat = self.models.factory(model_name).with_structured_output(
-            schema, include_raw=True
-        )
-        total = ModelCall(model=model_name)
+        """The schema call both tiers make, and the ladder both climb."""
+        model_name, tokens_in, tokens_out = primary, 0, 0
         note = ""
         for attempt in range(retries + 1):
             # Redaction runs on every attempt, so the retry after a schema
-            # failure cannot reach the provider unredacted (ADR 0002).
+            # failure cannot reach the provider unredacted (ADR 0002). The
+            # ladder's own retries reuse this redacted copy: it is the same call
+            # made again, and there is no unredacted text in scope to send.
             redacted = self._redact(system + note, user)
-            result = await chat.ainvoke(
-                [
-                    {"role": "system", "content": redacted.texts[0]},
-                    {"role": "user", "content": redacted.texts[1]},
-                ]
-            )
-            total = total + _usage(result.get("raw"), model_name)
-            parsed, error = result.get("parsed"), result.get("parsing_error")
-            if parsed is not None and error is None:
-                return parsed, total
-            log.warning("schema failure, retrying", extra={"attempt": attempt, "error": str(error)})
-            note = f"\n\nThe previous answer did not fit the schema: {error}. Answer again."
-        raise SchemaFailure(f"{model_name} did not fill {schema.__name__} in {retries + 1} attempts")
-
-    async def write(self, *, system: str, user: str) -> tuple[str, ModelCall]:
-        """Write prose for the User. The prose tier, by the routing rule."""
-        model_name = self.models.prose_model
-        redacted = self._redact(system, user)
-        message = await self.models.factory(model_name).ainvoke(
-            [
+            messages = [
                 {"role": "system", "content": redacted.texts[0]},
                 {"role": "user", "content": redacted.texts[1]},
             ]
+
+            async def call(model: str) -> Any:
+                chat = self.models.factory(model).with_structured_output(
+                    schema, include_raw=True
+                )
+                return await chat.ainvoke(messages)
+
+            result, model_name = await self._climb(
+                primary, self.models.fallback_model, call
+            )
+            usage = _usage(result.get("raw"), model_name)
+            tokens_in += usage.input_tokens
+            tokens_out += usage.output_tokens
+            parsed, error = result.get("parsed"), result.get("parsing_error")
+            if parsed is not None and error is None:
+                return parsed, ModelCall(model_name, tokens_in, tokens_out)
+            log.warning("schema failure, retrying", extra={"attempt": attempt, "error": str(error)})
+            note = f"\n\nThe previous answer did not fit the schema: {error}. Answer again."
+        raise SchemaFailure(f"{primary} did not fill {schema.__name__} in {retries + 1} attempts")
+
+    async def write(self, *, system: str, user: str) -> tuple[str, ModelCall]:
+        """Write prose for the User. The prose tier, by the routing rule."""
+        redacted = self._redact(system, user)
+        messages = [
+            {"role": "system", "content": redacted.texts[0]},
+            {"role": "user", "content": redacted.texts[1]},
+        ]
+        message, model_name = await self._climb(
+            self.models.prose_model,
+            self.models.fallback_model,
+            lambda model: self.models.factory(model).ainvoke(messages),
         )
         # `content` is a list of blocks — Gemini 3 puts a thought signature
         # beside the words — so the text comes off the message, not off content.
@@ -267,14 +385,34 @@ class TurnModels:
         user data, but the route to the provider is the same one — there is no
         second way out of the process (ADR 0002)."""
         redacted = self._redact(*texts)
-        vectors = await self._embedder().aembed_documents(list(redacted.texts))
+        # No fallback rung: the vector tier has one model, and answering with a
+        # vector from a different one would poison the index.
+        vectors, _ = await self._climb(
+            self.models.embedding_model,
+            None,
+            lambda _model: self._embedder().aembed_documents(list(redacted.texts)),
+        )
         return (
             [truncate_and_normalize(vector) for vector in vectors],
             ModelCall(model=self.models.embedding_model),
         )
 
-    async def embed_query(self, text: str) -> tuple[list[float], ModelCall]:
-        """The User's question, which is exactly the text redaction is for."""
+    async def embed_query(self, text: str) -> tuple[list[float], str, ModelCall]:
+        """The User's question, which is exactly the text redaction is for.
+
+        The redacted question comes back beside the vector because it is what
+        the lookup cache is keyed on in `key_text`: a cache entry outlives the
+        90-day purge of `message.raw_text`, so the copy kept there is the one
+        the provider saw and not the one the User typed.
+        """
         redacted = self._redact(text)
-        vector = await self._embedder().aembed_query(redacted.text)
-        return truncate_and_normalize(vector), ModelCall(model=self.models.embedding_model)
+        vector, _ = await self._climb(
+            self.models.embedding_model,
+            None,
+            lambda _model: self._embedder().aembed_query(redacted.text),
+        )
+        return (
+            truncate_and_normalize(vector),
+            redacted.text,
+            ModelCall(model=self.models.embedding_model),
+        )
