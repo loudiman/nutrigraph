@@ -8,6 +8,14 @@ reach an Intent path — including the Corpus, which an out-of-scope question is
 never allowed to search. `refuse` is the only node that writes a Refusal, and
 both detectors — the rule list and the router's `out_of_scope` flag — end there.
 
+Three Intent paths are built, all after both detectors, and `INTENT_PATHS` names
+the node each starts at. `update_profile` writes the change to PostgreSQL and to
+nothing else, so the Profile the next Turn reads is the changed one.
+`ask_question` is `retrieve` then `answer_question`: a question the guardrail
+permits, a general chronic-disease question among them, passes through `guard`
+untouched and is answered from the Corpus with a Citation on every claim.
+`log_meal` writes the Meal and then reads the day it counts against.
+
 **The multi-Intent Turn, and it costs one loop edge.** The router returns an
 ordered list of at most two Intents. Each Intent path appends one `IntentResult`
 to `ctx.intent_results` and formats nothing for the User, and `after_intent`
