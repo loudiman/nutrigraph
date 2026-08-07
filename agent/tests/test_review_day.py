@@ -229,6 +229,11 @@ async def test_a_nutrient_the_source_does_not_print_is_absent_never_zero(db):
     assert "sodium_mg" not in day.totals and "fibre_g" not in day.totals
     # And no gap is stated against a target for a nutrient with no total.
     assert "sodium_mg" not in day.target_delta
+    # Nothing carried either, which is a different fact from a total of zero.
+    assert (
+        "My source prints no fibre and sodium for anything you ate"
+        in day.reply.text
+    )
 
 
 async def test_a_total_the_source_only_partly_covers_says_it_is_short(db):

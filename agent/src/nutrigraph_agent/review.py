@@ -310,12 +310,27 @@ def compose(
             f"an unknown amount."
         )
 
-    short = sorted({
-        word for column, word in OFTEN_MISSING.items() if not total.complete(column)
-    })
-    if short:
+    # The two the source most often leaves out. A column no counted Item carried
+    # is not a total of zero, and a column only some of them carried is a total
+    # that is short — the two are different facts and are said differently.
+    absent = sorted(
+        word
+        for column, word in OFTEN_MISSING.items()
+        if total.counted and total.missing.get(column, 0) == total.counted
+    )
+    partial = sorted(
+        word
+        for column, word in OFTEN_MISSING.items()
+        if not total.complete(column) and word not in absent
+    )
+    if absent:
         lines.append(
-            f"My source prints no {_list(short)} for part of what you ate, so those "
+            f"My source prints no {_list(absent)} for anything you ate, so there is "
+            f"no {_list(absent)} total to give you at all."
+        )
+    if partial:
+        lines.append(
+            f"My source prints no {_list(partial)} for part of what you ate, so those "
             f"totals are short rather than complete."
         )
     return " ".join(lines)
