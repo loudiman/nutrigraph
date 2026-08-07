@@ -140,7 +140,13 @@ The demo Profiles are seeded by hand, once, and are not part of the pipeline:
 
 ```sh
 docker run --rm -e DATABASE_URL="$DATABASE_URL" <agent image> nutrigraph-seed
+docker run --rm -e DATABASE_URL="$DATABASE_URL" <agent image> nutrigraph-ingest
 ```
+
+`nutrigraph-ingest` is the slow one — it fetches the Corpus and embeds it, and
+it embeds the local dish names the recommend path's similarity query is over.
+Both halves are safe to run twice and cheap the second time, so a re-run after
+adding a dish costs one embedding call for that dish.
 
 **The one step that needs a browser** is connecting Cloud Build to the GitHub
 repository. The connection `nutrigraph-github` exists in `asia-southeast1` and

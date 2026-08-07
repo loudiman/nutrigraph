@@ -504,6 +504,49 @@ async def test_accepting_a_suggestion_writes_the_accepted_column(seam):
     assert written.accepted is True
 
 
+async def test_the_route_is_how_a_user_answers_one(seam):
+    """The signal has to be reachable, so it is a route: the User pressed yes on
+    a suggestion the Coach already made, and putting a boolean through the
+    router would spend a model call classifying it.
+
+    The transport skips the lifespan on purpose — this is the route and the
+    seam's own database fake, with no PostgreSQL and no pool behind it.
+    """
+    import httpx
+
+    from nutrigraph_agent.app import create_app
+    from nutrigraph_agent.config import Settings
+
+    seam.provider.script(WANTS, SUGGESTED)
+    await seam.turn(ASK)
+    written = seam.db.recommendations[-1]
+
+    app = create_app(
+        Settings(
+            database_url="postgresql://unused/unused", host="127.0.0.1", port=8080,
+            dev_auth=False, dev_token="",
+        )
+    )
+    app.state.deps = seam.deps
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://agent") as client:
+        accepted = await client.post(
+            f"/recommendation/{written.recommendation_id}", json={"accepted": True}
+        )
+        again = await client.post(
+            f"/recommendation/{written.recommendation_id}", json={"accepted": False}
+        )
+        unknown = await client.post(f"/recommendation/{uuid4()}", json={"accepted": True})
+
+    assert accepted.status_code == 200 and accepted.json() == {"accepted": True}
+    assert written.accepted is True
+    # A second answer does not rewrite the first, and neither does one for a
+    # suggestion that does not exist.
+    assert again.status_code == 404
+    assert unknown.status_code == 404
+    assert written.accepted is True
+
+
 async def test_rejecting_one_writes_it_too(seam):
     seam.provider.script(WANTS, SUGGESTED)
     await seam.turn(ASK)
