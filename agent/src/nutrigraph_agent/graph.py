@@ -8,12 +8,14 @@ reach an Intent path — including the Corpus, which an out-of-scope question is
 never allowed to search. `refuse` is the only node that writes a Refusal, and
 both detectors — the rule list and the router's `out_of_scope` flag — end there.
 
-Two Intent paths are built, both after both detectors, and `INTENT_PATHS` names
-the node each starts at. `update_profile` writes the change to PostgreSQL and to
+The Intent paths are built after both detectors, and `INTENT_PATHS` names the
+node each starts at. `update_profile` writes the change to PostgreSQL and to
 nothing else, so the Profile the next Turn reads is the changed one.
 `ask_question` is `retrieve` then `answer_question`: a question the guardrail
 permits, a general chronic-disease question among them, passes through `guard`
 untouched and is answered from the Corpus with a Citation on every claim.
+`review_day` sums the day out of PostgreSQL and states the gap against the
+targets the Goal produces, naming whatever the sum could not include.
 
 The state holds only what survives the Turn. Everything rebuilt every Turn
 lives on the `TurnContext`, which travels in the config and therefore never

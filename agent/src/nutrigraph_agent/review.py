@@ -272,11 +272,16 @@ def compose(
             if c in total.values
         ]
         if rest:
-            lines.append(f"That is beside {_list(rest)}.")
+            lines.append(f"That is with {_list(rest)}.")
     else:
+        # Nothing matched, so there is no total for the unmatched sentence below
+        # to be short against. The foods are named here instead, because naming
+        # them is the part that must not be lost.
+        they = "were" if len(total.unmatched) > 1 else "was"
         lines.append(
-            f"{profile.name}, nothing you logged {day} could be matched to a food "
-            f"I hold, so I have no total to give you at all."
+            f"{profile.name}, the only thing you logged {day} {they} "
+            f"{_list(total.unmatched)}, which I could not match to a food I hold, "
+            f"so I have no total to give you at all."
         )
 
     if delta:
@@ -296,7 +301,7 @@ def compose(
             f"so that is the total on its own and no gap."
         )
 
-    if total.unmatched:
+    if total.unmatched and total.counted:
         they = "they are" if len(total.unmatched) > 1 else "it is"
         lines.append(
             f"That total does not include {_list(total.unmatched)}, because I could "

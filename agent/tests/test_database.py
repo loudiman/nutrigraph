@@ -394,6 +394,9 @@ async def test_a_meal_is_written_with_its_items_and_a_day_total_is_one_sum(food_
     # not, so the total says it is short rather than reading as complete.
     assert total.missing["fibre_g"] == 1
     assert total.complete("kcal") and not total.complete("fibre_g")
+    # An unmatched Item added nothing to that sum, so the same query names it
+    # and the review can say the total is short by an unknown amount.
+    assert total.unmatched == ["kwek kwek"]
 
 
 async def test_the_whole_source_response_is_kept_as_jsonb(seeded, food_log):
@@ -445,6 +448,8 @@ async def test_a_correction_fills_in_the_item_that_was_already_written(food_log)
     total = await food_log.day_total("demo-user-1", start=start, end=end)
     assert (total.counted, total.not_counted) == (1, 0)
     assert total.values["kcal"] == 158.0
+    # `array_agg` over no unmatched rows is null, and that is an empty list here.
+    assert total.unmatched == []
     assert await food_log.open_unmatched_items("demo-user-1", since=start) == []
 
 
