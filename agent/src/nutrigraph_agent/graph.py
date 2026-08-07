@@ -8,8 +8,10 @@ reach an Intent path — including the Corpus, which an out-of-scope question is
 never allowed to search. `refuse` is the only node that writes a Refusal, and
 both detectors — the rule list and the router's `out_of_scope` flag — end there.
 
-Four Intent paths are built, all after both detectors, and `INTENT_PATHS` names
-the node each starts at. `update_profile` writes the change to PostgreSQL and to
+All five Intent paths are built, all after both detectors, and `INTENT_PATHS`
+names the node each starts at. `dispatch` is therefore no longer a stub for an
+unbuilt path: it is what answers a Turn the router understood and attached no
+Intent to. `update_profile` writes the change to PostgreSQL and to
 nothing else, so the Profile the next Turn reads is the changed one.
 `ask_question` is `retrieve` then `answer_question`: a question the guardrail
 permits, a general chronic-disease question among them, passes through `guard`
@@ -17,6 +19,8 @@ untouched and is answered from the Corpus with a Citation on every claim.
 `log_meal` writes the Meal and then reads the day it counts against.
 `review_day` sums the day out of PostgreSQL and states the gap against the
 targets the Goal produces, naming whatever the sum could not include.
+`recommend` computes that same gap, filters the candidate foods in SQL, and only
+then asks a model to rank what survived.
 
 **The multi-Intent Turn, and it costs one loop edge.** The router returns an
 ordered list of at most two Intents. Each Intent path appends one `IntentResult`
@@ -89,6 +93,7 @@ from .models import (
     RouterDecision,
 )
 from .providers import ModelCall, SchemaFailure, TurnModels
+from .recommend import recommend as run_recommend
 from .review import review_day as run_review_day
 
 # The key is underscore-prefixed so LangGraph keeps it out of checkpoint metadata.
@@ -108,6 +113,7 @@ INTENT_PATHS = {
     "ask_question": "retrieve",
     "log_meal": "log_meal",
     "review_day": "review_day",
+    "recommend": "recommend",
 }
 
 # The Intents whose answer is scanned against the Profile's allergies.
@@ -705,12 +711,54 @@ async def review_day(state: TurnState, config: RunnableConfig) -> dict[str, Any]
     return {}
 
 
-async def dispatch(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
-    """The stub each remaining Intent path replaces. It reports what the router
-    decided for one Intent, like any other path, and the composer says it.
+async def recommend(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
+    """What to eat next: the gap in SQL, the filters in SQL, and only then a
+    model — which ranks the surviving rows and explains the choice.
 
-    A Turn whose two Intents both land here runs it twice, once for each, which
-    is exactly what a Turn with two built paths does.
+    The Meals and the candidates are read from PostgreSQL, and every food the
+    answer names came off a row before a provider was asked anything. So the
+    allergy check that runs at the seam on this Intent is a second line of
+    defence: on a correct path there is no allergen left for it to find, and
+    `ctx.foods` is deliberately not fed from here so that the check reads the
+    prose with nothing excused.
+
+    On a two-Intent Turn this runs after the first, which is why the day total
+    it works from already holds a Meal logged in the same breath.
+    """
+    ctx = turn_context(config)
+    ctx.intent = "recommend"
+    profile = ctx.profile
+    assert profile is not None
+    suggested = await run_recommend(
+        db=ctx.deps.db,
+        turn=models(ctx),
+        profile=profile,
+        turn_id=ctx.turn_id,
+        # The same Manila clock the Meal was stamped with, so "today" is the day
+        # the User is living in and not the day the container thinks it is.
+        now=datetime.now(MANILA),
+    )
+    if suggested.call is not None:
+        ctx.record(suggested.call)
+    ctx.over_budget = suggested.over_budget
+    ctx.intent_results.append(
+        IntentResult(
+            intent="recommend",
+            text=suggested.text,
+            disclaimers=suggested.disclaimers,
+            again=suggested.again,
+        )
+    )
+    return {}
+
+
+async def dispatch(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
+    """A Turn the router understood and attached no Intent to.
+
+    Every Intent now has a path of its own, so this is no longer a stub waiting
+    to be replaced: it is what answers a confident classification that carries
+    nothing to do, and it reports that like any other path so the composer says
+    it rather than the Turn ending silently.
     """
     ctx = turn_context(config)
     intent = pending_intent(ctx)
@@ -880,6 +928,7 @@ def build_graph(checkpointer: Any):
         ("update_profile", update_profile),
         ("log_meal", log_meal),
         ("review_day", review_day),
+        ("recommend", recommend),
         ("retrieve", retrieve),
         ("answer_question", answer_question),
         ("dispatch", dispatch),
@@ -894,21 +943,23 @@ def build_graph(checkpointer: Any):
         "route",
         next_node,
         [
-            "clarify", "update_profile", "log_meal", "review_day", "retrieve",
-            "dispatch", "refuse",
+            "clarify", "update_profile", "log_meal", "review_day", "recommend",
+            "retrieve", "dispatch", "refuse",
         ],
     )
     # Where every Intent path ends: back for the second Intent, or on to the one
     # composer. The loop edge is these lists naming each other's entry nodes.
     onwards = [
-        "update_profile", "log_meal", "review_day", "retrieve", "dispatch",
-        "compose_reply",
+        "update_profile", "log_meal", "review_day", "recommend", "retrieve",
+        "dispatch", "compose_reply",
     ]
     builder.add_conditional_edges("update_profile", after_update, [*onwards, "clarify"])
     # Logging a Meal never interrupts the Turn, so `clarify` is not among these.
     builder.add_conditional_edges("log_meal", after_intent, onwards)
     # Nor does reviewing a day: a day the Coach cannot total is answered, not asked about.
     builder.add_conditional_edges("review_day", after_intent, onwards)
+    # Nor does suggesting a meal: a User the filters leave nothing for is told so.
+    builder.add_conditional_edges("recommend", after_intent, onwards)
     builder.add_edge("retrieve", "answer_question")
     builder.add_conditional_edges("answer_question", after_intent, onwards)
     builder.add_conditional_edges("dispatch", after_intent, onwards)

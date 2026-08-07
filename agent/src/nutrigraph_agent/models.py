@@ -250,6 +250,51 @@ class DayRequest(BaseModel):
     )
 
 
+# One or two sentences of suggestion, and one of reason. The User is reading
+# this while cooking.
+SUGGESTION_MAX_CHARS = 400
+REASON_MAX_CHARS = 300
+
+
+class Recommendation(BaseModel):
+    """What to eat next, ranked and explained from the candidates the SQL
+    filters left standing.
+
+    The model does one job here: it ranks and it explains. It does not find the
+    food — `foods` is copied from the candidate list, and a name that is not on
+    that list is rejected before the suggestion is written down or shown, which
+    is what makes "the model never invents a food" a test rather than a hope.
+
+    `reason` carries no `default`: a suggestion with no reason is not one this
+    Coach gives, so an empty one fails validation here.
+    """
+
+    suggestion: str = Field(
+        min_length=1,
+        max_length=SUGGESTION_MAX_CHARS,
+        description="What to eat next, in at most two short sentences, naming "
+        "only foods from the candidate list.",
+    )
+    reason: str = Field(
+        min_length=1,
+        max_length=REASON_MAX_CHARS,
+        description="One sentence saying why this food, in terms of the nutrient "
+        "gap you were given.",
+    )
+    foods: list[str] = Field(
+        min_length=1,
+        description="The candidate names this suggestion is built from, copied "
+        "exactly from the list. Naming anything else is rejected.",
+    )
+
+
+class RecommendationResponse(BaseModel):
+    """The User accepted or rejected one suggestion. The first of the two
+    measurement signals, and the only one that needs the User to say anything."""
+
+    accepted: bool
+
+
 class ReplyPart(BaseModel):
     """One part of a reply, one for each Intent the Turn ran."""
 

@@ -313,7 +313,36 @@ async def match_food(
     # time, because the catalogue may have gained it and a cached 'no' would
     # keep the Coach from ever counting it.
     await db.store_cached_food_match(key, asdict(match))
+    await remember_food(
+        db, turn, source="fdc", source_id=chosen.fdc_id, name=chosen.description
+    )
     return Attempt(match=match, call=call)
+
+
+async def remember_food(
+    db: Database, turn: TurnModels, *, source: str, source_id: str, name: str
+) -> None:
+    """Embed a food the first time this system sees it, and never again.
+
+    The vector table holds the local dish names and every food that has been
+    matched — hundreds of rows, not millions — and it is what makes the
+    recommend path's personalisation a similarity query over foods this User
+    actually ate rather than a phrase in a prompt.
+
+    Nothing raises out of here, and the check comes before the call: a food
+    already embedded costs one indexed select and no provider call at all, and
+    a provider that will not answer leaves the food unembedded rather than
+    losing the Meal that was being written when it was asked.
+    """
+    try:
+        if await db.has_food_embedding(source=source, source_id=source_id):
+            return
+        vectors, _ = await turn.embed_documents([name])
+        await db.store_food_embedding(
+            source=source, source_id=source_id, name=name, embedding=vectors[0]
+        )
+    except Exception as exc:
+        log.warning("%r was not embedded: %s", name, exc)
 
 
 def item_row(item: ParsedItem, attempt: Attempt, *, ordinal: int) -> MealItemRow:
