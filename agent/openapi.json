@@ -98,6 +98,83 @@
           }
         }
       }
+    },
+    "/recommendation/{recommendation_id}": {
+      "post": {
+        "summary": "Answer Recommendation",
+        "description": "The acceptance signal: `recommendation.accepted` turns from null.\n\nIt is a route and not a Turn because it is not a message \u2014 the User\npressed yes or no on a suggestion the Coach already made, and putting it\nthrough the router would spend a model call classifying a boolean.\n\nA second answer to the same suggestion is a 404 rather than a rewrite:\nwhat the User said the first time is the measurement.",
+        "operationId": "answer_recommendation_recommendation__recommendation_id__post",
+        "parameters": [
+          {
+            "name": "recommendation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Recommendation Id"
+            }
+          },
+          {
+            "name": "x-dev-auth",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dev-Auth"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecommendationResponse"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "title": "Response Answer Recommendation Recommendation  Recommendation Id  Post"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "no such suggestion, or it was already answered"
+          },
+          "401": {
+            "description": "internal caller not recognised"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -258,6 +335,20 @@
         ],
         "title": "NodeEvent",
         "description": "A node of the graph finished. These go out while the Turn runs."
+      },
+      "RecommendationResponse": {
+        "properties": {
+          "accepted": {
+            "type": "boolean",
+            "title": "Accepted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accepted"
+        ],
+        "title": "RecommendationResponse",
+        "description": "The User accepted or rejected one suggestion. The first of the two\nmeasurement signals, and the only one that needs the User to say anything."
       },
       "ReplyPart": {
         "properties": {
