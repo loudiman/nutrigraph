@@ -1,23 +1,50 @@
 """The graph. `load_profile` reads the Profile, `guard` runs the deterministic
 rule list with no model, `route` classifies the message into Intents with one
-model call, and the Turn refuses, runs an Intent path, dispatches, or asks one
-clarifying question.
+model call, and the Turn refuses, runs its Intent paths, or asks one clarifying
+question.
 
 `guard` sits before `route` because a message the rule list catches must never
 reach an Intent path — including the Corpus, which an out-of-scope question is
 never allowed to search. `refuse` is the only node that writes a Refusal, and
 both detectors — the rule list and the router's `out_of_scope` flag — end there.
 
-Two Intent paths are built, both after both detectors, and `INTENT_PATHS` names
+Three Intent paths are built, all after both detectors, and `INTENT_PATHS` names
 the node each starts at. `update_profile` writes the change to PostgreSQL and to
 nothing else, so the Profile the next Turn reads is the changed one.
 `ask_question` is `retrieve` then `answer_question`: a question the guardrail
 permits, a general chronic-disease question among them, passes through `guard`
 untouched and is answered from the Corpus with a Citation on every claim.
+`log_meal` writes the Meal and then reads the day it counts against.
+
+**The multi-Intent Turn, and it costs one loop edge.** The router returns an
+ordered list of at most two Intents. Each Intent path appends one `IntentResult`
+to `ctx.intent_results` and formats nothing for the User, and `after_intent`
+either sends the Turn back for the second Intent or on to the composer. So "I
+ate two eggs, is that enough protein" logs the Meal first, and the question is
+then answered from a day total that already holds it.
+
+**One composer.** `compose_reply` is the only node on an Intent path that
+produces a `CoachReply`. The prototype ran without it, each path writing its own
+reply, and the second Intent did its work silently while the User saw only the
+first — which is the fault this node exists to prevent. `parts` and
+`disclaimers` are assembled in code from what the paths reported, so a model
+cannot drop an Intent from the record or a marking from the answer; only the
+words are asked of a model, on the prose tier, because the User reads them.
+
+`refuse` and `clarify` are outside that rule and stay outside it: neither runs
+an Intent, a Refusal is a template from `guardrail` rather than anybody's
+composition, and `clarify` is the graph's one interrupt, asked before any Intent
+path runs. Nothing composes there because nothing ran.
+
+**Order.** The composer runs after every Intent path, which is after the allergy
+check on the paths that have one, and before the guardrail text scan in
+`run_turn` — the answer is held back until that scan passes, so the composer
+writing the text does not put it on the screen.
 
 The state holds only what survives the Turn. Everything rebuilt every Turn
 lives on the `TurnContext`, which travels in the config and therefore never
-enters the checkpoint.
+enters the checkpoint — `intent_results` among them, which is this Turn's
+working note and not part of the Thread.
 
 Every node is wrapped in `measured`, so a node cannot be added without leaving
 an `interaction_event` row behind.
@@ -40,20 +67,22 @@ from pydantic import ValidationError
 from .db import InteractionEvent, RetrievedChunk
 from .deps import Deps
 from .guardrail import OUT_OF_SCOPE, Subject, match_rule, refusal
-from .meal import MANILA
+from .meal import MANILA, day_bounds, day_line
 from .meal import log_meal as run_log_meal
 from .models import (
     INTENTS,
     LIST_FIELDS,
     UPDATABLE_FIELDS,
     Answer,
+    Citation,
     CoachReply,
+    ComposedReply,
     Profile,
     ProfileUpdate,
     ReplyPart,
     RouterDecision,
 )
-from .providers import ModelCall, TurnModels
+from .providers import ModelCall, SchemaFailure, TurnModels
 
 # The key is underscore-prefixed so LangGraph keeps it out of checkpoint metadata.
 TURN_CONTEXT_KEY = "__turn"
@@ -143,6 +172,33 @@ NOT_IN_THE_CORPUS = (
     "you at a dietitian than guess at it."
 )
 
+COMPOSE_SYSTEM = """You are a nutrition Coach who has just done two things for
+one User in one message, and you write the single reply that covers both.
+
+You are given the parts, in the order they were done, each with the sentences
+that part already produced and the facts behind it. Join them into one reply.
+
+Keep every fact and every marking. A sentence saying a number was assumed, is a
+stand-in for another food, is calculated rather than measured, or that a total
+is short, has to survive into your reply — those markings are what stop a
+number being read as more certain than it is.
+
+Make no nutrition claim of your own. Everything you assert comes from a part you
+were given; where a part answers a question, answer it from the facts and the
+sentences in that part, and from nothing else. Where a part reports the day's
+totals, use those numbers and not your own arithmetic.
+
+At most five short sentences. The User is reading this while cooking. Address
+them by the placeholder you are given, written exactly as it appears."""
+
+# What a Turn ends with when the composer could not fill the schema twice. It is
+# fixed text in code, like a Refusal: whatever went wrong with the words, the
+# work the Intent paths did was already written down before this node ran.
+COULD_NOT_COMPOSE = (
+    "I did what you asked, but I could not put it into words this time. Nothing "
+    "you told me was lost. Ask me again and I will read it back to you."
+)
+
 ANSWER_SYSTEM = """You are a nutrition Coach answering one question from the
 Corpus passages given to you, and from nothing else.
 
@@ -167,6 +223,26 @@ class TurnState(TypedDict):
 
 
 @dataclass
+class IntentResult:
+    """What one Intent path did, for the composer to read.
+
+    `text` is the sentences the path assembled itself — facts it already holds,
+    which is why they are assembled in code and not asked of a model. `facts` is
+    what the path knows that the User does not need read back word for word: the
+    day's totals, for instance, which the next Intent answers against.
+
+    `disclaimers` are the markings that may not be lost. The composer carries
+    them onto the reply and puts back any the words dropped.
+    """
+
+    intent: str
+    text: str
+    facts: str = ""
+    citations: list[Citation] = field(default_factory=list)
+    disclaimers: list[str] = field(default_factory=list)
+
+
+@dataclass
 class TurnContext:
     """Rebuilt every Turn, never checkpointed."""
 
@@ -177,6 +253,11 @@ class TurnContext:
     models: TurnModels | None = None
     decision: RouterDecision | None = None
     reply: CoachReply | None = None
+    # One for each Intent that ran, in the order they ran. This lives here and
+    # not in `TurnState` because it is this Turn's working note: the Thread keeps
+    # what was said, not how the Coach got there, so it never enters the
+    # checkpoint. `CHECKPOINTED` is the list of keys that do.
+    intent_results: list[IntentResult] = field(default_factory=list)
     # What retrieval found this Turn. Rebuilt every Turn, so it never enters the
     # checkpoint — a Corpus passage is not part of the Thread.
     passages: list[RetrievedChunk] = field(default_factory=list)
@@ -253,6 +334,16 @@ async def route(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     return {}
 
 
+def pending_intent(ctx: TurnContext) -> str | None:
+    """The Intent whose turn it is: the next one the router named that has not
+    reported a result yet. Each path appends exactly one, so the count is the
+    position, and there is no second bookkeeping to fall out of step."""
+    decision = ctx.decision
+    assert decision is not None
+    at = len(ctx.intent_results)
+    return decision.intents[at] if at < len(decision.intents) else None
+
+
 def next_node(state: TurnState, config: RunnableConfig) -> str:
     decision = turn_context(config).decision
     assert decision is not None
@@ -265,11 +356,24 @@ def next_node(state: TurnState, config: RunnableConfig) -> str:
         return "refuse"
     if decision.confidence < CONFIDENCE_FLOOR:
         return "clarify"
-    # The first Intent is the one that runs, because the order matters and the
-    # second reads what the first produced. Chaining a second one onto the first
-    # is a later slice; until then the stub says what was decided.
+    # The first Intent, because the order matters and the second reads what the
+    # first produced. `after_intent` brings the Turn back here for the second.
     first = decision.intents[0] if decision.intents else None
     return INTENT_PATHS.get(first, "dispatch")
+
+
+def after_intent(state: TurnState, config: RunnableConfig) -> str:
+    """The loop edge. Back to the second Intent's path, or on to the composer.
+
+    Every Intent path ends here, so the composer runs after all of them and
+    after the allergy check on the paths that have one — and no path can reach
+    the end of the Turn without its result being composed into the reply.
+    """
+    ctx = turn_context(config)
+    remaining = pending_intent(ctx)
+    if remaining is None:
+        return "compose_reply"
+    return INTENT_PATHS.get(remaining, "dispatch")
 
 
 async def refuse(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
@@ -349,15 +453,12 @@ async def answer_question(state: TurnState, config: RunnableConfig) -> dict[str,
                 ],
             }
         )
-    ctx.reply = CoachReply(
-        text=answer.text,
-        parts=[
-            ReplyPart(
-                intent="ask_question", text=answer.text, citations=answer.citations
-            )
-        ],
+    ctx.intent_results.append(
+        IntentResult(
+            intent="ask_question", text=answer.text, citations=answer.citations
+        )
     )
-    return {"messages": [{"role": "coach", "text": answer.text}]}
+    return {}
 
 
 def _say(value: Any) -> str:
@@ -403,7 +504,7 @@ async def update_profile(state: TurnState, config: RunnableConfig) -> dict[str, 
     and the next Turn's `load_profile` reads the change back — in this Session
     or in a new one.
 
-    Leaving `ctx.reply` unset sends the Turn to `clarify`: an ambiguous Profile
+    Appending no result sends the Turn to `clarify`: an ambiguous Profile
     statement is a question to the User, not a guessed field.
     """
     ctx = turn_context(config)
@@ -431,30 +532,42 @@ async def update_profile(state: TurnState, config: RunnableConfig) -> dict[str, 
         f"{ctx.name}, I changed your {update.field.replace('_', ' ')} "
         f"from {_say(old)} to {_say(new)}."
     )
-    ctx.reply = CoachReply(
-        text=text, parts=[ReplyPart(intent="update_profile", text=text)]
-    )
-    return {"messages": [{"role": "coach", "text": text}]}
+    ctx.intent_results.append(IntentResult(intent="update_profile", text=text))
+    return {}
 
 
 def after_update(state: TurnState, config: RunnableConfig) -> str:
     """A Profile statement the extractor could not pin to one field goes to the
-    clarify path rather than to a guess."""
-    return END if turn_context(config).reply is not None else "clarify"
+    clarify path rather than to a guess.
+
+    The Intent still standing after the node ran is how that is known, and it
+    reads the same whether this was the Turn's first Intent or its second.
+    """
+    ctx = turn_context(config)
+    if pending_intent(ctx) == "update_profile":
+        return "clarify"
+    return after_intent(state, config)
 
 
 async def log_meal(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     """The User says what they ate, and it is written down.
 
-    This node has one edge, and it goes to END. A food the Coach could not match
-    does not send the Turn to `clarify`: the answer names it and invites a
-    correction instead, because `clarify` is the only interrupt in the graph and
-    meal logging is not it.
+    A food the Coach could not match does not send the Turn to `clarify`: the
+    answer names it and invites a correction instead, because `clarify` is the
+    only interrupt in the graph and meal logging is not it.
+
+    The day's totals are read *after* the Meal is written, and they travel on the
+    result as facts. That ordering is what makes "I ate two eggs, is that enough
+    protein" one Turn rather than two: the second Intent answers against a total
+    that already holds this Meal.
     """
     ctx = turn_context(config)
     ctx.intent = "log_meal"
     profile = ctx.profile
     assert profile is not None
+    # One clock for the Meal Type, the `eaten_at` stamp and the day it counts
+    # against, so the three cannot disagree about which day it was.
+    now = datetime.now(MANILA)
     logged = await run_log_meal(
         db=ctx.deps.db,
         food=ctx.deps.food,
@@ -462,29 +575,98 @@ async def log_meal(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
         profile=profile,
         message=ctx.raw_message,
         turn_id=ctx.turn_id,
-        # One clock for the Meal Type, the `eaten_at` stamp and the day it counts
-        # against, so the three cannot disagree about which day it was.
-        now=datetime.now(MANILA),
+        now=now,
     )
     # Both schema calls the node made — the parse and any choice — on one row.
     ctx.record(logged.call)
-    ctx.reply = logged.reply
-    return {"messages": [{"role": "coach", "text": logged.reply.text}]}
+    start, end = day_bounds(now)
+    total = await ctx.deps.db.day_total(profile.user_id, start=start, end=end)
+    ctx.intent_results.append(
+        IntentResult(
+            intent="log_meal",
+            text=logged.text,
+            facts=day_line(total),
+            disclaimers=logged.disclaimers,
+        )
+    )
+    return {}
 
 
 async def dispatch(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
-    """The stub each remaining Intent path replaces. It says what the router
-    decided and stops."""
+    """The stub each remaining Intent path replaces. It reports what the router
+    decided for one Intent, like any other path, and the composer says it.
+
+    A Turn whose two Intents both land here runs it twice, once for each, which
+    is exactly what a Turn with two built paths does.
+    """
     ctx = turn_context(config)
-    decision = ctx.decision
-    assert decision is not None
-    ctx.intent = decision.intents[0] if decision.intents else None
-    named = ", ".join(decision.intents) or "nothing I handle"
-    text = f"{ctx.name}, I read that as: {named}."
+    intent = pending_intent(ctx)
+    ctx.intent = intent
+    named = intent or "nothing I handle"
+    ctx.intent_results.append(
+        IntentResult(intent=intent or "none", text=f"{ctx.name}, I read that as: {named}.")
+    )
+    return {}
+
+
+def _for_composer(ctx: TurnContext) -> str:
+    """Every part, in the order it ran, as the composer reads it."""
+    blocks = [f"The User wrote: {ctx.raw_message}"]
+    for position, result in enumerate(ctx.intent_results, start=1):
+        block = f"Part {position}, {result.intent}:\n{result.text}"
+        if result.facts:
+            block += f"\nThe facts behind it: {result.facts}"
+        blocks.append(block)
+    return "\n\n".join(blocks)
+
+
+async def compose_reply(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
+    """The one node that produces a `CoachReply` for an Intent path.
+
+    One part needs no composing: there is nothing to join, and a model asked to
+    rewrite sentences a path already assembled from facts can only lose one. Two
+    parts are worth a call, and it goes to the prose tier because the User reads
+    what comes back. The schema failure retries once with the error inside
+    `compose`, so both attempts are two calls in the trace, and a second failure
+    ends the Turn on the fixed message rather than on a half-written answer.
+
+    Whichever way the words arrive, `parts` and `disclaimers` are built here from
+    what the paths reported. So `parts` holds one entry for every Intent that
+    ran, and a marking raised on any path survives even if the words dropped it.
+    """
+    ctx = turn_context(config)
+    results = ctx.intent_results
+    ctx.intent = results[-1].intent if results else None
+    disclaimers = list(dict.fromkeys(d for r in results for d in r.disclaimers))
+
+    if len(results) <= 1:
+        text = results[0].text if results else COULD_NOT_COMPOSE
+    else:
+        turn = models(ctx)
+        try:
+            composed, call = await turn.compose(
+                ComposedReply, system=COMPOSE_SYSTEM, user=_for_composer(ctx)
+            )
+            ctx.record(call)
+            # The provider wrote the placeholders back; the User reads the name.
+            text = turn.restore(composed.text)
+        except SchemaFailure:
+            log.warning(
+                "the composer did not fill the schema twice",
+                extra={"turn_id": str(ctx.turn_id)},
+            )
+            text = COULD_NOT_COMPOSE
+
+    # A marking the words left out is put back rather than lost. It is the one
+    # thing in the reply a model does not get to be brief about.
+    text = " ".join([text, *(d for d in disclaimers if d not in text)])
     ctx.reply = CoachReply(
         text=text,
-        parts=[ReplyPart(intent=intent, text=text) for intent in decision.intents]
-        or [ReplyPart(intent="none", text=text)],
+        parts=[
+            ReplyPart(intent=r.intent, text=r.text, citations=r.citations)
+            for r in results
+        ],
+        disclaimers=disclaimers,
     )
     return {"messages": [{"role": "coach", "text": text}]}
 
@@ -535,6 +717,7 @@ def build_graph(checkpointer: Any):
         ("retrieve", retrieve),
         ("answer_question", answer_question),
         ("dispatch", dispatch),
+        ("compose_reply", compose_reply),
         ("refuse", refuse),
     ):
         builder.add_node(name, measured(name, node))
@@ -546,12 +729,16 @@ def build_graph(checkpointer: Any):
         next_node,
         ["clarify", "update_profile", "log_meal", "retrieve", "dispatch", "refuse"],
     )
-    builder.add_conditional_edges("update_profile", after_update, ["clarify", END])
-    builder.add_edge("clarify", END)
-    # One edge, and it goes to END. Logging a Meal never interrupts the Turn.
-    builder.add_edge("log_meal", END)
+    # Where every Intent path ends: back for the second Intent, or on to the one
+    # composer. The loop edge is these lists naming each other's entry nodes.
+    onwards = ["update_profile", "log_meal", "retrieve", "dispatch", "compose_reply"]
+    builder.add_conditional_edges("update_profile", after_update, [*onwards, "clarify"])
+    # Logging a Meal never interrupts the Turn, so `clarify` is not among these.
+    builder.add_conditional_edges("log_meal", after_intent, onwards)
     builder.add_edge("retrieve", "answer_question")
-    builder.add_edge("answer_question", END)
-    builder.add_edge("dispatch", END)
+    builder.add_conditional_edges("answer_question", after_intent, onwards)
+    builder.add_conditional_edges("dispatch", after_intent, onwards)
+    builder.add_edge("compose_reply", END)
+    builder.add_edge("clarify", END)
     builder.add_edge("refuse", END)
     return builder.compile(checkpointer=checkpointer)

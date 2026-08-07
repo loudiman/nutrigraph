@@ -84,6 +84,9 @@ export interface components {
         /**
          * CoachReply
          * @description The Coach's complete answer to one User message.
+         *
+         *     One node builds this, whatever the Turn did. `parts` holds one entry for
+         *     each Intent that ran, so a Turn that did two jobs cannot report one.
          */
         CoachReply: {
             /** Text */
