@@ -52,15 +52,18 @@ TABLES = (
     "meal",
     "meal_item",
     "lookup_cache",
+    "food_embedding",
+    "recommendation",
 )
 OUR_TABLES = set(TABLES)
 
-# 004, 005 and 006 were reserved by tickets that were never written. A number is
-# never reused: the runner records the file name, so a reused number would
-# silently skip a file that had already been applied under it.
+# 004, 005, 006, 008, 009 and 010 were reserved by tickets that needed no
+# schema. A number is never reused: the runner records the file name, so a
+# reused number would silently skip a file that had already been applied
+# under it.
 MIGRATION_FILES = [
     "001_init.sql", "002_router.sql", "003_corpus.sql", "007_meal.sql",
-    "011_lookup_cache.sql",
+    "011_lookup_cache.sql", "012_recommend.sql",
 ]
 
 # Two documents on different licences, so one predicate has something to exclude.
