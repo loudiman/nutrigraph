@@ -21,6 +21,7 @@ from nutrigraph_agent.models import (
 )
 
 from .conftest import PROSE_MODEL, SCHEMA_MODEL, answer
+from .fakes import SUGGESTED
 
 STATES_A_FACT = RouterDecision(intents=["update_profile"], confidence=0.93)
 RECOMMENDS = RouterDecision(intents=["recommend"], confidence=0.9)
@@ -109,7 +110,7 @@ async def test_the_changed_value_is_read_back_by_the_next_turn_in_a_new_session(
 
 
 async def test_a_new_allergy_is_honoured_by_the_next_recommendation(seam):
-    seam.provider.script(STATES_A_FACT, SHRIMP, RECOMMENDS)
+    seam.provider.script(STATES_A_FACT, SHRIMP, RECOMMENDS, SUGGESTED)
 
     await seam.turn("I am allergic to shrimp")
     seam.reconnect()  # no restart of the graph, no reseed of the database
@@ -118,6 +119,10 @@ async def test_a_new_allergy_is_honoured_by_the_next_recommendation(seam):
     # The Profile the Recommendation Turn was handed, not the one the store
     # happens to hold now.
     assert seam.db.loaded[-1].allergies == ["peanut", "shrimp"]
+    # And the candidate filter was given both, before any candidate was ranked.
+    assert seam.db.candidate_queries == [{
+        "blocked": ["peanut", "shrimp"], "conflicts": [], "nutrient": "kcal",
+    }]
 
 
 async def test_the_same_food_stated_twice_is_not_added_twice(seam):

@@ -38,6 +38,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/recommendation/{recommendation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer Recommendation
+         * @description The acceptance signal: `recommendation.accepted` turns from null.
+         *
+         *     It is a route and not a Turn because it is not a message — the User
+         *     pressed yes or no on a suggestion the Coach already made, and putting it
+         *     through the router would spend a model call classifying a boolean.
+         *
+         *     A second answer to the same suggestion is a 404 rather than a rewrite:
+         *     what the User said the first time is the measurement.
+         */
+        post: operations["answer_recommendation_recommendation__recommendation_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -140,6 +167,15 @@ export interface components {
             node: string;
         };
         /**
+         * RecommendationResponse
+         * @description The User accepted or rejected one suggestion. The first of the two
+         *     measurement signals, and the only one that needs the User to say anything.
+         */
+        RecommendationResponse: {
+            /** Accepted */
+            accepted: boolean;
+        };
+        /**
          * ReplyPart
          * @description One part of a reply, one for each Intent the Turn ran.
          */
@@ -150,6 +186,8 @@ export interface components {
             text: string;
             /** Citations */
             citations?: components["schemas"]["Citation"][];
+            /** Recommendation Id */
+            recommendation_id?: string | null;
         };
         /**
          * TurnEventEnvelope
@@ -236,6 +274,59 @@ export interface operations {
             };
             /** @description internal caller not recognised */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    answer_recommendation_recommendation__recommendation_id__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-dev-auth"?: string | null;
+            };
+            path: {
+                recommendation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecommendationResponse"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description internal caller not recognised */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description no such suggestion, or it was already answered */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

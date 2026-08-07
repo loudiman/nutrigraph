@@ -25,7 +25,7 @@ from nutrigraph_agent.models import (
 )
 
 from .conftest import SCHEMA_MODEL
-from .fakes import EGG
+from .fakes import EGG, SUGGESTED
 
 SOURCE = Path(__file__).resolve().parents[1] / "src" / "nutrigraph_agent"
 
@@ -43,12 +43,14 @@ IDENTIFIERS = (
 
 # Every shape of Turn: one that dispatches, one that clarifies, one that logs a
 # Meal — which is the shape with the most provider calls in it — one that
-# reviews a day, one that retrieves from the Corpus and answers, and one whose
-# first router answer failed the schema and had to be asked again.
+# reviews a day, one that suggests what to eat next, one that retrieves from the
+# Corpus and answers, and one whose first router answer failed the schema and
+# had to be asked again.
 SHAPES = {
-    "dispatch": [RouterDecision(intents=["recommend"], confidence=0.95)],
+    "dispatch": [RouterDecision(intents=[], confidence=0.95)],
     "clarify": [RouterDecision(intents=[], confidence=0.1)],
-    "retry": ["intents had three entries", RouterDecision(intents=["recommend"], confidence=0.9)],
+    "retry": ["intents had three entries", RouterDecision(intents=[], confidence=0.9)],
+    "recommend": [RouterDecision(intents=["recommend"], confidence=0.95), SUGGESTED],
     "log_meal": [
         RouterDecision(intents=["log_meal"], confidence=0.95),
         ParsedMeal(

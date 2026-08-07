@@ -250,12 +250,67 @@ class DayRequest(BaseModel):
     )
 
 
+# One or two sentences of suggestion, and one of reason. The User is reading
+# this while cooking.
+SUGGESTION_MAX_CHARS = 400
+REASON_MAX_CHARS = 300
+
+
+class RankedFoods(BaseModel):
+    """The only thing the ranker asks a model for: which of the candidates, and
+    why.
+
+    Not the Recommendation. The Recommendation is what the path assembles —
+    the sentences, the markings, and the row that both measurement signals read
+    — and this is the ranking it is assembled around, which is exactly the
+    slice's ordering: code finds, and the model ranks.
+
+    The model does one job here: it ranks and it explains. It does not find the
+    food — `foods` is copied from the candidate list, and a name that is not on
+    that list is rejected before the suggestion is written down or shown, which
+    is what makes "the model never invents a food" a test rather than a hope.
+
+    `reason` carries no `default`: a suggestion with no reason is not one this
+    Coach gives, so an empty one fails validation here.
+    """
+
+    suggestion: str = Field(
+        min_length=1,
+        max_length=SUGGESTION_MAX_CHARS,
+        description="What to eat next, in at most two short sentences, naming "
+        "only foods from the candidate list.",
+    )
+    reason: str = Field(
+        min_length=1,
+        max_length=REASON_MAX_CHARS,
+        description="One sentence saying why this food, in terms of the nutrient "
+        "gap you were given.",
+    )
+    foods: list[str] = Field(
+        min_length=1,
+        description="The candidate names this suggestion is built from, copied "
+        "exactly from the list. Naming anything else is rejected.",
+    )
+
+
+class RecommendationResponse(BaseModel):
+    """The User accepted or rejected one suggestion. The first of the two
+    measurement signals, and the only one that needs the User to say anything."""
+
+    accepted: bool
+
+
 class ReplyPart(BaseModel):
     """One part of a reply, one for each Intent the Turn ran."""
 
     intent: str
     text: str
     citations: list[Citation] = Field(default_factory=list)
+    # The Recommendation this part wrote down, on the one path that writes one.
+    # It travels out with the answer because the acceptance signal needs it: a
+    # User pressing yes has to name the suggestion they are answering, and this
+    # is the only place the identifier could otherwise be known.
+    recommendation_id: UUID | None = None
 
 
 class CoachReply(BaseModel):

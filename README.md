@@ -38,7 +38,7 @@ cd agent
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/nutrigraph-migrate  # numbered SQL files, in order; safe to re-run
 .venv/bin/nutrigraph-seed     # the demo Profiles and the Filipino dish table; safe to run twice
-.venv/bin/nutrigraph-ingest   # the Corpus: fetch, chunk, embed, store; slow, safe to run twice
+.venv/bin/nutrigraph-ingest   # the Corpus, and the dish-name vectors; slow, safe to run twice
 .venv/bin/python -m nutrigraph_agent.main
 
 cd ../gateway
@@ -140,6 +140,23 @@ FDC_API_KEY=...   # the free data.gov key: https://fdc.nal.usda.gov/api-key-sign
 ```
 
 Leaving it empty leaves the search seam unwired, so a Turn that needs it fails loudly instead of quietly counting nothing.
+
+## `recommend`
+
+**Code finds; the model ranks.** That order is the slice, and it is what makes "the Coach never invents a food" a test rather than a hope.
+
+1. **The gap is SQL.** Today's Meals are summed by the same statement the day review uses, and subtracted from the targets the Goal produces — `review.targets_for`, reused, because a second derivation of the same target is two Coaches disagreeing about one User. The largest gap is the largest *share* of its own target, since 1,200 kcal and 90 g of protein are not comparable as numbers. Sodium is computed and reported and never ranked on: its target is a ceiling, and closing a sodium gap means recommending salt.
+2. **The candidates are rows** — the local Filipino dish table, and the FoodData Central foods this User has already logged, put back on the per-100 g basis the dish table is read on.
+3. **The hard filters are in the query, not in a prompt.** Allergens and disliked foods are struck on the name, on `local_food.tags` and on the FoodData Central category; a diet-pattern conflict is struck on the tags and the category and never on the name, because 'egg' inside 'eggplant' would take a vegetable off a vegan's list. An allergy is filtered the other way round on purpose — there the false positive is the safe direction.
+4. **Only then does Gemini rank and explain**, on Flash, because the User reads what it writes. It fills `RankedFoods`, and **every name it gives has to be a candidate**: one that is not rejects the whole answer, and the Coach then says a sentence assembled from the top row instead. So the allergy check that runs at the seam on this Intent is a second line of defence, and on a correct path it never fires.
+
+**The similarity is the honest part.** `food_embedding` holds the local dish names and every food this system has matched — hundreds of rows, `vector(768)` with an HNSW cosine index, truncated and re-normalized by the one helper the Corpus uses ([ADR 0001](docs/adr/0001-gemini-free-tier-and-768-dimension-embeddings.md)). The candidate ordering carries the cosine between each food and `avg(embedding)` over the foods this User **actually ate or accepted**, so a suggestion feels like their own food rather than a generic list. `nutrigraph-ingest` embeds the dish names and skips the ones it has already done; a newly matched FoodData Central food is embedded the first time it is seen, and a provider that will not answer leaves it unembedded rather than losing the Meal.
+
+**The cold start needs no onboarding.** With no Meal and no accepted Recommendation there is no centroid, so the ordering rests on the gap alone and the first suggestion is still a Filipino dish that fits the Goal.
+
+**Measurement, from two signals and no new column.** `recommendation.accepted` turns from null when the User answers `POST /recommendation/{id}` — once; a second answer is a 404, because what they said the first time is the measurement. And a Meal holding one of `recommendation.foods` within 24 hours is a join to `meal_item`. Acceptance alone cannot tell a polite yes from a real change, which is why the second signal exists.
+
+The dish table is verified and off limits here as everywhere: nothing on this path adjusts a transcribed value, a proxy row is marked as a stand-in, and a calculated row is never presented as measured.
 
 ## The model routing rule
 

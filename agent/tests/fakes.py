@@ -8,11 +8,12 @@ would have seen.
 from __future__ import annotations
 
 import json
+import math
 import random
 import re
 from collections import deque
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any
@@ -21,17 +22,25 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel
 
 from nutrigraph_agent.db import (
+    FOLLOWED_WITHIN,
     FOOD_MATCH_DAYS,
     RETRIEVAL_SIMILARITY,
+    Candidate,
     DayTotal,
     InteractionEvent,
     LocalFood,
     MealItemRow,
+    RecommendationOutcome,
     RetrievedChunk,
     UnmatchedItem,
 )
 from nutrigraph_agent.food import CANDIDATES, COLUMNS, FoodCandidate, candidate
-from nutrigraph_agent.models import UPDATABLE_FIELDS, Profile, RouterDecision
+from nutrigraph_agent.models import (
+    UPDATABLE_FIELDS,
+    Profile,
+    RankedFoods,
+    RouterDecision,
+)
 from nutrigraph_agent.providers import Models
 from nutrigraph_agent.seed import DISHES_FILE, aliases_for
 
@@ -67,6 +76,15 @@ DEMO_PROFILE = Profile(
 
 NAME_PLACEHOLDER = re.compile(r"\[NAME_\d+\]")
 
+# What the ranker writes when a test is about something else. The food is a real
+# row of the dish table, because a name that is not a candidate is rejected —
+# which is the whole of the recommend path's contract with a model.
+SUGGESTED = RankedFoods(
+    suggestion="[NAME_1], try Lechon manok next.",
+    reason="It carries the most protein of anything left on your list.",
+    foods=["Lechon manok"],
+)
+
 
 @dataclass
 class StoredMessage:
@@ -86,6 +104,24 @@ class StoredMeal:
 
 
 @dataclass
+class StoredRecommendation:
+    """One `recommendation` row. `accepted` is null until the User answers, and
+    that is the first of the two measurement signals."""
+
+    recommendation_id: UUID
+    user_id: str
+    turn_id: UUID
+    gap_nutrient: str | None
+    gap_amount: float | None
+    suggestion: str
+    reason: str
+    foods: list[str]
+    created_at: datetime
+    accepted: bool | None = None
+    responded_at: datetime | None = None
+
+
+@dataclass
 class StoredItem:
     meal_item_id: UUID
     meal_id: UUID
@@ -96,6 +132,14 @@ class StoredItem:
 
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def cosine(left: Sequence[float], right: Sequence[float]) -> float:
+    """What pgvector's `<=>` measures, for the fake's ordering. The stored
+    vectors are unit length, but the centroid of several is not, so the norms
+    are divided out rather than assumed away."""
+    scale = math.sqrt(sum(v * v for v in left)) * math.sqrt(sum(v * v for v in right))
+    return sum(a * b for a, b in zip(left, right)) / scale if scale else 0.0
 
 
 @dataclass
@@ -199,6 +243,15 @@ class FakeDatabase:
     # there, which is the point of the table.
     cache: list[CacheEntry] = field(default_factory=list)
     corpus_version: str = "corpus-1"
+    # The recommend path. `food_embeddings` is keyed the way the table's unique
+    # index is, and `recommendations` is the row both measurement signals read.
+    food_embeddings: dict[tuple[str, str], tuple[str, list[float]]] = field(
+        default_factory=dict
+    )
+    recommendations: list[StoredRecommendation] = field(default_factory=list)
+    # Every candidate query this fake answered, as it was asked, so a test can
+    # read what the filter was given rather than only what it returned.
+    candidate_queries: list[dict[str, Any]] = field(default_factory=list)
 
     async def load_profile(self, user_id: str) -> Profile | None:
         if self.fail_on_load:
@@ -351,6 +404,200 @@ class FakeDatabase:
             unmatched=[r.said_as for r in rows if r.status == "unmatched"],
         )
 
+    # --- the recommend path ---------------------------------------------------
+    #
+    # The filter and the ordering are reimplemented here the way `day_total` is:
+    # small enough to read beside the SQL, and the SQL itself is asserted against
+    # a real PostgreSQL in `test_database.py`. A fake that skipped the filter
+    # would hide the one thing this path is about.
+
+    def _taste(self, user_id: str) -> list[float] | None:
+        """The centroid of the foods this User actually ate or accepted."""
+        keys = {
+            ("local", str(i.row.local_food_id)) if i.row.local_food_id else
+            ("fdc", str(i.row.fdc_id))
+            for i in self.items
+            if i.user_id == user_id and i.row.status == "matched"
+        }
+        accepted = {
+            food.lower()
+            for r in self.recommendations
+            if r.user_id == user_id and r.accepted
+            for food in r.foods
+        }
+        vectors = [
+            vector
+            for key, (name, vector) in self.food_embeddings.items()
+            if key in keys or name.lower() in accepted
+        ]
+        if not vectors:
+            return None
+        return [sum(values) / len(vectors) for values in zip(*vectors)]
+
+    def _logged_candidates(self, user_id: str) -> list[Candidate]:
+        """The FoodData Central foods this User has logged, back on the per-100 g
+        basis the local table is read on."""
+        out: dict[str, Candidate] = {}
+        for item in sorted(self.items, key=lambda i: i.eaten_at):
+            row = item.row
+            if (
+                item.user_id != user_id
+                or row.status != "matched"
+                or row.source != "fdc"
+                or not row.food_name
+                or not row.grams
+            ):
+                continue
+            out[row.food_name.lower()] = Candidate(
+                source="fdc",
+                source_id=str(row.fdc_id),
+                name=row.food_name,
+                per_100g={c: v * 100.0 / row.grams for c, v in row.values.items()},
+                value_kind=row.value_kind,
+                category=(row.nutrients or {}).get("foodCategory"),
+            )
+        return list(out.values())
+
+    async def candidate_foods(
+        self,
+        user_id: str,
+        *,
+        blocked: Sequence[str],
+        conflicts: Sequence[str],
+        nutrient: str | None,
+        gap: float,
+        limit: int,
+    ) -> list[Candidate]:
+        self.candidate_queries.append(
+            {"blocked": list(blocked), "conflicts": list(conflicts), "nutrient": nutrient}
+        )
+        rows: list[Candidate] = []
+        for food in {f.local_food_id: f for f in self.local_foods.values()}.values():
+            rows.append(
+                Candidate(
+                    source="local",
+                    source_id=str(food.local_food_id),
+                    name=food.name,
+                    per_100g=dict(food.per_100g),
+                    tags=list(food.source.get("tags") or []),
+                    value_kind=food.value_kind,
+                    source_note=food.source_note,
+                )
+            )
+        rows += self._logged_candidates(user_id)
+
+        blocked = [w.strip().lower() for w in blocked if w.strip()]
+        conflicts = [w.strip().lower() for w in conflicts if w.strip()]
+        surviving = [
+            row
+            for row in rows
+            # An allergen or a disliked food is struck on the name, the tags and
+            # the category; a diet conflict never on the name, because 'egg'
+            # inside 'eggplant' would take a vegetable off a vegan's list.
+            if not any(
+                w in row.name.lower()
+                or w in row.tags
+                or w in (row.category or "").lower()
+                for w in blocked
+            )
+            and not set(conflicts) & set(row.tags)
+            and not any(w in (row.category or "").lower() for w in conflicts)
+        ]
+
+        taste = self._taste(user_id)
+        scored: list[Candidate] = []
+        for row in surviving:
+            known = self.food_embeddings.get((row.source, row.source_id))
+            scored.append(
+                replace(
+                    row,
+                    similarity=(
+                        None if taste is None or known is None
+                        else cosine(taste, known[1])
+                    ),
+                )
+            )
+        if nutrient:
+            def rank(row: Candidate) -> float:
+                closes = min((row.per_100g.get(nutrient) or 0.0) / (gap or 1.0), 1.0)
+                return closes + (row.similarity or 0.0)
+
+            scored.sort(key=rank, reverse=True)
+        else:
+            scored.sort(key=lambda r: (-(r.similarity or 0.0), r.per_100g.get("kcal", 0.0)))
+        return scored[:limit]
+
+    async def store_recommendation(
+        self,
+        *,
+        user_id: str,
+        turn_id: UUID,
+        gap_nutrient: str | None,
+        gap_amount: float | None,
+        suggestion: str,
+        reason: str,
+        foods: Sequence[str],
+    ) -> UUID:
+        row = StoredRecommendation(
+            recommendation_id=uuid4(),
+            user_id=user_id,
+            turn_id=turn_id,
+            gap_nutrient=gap_nutrient,
+            gap_amount=gap_amount,
+            suggestion=suggestion,
+            reason=reason,
+            foods=list(foods),
+            created_at=now_utc(),
+        )
+        self.recommendations.append(row)
+        return row.recommendation_id
+
+    async def answer_recommendation(
+        self, recommendation_id: UUID, *, accepted: bool
+    ) -> bool:
+        for row in self.recommendations:
+            if row.recommendation_id == recommendation_id and row.accepted is None:
+                row.accepted, row.responded_at = accepted, now_utc()
+                return True
+        return False
+
+    async def recommendation_outcomes(
+        self, user_id: str, *, within: timedelta = FOLLOWED_WITHIN
+    ) -> list[RecommendationOutcome]:
+        out = []
+        for row in sorted(self.recommendations, key=lambda r: r.created_at, reverse=True):
+            if row.user_id != user_id:
+                continue
+            names = {food.lower() for food in row.foods}
+            out.append(
+                RecommendationOutcome(
+                    recommendation_id=row.recommendation_id,
+                    created_at=row.created_at,
+                    foods=list(row.foods),
+                    accepted=row.accepted,
+                    gap_nutrient=row.gap_nutrient,
+                    followed=any(
+                        i.user_id == user_id
+                        and row.created_at <= i.eaten_at < row.created_at + within
+                        and {
+                            (i.row.food_name or "").lower(),
+                            i.row.said_as.lower(),
+                        }
+                        & names
+                        for i in self.items
+                    ),
+                )
+            )
+        return out
+
+    async def has_food_embedding(self, *, source: str, source_id: str) -> bool:
+        return (source, source_id) in self.food_embeddings
+
+    async def store_food_embedding(
+        self, *, source: str, source_id: str, name: str, embedding: Sequence[float]
+    ) -> None:
+        self.food_embeddings.setdefault((source, source_id), (name, list(embedding)))
+
 
 # What a call is keyed on, both to aim a failure at it and to read its attempts
 # back. A structured call is keyed on the schema it asked the provider to fill;
@@ -413,10 +660,11 @@ class FakeProvider:
     failures: dict[Any, deque[BaseException]] = field(default_factory=dict)
     # Every wait the retry ladder asked for, in order, instead of sat through.
     slept: list[float] = field(default_factory=list)
-    # An Intent with no path of its own, so an unscripted Turn ends at the stub
-    # and makes exactly one call. A scripted Turn names the Intent it wants.
+    # No Intent, so an unscripted Turn ends at `dispatch` and makes exactly one
+    # call. Every Intent has a path of its own now, so this and not an unbuilt
+    # Intent is what reaches the stub. A scripted Turn names the Intent it wants.
     default: RouterDecision = field(
-        default_factory=lambda: RouterDecision(intents=["recommend"], confidence=0.92)
+        default_factory=lambda: RouterDecision(intents=[], confidence=0.92)
     )
     seen: list[ProviderCall] = field(default_factory=list)
     # Every text that reached the embedding model, as it reached it.

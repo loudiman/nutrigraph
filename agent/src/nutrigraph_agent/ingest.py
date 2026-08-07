@@ -4,6 +4,10 @@ Its own command, and not part of `nutrigraph-seed`, because it is the slow step:
 it talks to forty web servers and to the embedding model. Tying it to the demo
 Profiles would make a two-second command a two-minute one.
 
+It carries the other embedding step for the same reason: `embed_local_foods`
+gives the local dish names their vectors, which is what the recommend path's
+similarity query is over.
+
 **Safe to run twice.** A document is keyed by its slug and its chunks are
 replaced wholesale, so a second run cannot double the Corpus. A document whose
 extracted text has not changed is skipped before any embedding call, so a second
@@ -30,7 +34,7 @@ from .corpus import (
     fetch_chunks,
     load_manifest,
 )
-from .db import vector_literal
+from .db import INSERT_FOOD_EMBEDDING, UNEMBEDDED_LOCAL_FOODS, vector_literal
 from .providers import Models, langchain_embedding_factory, langchain_factory
 
 log = logging.getLogger("nutrigraph.agent.ingest")
@@ -171,6 +175,47 @@ async def ingest(
     return report
 
 
+async def embed_local_foods(database_url: str, models: Models) -> list[str]:
+    """The seed step that gives the recommend path something to be similar to.
+
+    It belongs to this command rather than to `nutrigraph-seed` for the reason
+    the Corpus does: it is the step that talks to the embedding model, and
+    `nutrigraph-seed` is a two-second command that loads rows. Run it after the
+    seed; the dish table is what it reads.
+
+    **Safe to run twice**, and cheap the second time: the query asks for the
+    dishes that have no vector yet, so a second run finds none and makes no
+    provider call at all. The dimension and the hand re-normalization are
+    `truncate_and_normalize`'s, through the same wrapper every other call uses —
+    there is no second copy of that arithmetic (ADR 0001).
+    """
+    turn = models.for_turn(known_names=[])
+    with psycopg.connect(database_url) as conn:
+        rows = conn.execute(UNEMBEDDED_LOCAL_FOODS).fetchall()
+        if not rows:
+            return []
+        embedded: list[str] = []
+        for start in range(0, len(rows), BATCH):
+            batch = rows[start : start + BATCH]
+            vectors, _ = await turn.embed_documents([name for _, name in batch])
+            conn.cursor().executemany(
+                INSERT_FOOD_EMBEDDING,
+                [
+                    {
+                        "source": "local",
+                        "source_id": source_id,
+                        "name": name,
+                        "embedding": vector_literal(vector),
+                    }
+                    for (source_id, name), vector in zip(batch, vectors, strict=True)
+                ],
+            )
+            conn.commit()
+            embedded += [name for _, name in batch]
+    log.info("embedded %d local dish names", len(embedded))
+    return embedded
+
+
 def main() -> int:
     use_selector_event_loop()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -184,6 +229,8 @@ def main() -> int:
     )
     report = asyncio.run(ingest(settings.database_url, models, force="--force" in sys.argv))
     print(report)
+    dishes = asyncio.run(embed_local_foods(settings.database_url, models))
+    print(f"embedded {len(dishes)} local dish names")
     return 1 if report.failed else 0
 
 

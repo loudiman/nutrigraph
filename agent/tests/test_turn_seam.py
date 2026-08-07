@@ -17,17 +17,21 @@ from nutrigraph_agent.models import (
 )
 
 from .conftest import PROSE_MODEL, SCHEMA_MODEL, answer
+from .fakes import SUGGESTED
 
 UNSURE = RouterDecision(intents=[], confidence=0.2)
-# An Intent whose path is not built yet, so this file reads the stub and the
-# seam rather than an Intent's own behaviour, which its own file tests.
-SURE = RouterDecision(intents=["recommend"], confidence=0.95)
+# A message the router understood and attached no Intent to. Every Intent has a
+# path of its own now, so this and not an unbuilt Intent is what reaches
+# `dispatch` — which is what lets this file read the seam rather than an
+# Intent's own behaviour, which its own file tests.
+SURE = RouterDecision(intents=[], confidence=0.95)
 
 
 async def test_a_turn_calls_the_router_once_and_dispatches_what_it_decided(seam):
     seam.provider.script(
         RouterDecision(intents=["review_day", "recommend"], confidence=0.9),
         DayRequest(days_ago=0),
+        SUGGESTED,
         ComposedReply(text="Lou, your day and what to eat next."),
     )
 
@@ -36,16 +40,19 @@ async def test_a_turn_calls_the_router_once_and_dispatches_what_it_decided(seam)
     reply = answer(events).reply
     assert isinstance(reply, CoachReply)
     assert [p.intent for p in reply.parts] == ["review_day", "recommend"]
-    # The router and the review path's own day question on the schema tier, and
-    # one composer call on the prose tier. `recommend` is the one Intent still
-    # standing on the stub, so it asked a model nothing of its own.
+    # The router and the review path's own day question on the schema tier; the
+    # ranker and the composer on the prose tier, because the User reads both.
     assert [c.model for c in seam.provider.seen] == [
-        SCHEMA_MODEL, SCHEMA_MODEL, PROSE_MODEL,
+        SCHEMA_MODEL, SCHEMA_MODEL, PROSE_MODEL, PROSE_MODEL,
     ]
 
 
 async def test_the_intent_list_is_never_longer_than_two_and_holds_only_the_five(seam):
-    events = await seam.turn("I ate two eggs")
+    seam.provider.script(
+        RouterDecision(intents=["review_day"], confidence=0.9), DayRequest(days_ago=0)
+    )
+
+    events = await seam.turn("how did my day go?")
 
     parts = answer(events).reply.parts
     assert len(parts) <= 2
@@ -178,11 +185,14 @@ async def test_a_second_clarify_turn_replaces_the_pending_value(seam):
 
 
 async def test_the_floor_is_the_boundary_not_a_range(seam):
-    seam.provider.script(RouterDecision(intents=["recommend"], confidence=CONFIDENCE_FLOOR))
+    seam.provider.script(
+        RouterDecision(intents=["recommend"], confidence=CONFIDENCE_FLOOR), SUGGESTED
+    )
 
     events = await seam.turn("what should I eat")
 
-    assert [e.node for e in events[:4]] == ["load_profile", "guard", "route", "dispatch"]
+    # Exactly at the floor the Turn runs its Intent; it does not clarify.
+    assert [e.node for e in events[:4]] == ["load_profile", "guard", "route", "recommend"]
 
 
 # --- the metric record --------------------------------------------------------
@@ -190,13 +200,13 @@ async def test_the_floor_is_the_boundary_not_a_range(seam):
 
 async def test_every_node_writes_an_interaction_event_row(seam):
     turn_id = uuid4()
-    seam.provider.script(SURE)
+    seam.provider.script(RouterDecision(intents=["recommend"], confidence=0.95), SUGGESTED)
 
-    await seam.turn("I ate two eggs", turn_id=turn_id)
+    await seam.turn("what should I eat tonight?", turn_id=turn_id)
 
     rows = seam.db.events
     assert [r.node for r in rows] == [
-        "load_profile", "guard", "route", "dispatch", "compose_reply",
+        "load_profile", "guard", "route", "recommend", "compose_reply",
     ]
     assert {r.turn_id for r in rows} == {turn_id}
     assert all(r.latency_ms >= 0 for r in rows)

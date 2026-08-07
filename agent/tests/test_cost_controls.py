@@ -52,6 +52,7 @@ from .conftest import PROSE_MODEL, SCHEMA_MODEL, answer
 from .fakes import (
     EGG,
     EGGS_CHUNK,
+    SUGGESTED,
     WRITE,
     BadApiKey,
     ResourceExhausted,
@@ -73,9 +74,10 @@ CHOSE_EGG = FoodChoice(fdc_id="748967", reason="the plain whole egg")
 
 QUESTION = "is an egg a good source of protein?"
 
-# A Turn with two Intents, so `compose_reply` makes its prose-tier call. Both
-# land on the stub, which keeps the call count to the router and the composer.
-TWO_STUBS = RouterDecision(intents=["review_day", "recommend"], confidence=0.95)
+# A Turn with two Intents, so `compose_reply` makes its prose-tier call. Every
+# ladder assertion here reads `attempts_on(ComposedReply)`, so what the two
+# paths call on the way is not this test's business — that is issue #54's rule.
+TWO_INTENTS = RouterDecision(intents=["review_day", "recommend"], confidence=0.95)
 COMPOSED = ComposedReply(text="[NAME_1], here is both of those.")
 
 # The sentence issue #36 names: two Intents, and the second answers from a day
@@ -412,7 +414,7 @@ async def test_a_stop_that_is_not_transient_is_raised_at_once(ladder_seam):
 async def test_the_composer_climbs_the_same_ladder_as_every_other_call(ladder_seam):
     """`compose` is a provider call, so it is on the ladder — and it starts on
     Flash, so unlike the schema tier it has a rung below it to fall to."""
-    ladder_seam.provider.script(TWO_STUBS, DayRequest(days_ago=0), COMPOSED)
+    ladder_seam.provider.script(TWO_INTENTS, DayRequest(days_ago=0), SUGGESTED, COMPOSED)
     ladder_seam.provider.fail_on(ComposedReply, *[ResourceExhausted("429")] * 3)
 
     events = await ladder_seam.turn("how did my day go, and what should I eat tonight?")
@@ -431,7 +433,7 @@ async def test_a_composer_the_provider_never_answers_ends_the_turn_with_the_fall
     """Not `COULD_NOT_COMPOSE`, which is what a schema the model could not fill
     twice ends on. A provider that stopped at every rung is the ladder running
     out, and that ends the Turn on the fixed message with an `error` event."""
-    ladder_seam.provider.script(TWO_STUBS, DayRequest(days_ago=0), COMPOSED)
+    ladder_seam.provider.script(TWO_INTENTS, DayRequest(days_ago=0), SUGGESTED, COMPOSED)
     ladder_seam.provider.fail_on(ComposedReply, *[ResourceExhausted("429")] * MAX_ATTEMPTS)
 
     events = await ladder_seam.turn("how did my day go, and what should I eat tonight?")

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -167,6 +167,190 @@ where m.user_id = %(user_id)s and m.eaten_at >= %(start)s and m.eaten_at < %(end
 """
 
 
+# --- the recommend path -------------------------------------------------------
+#
+# Code finds; the model ranks. Everything below runs before any provider call on
+# this path, so the surviving rows are the only foods a model is ever shown.
+
+# The vector of the foods this User actually ate or accepted. `avg` over
+# unit-length vectors is the centroid of their taste, and cosine distance
+# ignores magnitude, so it needs no re-normalizing. A User with neither returns
+# one row holding null, which is the cold start: the ordering then rests on the
+# gap alone.
+TASTE = """
+select avg(e.embedding) as v
+  from food_embedding e
+ where exists (
+           select 1
+             from meal_item mi join meal m using (meal_id)
+            where m.user_id = %(user_id)s
+              and mi.status = 'matched'
+              and ((e.source = 'local' and e.source_id = mi.local_food_id::text)
+                or (e.source = 'fdc' and e.source_id = mi.fdc_id))
+       )
+    or exists (
+           select 1
+             from recommendation r
+            where r.user_id = %(user_id)s and r.accepted
+              and lower(e.name) in (select lower(f) from unnest(r.foods) f)
+       )
+"""
+
+# The two sources of candidates: the local dish table, and the FoodData Central
+# foods this User has already logged. A logged Item holds the values for the
+# portion that was eaten, so `grams` puts it back on the per-100 g basis both
+# sources are read on.
+CANDIDATE_ROWS = f"""
+select 'local' as source, f.local_food_id::text as source_id, f.name,
+       f.tags, f.value_kind, f.source_note, null::text as category,
+       {", ".join(f"f.{c}::float8 as {c}" for c in COLUMNS)}
+  from local_food f
+union all
+select * from (
+    select distinct on (lower(mi.food_name))
+           'fdc' as source, mi.fdc_id as source_id, mi.food_name as name,
+           '{{}}'::text[] as tags, mi.value_kind, null::text as source_note,
+           -- A FoodData Central item carries no tags, so its source category is
+           -- what the diet-pattern filter reads instead.
+           mi.nutrients->>'foodCategory' as category,
+           {", ".join(f"(mi.{c} * 100.0 / mi.grams)::float8 as {c}" for c in COLUMNS)}
+      from meal_item mi join meal m using (meal_id)
+     where m.user_id = %(user_id)s and mi.status = 'matched'
+       and mi.source = 'fdc' and mi.food_name is not null
+       and mi.grams is not null and mi.grams > 0
+     order by lower(mi.food_name), m.eaten_at desc
+) logged
+"""
+
+# **The hard filters, in SQL and not in a prompt.**
+#
+# An allergen or a disliked food is struck on the name, on the dish table's tags
+# and on the FoodData Central category, because any of the three may be the only
+# structured place that knows: a User allergic to peanut who is offered
+# kare-kare is offered a dish whose name says no peanut at all.
+#
+# A diet-pattern conflict is struck on the tags and the category alone, never on
+# the name. 'egg' inside 'eggplant' is why: a substring match on the name would
+# take a vegetable off a vegan's list. An allergy is filtered the other way
+# round on purpose — there the false positive is the safe direction.
+FILTERS = """
+   and not exists (
+           select 1 from unnest(%(blocked)s::text[]) w
+            where c.name ilike ('%%' || w || '%%')
+               or w = any (c.tags)
+               or coalesce(c.category, '') ilike ('%%' || w || '%%')
+       )
+   and not (c.tags && %(conflicts)s::text[])
+   and not exists (
+           select 1 from unnest(%(conflicts)s::text[]) w
+            where coalesce(c.category, '') ilike ('%%' || w || '%%')
+       )
+"""
+
+# How much of the largest gap a 100 g serving of this food closes, capped at
+# one whole gap, plus how near it is to what this User already eats. The two
+# are added rather than ranked one after the other: a strict ordering on the
+# gap would make the similarity a tie-break that continuous numbers never
+# reach, and the personalisation would be decoration.
+#
+# ponytail: one weight each. A weight worth tuning is one the eval can measure,
+# and the eval set is issue #39.
+SCORED = "least(coalesce({column}, 0) / %(gap)s, 1.0) + coalesce(similarity, 0)"
+
+# Nothing is short today, or no target could be worked out. The nearest food to
+# what this User eats, and the lightest of those, which is the honest ordering
+# when there is no gap to close.
+UNSCORED = "coalesce(similarity, 0) desc, kcal asc nulls last"
+
+
+def candidate_query(nutrient: str | None) -> str:
+    """The candidate query, ordered by the nutrient the gap is largest on.
+
+    A column name cannot be a query parameter, so it is whitelisted against the
+    same six columns every other statement here is built from.
+    """
+    if nutrient is not None and nutrient not in COLUMNS:
+        raise ValueError(f"{nutrient!r} is not a nutrient column")
+    order = f"({SCORED.format(column=nutrient)}) desc" if nutrient else UNSCORED
+    # The similarity is named in its own step, because a select-list alias
+    # cannot be used inside an expression in the same statement's `order by`.
+    return f"""
+with taste as ({TASTE}), candidate as ({CANDIDATE_ROWS}),
+surviving as (
+    select c.*,
+           case when t.v is null then null
+                else 1 - (e.embedding <=> t.v) end as similarity
+      from candidate c
+      cross join taste t
+      left join food_embedding e
+             on e.source = c.source and e.source_id = c.source_id
+     where true {FILTERS}
+)
+select * from surviving
+ order by {order}
+ limit %(limit)s
+"""
+
+
+INSERT_RECOMMENDATION = """
+insert into recommendation
+    (user_id, turn_id, gap_nutrient, gap_amount, suggestion, reason, foods)
+values (%(user_id)s, %(turn_id)s, %(gap_nutrient)s, %(gap_amount)s,
+        %(suggestion)s, %(reason)s, %(foods)s)
+returning recommendation_id
+"""
+
+# The acceptance signal: null becomes true or false, once. `where accepted is
+# null` is what makes a second answer to the same suggestion a no-op rather than
+# a rewritten history.
+ANSWER_RECOMMENDATION = """
+update recommendation set accepted = %(accepted)s, responded_at = now()
+ where recommendation_id = %(recommendation_id)s and accepted is null
+returning recommendation_id
+"""
+
+# **Both measurement signals, and no new column.** `accepted` is the first.
+# The second is a Meal holding one of the recommended foods inside the window,
+# which is this join over `recommendation.foods` and `meal_item` — acceptance
+# alone cannot tell a polite yes from a real change, which is why it is here.
+RECOMMENDATION_OUTCOMES = """
+select r.recommendation_id, r.created_at, r.foods, r.accepted, r.gap_nutrient,
+       exists (
+           select 1
+             from meal_item mi join meal m using (meal_id)
+            where m.user_id = r.user_id
+              and m.eaten_at >= r.created_at
+              and m.eaten_at < r.created_at + %(within)s
+              and exists (
+                      select 1 from unnest(r.foods) f
+                       where lower(mi.food_name) = lower(f)
+                          or lower(mi.said_as) = lower(f)
+                  )
+       ) as followed
+  from recommendation r
+ where r.user_id = %(user_id)s
+ order by r.created_at desc
+"""
+
+# One row for each food, so the seed is safe to run twice and a food this system
+# has already seen is never embedded a second time.
+INSERT_FOOD_EMBEDDING = """
+insert into food_embedding (source, source_id, name, embedding)
+values (%(source)s, %(source_id)s, %(name)s, %(embedding)s::vector)
+on conflict (source, source_id) do nothing
+"""
+
+UNEMBEDDED_LOCAL_FOODS = """
+select f.local_food_id::text as source_id, f.name
+  from local_food f
+ where not exists (
+           select 1 from food_embedding e
+            where e.source = 'local' and e.source_id = f.local_food_id::text
+       )
+ order by f.name
+"""
+
+
 def vector_literal(values: Sequence[float]) -> str:
     """pgvector's text input. No adapter to register, and no dependency beyond
     psycopg — the cast in the query does the rest."""
@@ -276,6 +460,49 @@ class DayTotal:
         return self.missing.get(column, 0) == 0
 
 
+@dataclass(frozen=True)
+class Candidate:
+    """One food that survived the filters, on the per-100 g basis both sources
+    are read on.
+
+    `value_kind` and `source_note` travel here for the same reason they travel
+    with a match: a proxy row is a stand-in and a calculated row is computed
+    rather than measured, and the suggestion has to say so.
+
+    `similarity` is how near this food is to what this User actually eats, and
+    it is null when there is nothing to be near — a User with no Meal and no
+    accepted suggestion, or a food this system has not embedded yet.
+    """
+
+    source: str
+    source_id: str
+    name: str
+    per_100g: dict[str, float] = field(default_factory=dict)
+    tags: list[str] = field(default_factory=list)
+    value_kind: str | None = None
+    source_note: str | None = None
+    category: str | None = None
+    similarity: float | None = None
+
+
+@dataclass(frozen=True)
+class RecommendationOutcome:
+    """One suggestion, measured by both signals. `accepted` is null until the
+    User says; `followed` is a Meal holding one of the foods inside the window,
+    which is a query and not a column."""
+
+    recommendation_id: UUID
+    created_at: datetime
+    foods: list[str]
+    accepted: bool | None
+    gap_nutrient: str | None
+    followed: bool
+
+
+# How long a Meal has to appear in for it to count as following the suggestion.
+FOLLOWED_WITHIN = timedelta(hours=24)
+
+
 class Database(Protocol):
     async def load_profile(self, user_id: str) -> Profile | None: ...
 
@@ -328,6 +555,43 @@ class Database(Protocol):
     async def day_total(
         self, user_id: str, *, start: datetime, end: datetime
     ) -> DayTotal: ...
+
+    async def candidate_foods(
+        self,
+        user_id: str,
+        *,
+        blocked: Sequence[str],
+        conflicts: Sequence[str],
+        nutrient: str | None,
+        gap: float,
+        limit: int,
+    ) -> list[Candidate]: ...
+
+    async def store_recommendation(
+        self,
+        *,
+        user_id: str,
+        turn_id: UUID,
+        gap_nutrient: str | None,
+        gap_amount: float | None,
+        suggestion: str,
+        reason: str,
+        foods: Sequence[str],
+    ) -> UUID: ...
+
+    async def answer_recommendation(
+        self, recommendation_id: UUID, *, accepted: bool
+    ) -> bool: ...
+
+    async def recommendation_outcomes(
+        self, user_id: str, *, within: timedelta = FOLLOWED_WITHIN
+    ) -> list[RecommendationOutcome]: ...
+
+    async def has_food_embedding(self, *, source: str, source_id: str) -> bool: ...
+
+    async def store_food_embedding(
+        self, *, source: str, source_id: str, name: str, embedding: Sequence[float]
+    ) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -552,6 +816,133 @@ class PostgresDatabase:
             # `array_agg` over no rows is null, not an empty array.
             unmatched=list(row["unmatched"] or []),
         )
+
+    # --- the recommend path ---------------------------------------------------
+
+    async def candidate_foods(
+        self,
+        user_id: str,
+        *,
+        blocked: Sequence[str],
+        conflicts: Sequence[str],
+        nutrient: str | None,
+        gap: float,
+        limit: int,
+    ) -> list[Candidate]:
+        """The foods this User may be offered, best first. One query, and every
+        filter inside it, so no allergen and no disliked food is ever in the
+        list a model is shown."""
+        async with self._pool.connection() as conn:
+            cur = await conn.cursor(row_factory=dict_row).execute(
+                candidate_query(nutrient),
+                {
+                    "user_id": user_id,
+                    "blocked": [w.strip().lower() for w in blocked if w.strip()],
+                    "conflicts": [w.strip().lower() for w in conflicts if w.strip()],
+                    # Never zero: `candidate_query` only names the gap when there
+                    # is one to close, and this divides by it.
+                    "gap": gap or 1.0,
+                    "limit": limit,
+                },
+            )
+            rows = await cur.fetchall()
+        return [
+            Candidate(
+                source=row["source"],
+                source_id=row["source_id"],
+                name=row["name"],
+                per_100g=_floats(row),
+                tags=list(row["tags"] or []),
+                value_kind=row["value_kind"],
+                source_note=row["source_note"],
+                category=row["category"],
+                similarity=(
+                    None if row["similarity"] is None else float(row["similarity"])
+                ),
+            )
+            for row in rows
+        ]
+
+    async def store_recommendation(
+        self,
+        *,
+        user_id: str,
+        turn_id: UUID,
+        gap_nutrient: str | None,
+        gap_amount: float | None,
+        suggestion: str,
+        reason: str,
+        foods: Sequence[str],
+    ) -> UUID:
+        async with self._pool.connection() as conn:
+            cur = await conn.execute(
+                INSERT_RECOMMENDATION,
+                {
+                    "user_id": user_id,
+                    "turn_id": str(turn_id),
+                    "gap_nutrient": gap_nutrient,
+                    "gap_amount": gap_amount,
+                    "suggestion": suggestion,
+                    "reason": reason,
+                    "foods": list(foods),
+                },
+            )
+            return (await cur.fetchone())[0]
+
+    async def answer_recommendation(
+        self, recommendation_id: UUID, *, accepted: bool
+    ) -> bool:
+        """The acceptance signal. False when there is no such suggestion, or
+        when it was already answered — a second answer does not rewrite the
+        first."""
+        async with self._pool.connection() as conn:
+            cur = await conn.execute(
+                ANSWER_RECOMMENDATION,
+                {"recommendation_id": str(recommendation_id), "accepted": accepted},
+            )
+            return await cur.fetchone() is not None
+
+    async def recommendation_outcomes(
+        self, user_id: str, *, within: timedelta = FOLLOWED_WITHIN
+    ) -> list[RecommendationOutcome]:
+        async with self._pool.connection() as conn:
+            cur = await conn.cursor(row_factory=dict_row).execute(
+                RECOMMENDATION_OUTCOMES, {"user_id": user_id, "within": within}
+            )
+            rows = await cur.fetchall()
+        return [
+            RecommendationOutcome(
+                recommendation_id=row["recommendation_id"],
+                created_at=row["created_at"],
+                foods=list(row["foods"] or []),
+                accepted=row["accepted"],
+                gap_nutrient=row["gap_nutrient"],
+                followed=row["followed"],
+            )
+            for row in rows
+        ]
+
+    async def has_food_embedding(self, *, source: str, source_id: str) -> bool:
+        async with self._pool.connection() as conn:
+            cur = await conn.execute(
+                "select 1 from food_embedding where source = %s and source_id = %s",
+                (source, source_id),
+            )
+            return await cur.fetchone() is not None
+
+    async def store_food_embedding(
+        self, *, source: str, source_id: str, name: str, embedding: Sequence[float]
+    ) -> None:
+        async with self._pool.connection() as conn:
+            await conn.execute(
+                INSERT_FOOD_EMBEDDING,
+                {
+                    "source": source,
+                    "source_id": source_id,
+                    "name": name,
+                    "embedding": vector_literal(embedding),
+                },
+            )
 
 
 def _item_values(item: MealItemRow) -> tuple[Any, ...]:
