@@ -114,6 +114,15 @@ def test_the_purge_writes_two_columns_of_one_table_and_nothing_else(database):
             "values (%s, '[NAME_1]', 'Lou')",
             (str(turn),),
         )
+        # A Recommendation and its measurement, which the day history is read
+        # from long after the free text that produced it has gone.
+        conn.execute(
+            "insert into recommendation "
+            "(user_id, turn_id, gap_nutrient, suggestion, reason, foods, accepted) "
+            "values (%s, %s, 'protein_g', 'Try Lechon manok next.', "
+            "'It closes the protein gap.', array['Lechon manok'], true)",
+            (USER, str(turn)),
+        )
         tables = [
             r[0]
             for r in conn.execute(
