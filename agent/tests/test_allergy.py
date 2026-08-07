@@ -20,9 +20,11 @@ where a correct answer may name the allergen as a fact.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 import pytest
 
+from nutrigraph_agent import turn as turn_module
 from nutrigraph_agent.graph import (
     ALLERGY_CHECKED_INTENTS,
     TURN_CONTEXT_KEY,
@@ -37,12 +39,19 @@ from nutrigraph_agent.guardrail import (
     allergens_named,
     food_sentences,
 )
-from nutrigraph_agent.meal import DECLARED_SERVING_G, NOTHING_TO_LOG, TELL_ME, item_words
+from nutrigraph_agent.meal import (
+    DECLARED_SERVING_G,
+    MANILA,
+    NOTHING_TO_LOG,
+    TELL_ME,
+    item_words,
+)
 from nutrigraph_agent.models import (
     INTENTS,
     Answer,
     Citation,
     ComposedReply,
+    DayRequest,
     ParsedItem,
     ParsedMeal,
     RouterDecision,
@@ -53,6 +62,7 @@ from .conftest import answer
 
 LOGGED = RouterDecision(intents=["log_meal"], confidence=0.95)
 ASKED = RouterDecision(intents=["ask_question"], confidence=0.95)
+REVIEWED = RouterDecision(intents=["review_day"], confidence=0.95)
 
 # Kare-kare is the case the structured comparison exists for. The User says
 # "kare-kare", the dish table matches "Kare-kare (beef)", and neither word is
@@ -479,3 +489,87 @@ async def test_a_meal_the_coach_could_not_read_is_not_blocked_by_the_check(seam)
     events = await seam.turn("I ate")
 
     assert NOTHING_TO_LOG in answer(events).reply.text
+
+
+# --- review_day, which now has something real to run on ------------------------
+#
+# `review_day` was a stub when this check was written and is a built path now,
+# and its answer names foods: an Item the sum could not include is named, and
+# the sentence naming it is a marking the composer may not drop. So a User
+# allergic to peanut who logged peanut brittle and could not have it counted
+# reads the word peanut in a correct review. These drive the real path.
+
+
+async def a_logged_day(seam, *foods: str) -> None:
+    """Foods on today's Meal that the Coach could not match, so the review has
+    to name them. Written straight to the store: what a review reads is
+    PostgreSQL, never the Thread."""
+    from uuid import uuid4
+
+    from nutrigraph_agent.db import MealItemRow
+
+    await seam.db.store_meal(
+        user_id="demo-user-1",
+        turn_id=uuid4(),
+        eaten_at=datetime.now(MANILA),
+        meal_type="breakfast",
+        items=[
+            MealItemRow(ordinal=i, said_as=food, status="unmatched")
+            for i, food in enumerate(foods)
+        ],
+    )
+
+
+async def test_a_review_naming_an_allergen_the_user_logged_is_not_touched(seam):
+    """The whole risk in one Turn. `review_day` is not on the list, so the food
+    it names survives — and it has to, because that sentence is the Coach saying
+    the total is short by exactly that food."""
+    await a_logged_day(seam, "peanut brittle")
+    seam.provider.script(REVIEWED, DayRequest(days_ago=0))
+
+    events = await seam.turn("how did my day go?")
+
+    reply = answer(events).reply
+    assert [p.intent for p in reply.parts] == ["review_day"]
+    assert "peanut brittle" in reply.text
+    assert reply.text != SAFE_MESSAGE
+    # And it is a marking, so the composer could not have dropped it either.
+    assert any("peanut brittle" in d for d in reply.disclaimers)
+
+
+async def test_the_check_does_not_run_at_all_on_a_review_day_turn(seam):
+    """Not "it ran and found nothing". The gate reads the Intents that ran, and
+    `review_day` is not among the ones it runs for."""
+    await a_logged_day(seam, "peanut brittle")
+    seam.provider.script(REVIEWED, DayRequest(days_ago=0))
+    seen: list[list[str]] = []
+    original = turn_module.allergens_in_prose
+    turn_module.allergens_in_prose = lambda *a: seen.append(list(a)) or original(*a)
+    try:
+        await seam.turn("how did my day go?")
+    finally:
+        turn_module.allergens_in_prose = original
+
+    assert seen == [], "the allergy check read a review_day answer"
+
+
+async def test_a_review_beside_a_logged_meal_keeps_the_food_it_names(seam):
+    """The sharp case. `log_meal` is checked and `review_day` is not, and they
+    are one Turn with one composed reply. What the review said is spoken for."""
+    await a_logged_day(seam, "peanut brittle")
+    seam.provider.script(
+        RouterDecision(intents=["log_meal", "review_day"], confidence=0.95),
+        ParsedMeal(items=[ParsedItem(name="pandesal", quantity=1, unit="piece")]),
+        DayRequest(days_ago=0),
+        ComposedReply(
+            text="Lou, I logged breakfast: pandesal. That total does not include "
+            "peanut brittle, which I could not match."
+        ),
+    )
+
+    events = await seam.turn("I had pandesal, and how is my day going?")
+
+    reply = answer(events).reply
+    assert [p.intent for p in reply.parts] == ["log_meal", "review_day"]
+    assert "peanut brittle" in reply.text
+    assert reply.text != SAFE_MESSAGE
