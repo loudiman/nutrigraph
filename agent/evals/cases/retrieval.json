@@ -1,0 +1,233 @@
+[
+  {
+    "id": "retrieval-sodium-limit",
+    "message": "how much sodium should I have in a day?",
+    "intents": ["ask_question"],
+    "citations_from": "Salt and Sodium",
+    "reference_locator": "How much sodium",
+    "reference": "Adults should keep sodium under 2,300 mg a day, about a teaspoon of table salt, and most of it arrives in packaged and restaurant food rather than from the salt shaker.",
+    "reference_contexts": [
+      "Adults should keep sodium to less than 2,300 mg per day, which is about one teaspoon of table salt. More than 70 percent of the sodium people eat comes from packaged, processed, and restaurant foods, not from salt added at the table."
+    ]
+  },
+  {
+    "id": "retrieval-cutting-sodium-back",
+    "message": "what are practical ways to eat less salt?",
+    "intents": ["ask_question"],
+    "citations_from": "Salt and Sodium",
+    "reference_locator": "Cutting back",
+    "reference": "Cut back gradually, rinse canned beans and vegetables, choose plain fresh or frozen vegetables, and season with herbs, citrus, vinegar, garlic and spices instead of salt.",
+    "reference_contexts": [
+      "Cutting back on sodium works best gradually: the taste for salt adjusts over a few weeks. Rinse canned beans and vegetables, choose fresh or frozen plain vegetables over sauced ones, and season with herbs, citrus, vinegar, garlic, and spices instead of salt."
+    ]
+  },
+  {
+    "id": "retrieval-protein-variety",
+    "message": "is an egg a good source of protein?",
+    "intents": ["ask_question"],
+    "citations_from": "Dietary Guidelines for Americans, 2025-2030",
+    "reference_locator": "page 3",
+    "reference": "Yes. Eggs are one of the protein foods the guidelines name, alongside seafood, lean meats, beans, nuts and soy products, and they supply amino acids the body cannot make for itself.",
+    "reference_contexts": [
+      "Eat a variety of protein foods, including eggs, seafood, lean meats and poultry, beans, peas, lentils, nuts, seeds, and soy products. Protein foods supply the amino acids the body cannot make for itself."
+    ]
+  },
+  {
+    "id": "retrieval-how-much-protein",
+    "message": "how many grams of protein does an adult need each day?",
+    "intents": ["ask_question"],
+    "citations_from": "Protein",
+    "reference_locator": "How much protein",
+    "reference": "The Recommended Dietary Allowance is 0.8 grams of protein per kilogram of body weight a day, roughly 46 grams for an average woman and 56 grams for an average man.",
+    "reference_contexts": [
+      "The Recommended Dietary Allowance for protein is 0.8 grams per kilogram of body weight a day for adults, which is about 46 grams a day for an average woman and about 56 grams a day for an average man."
+    ]
+  },
+  {
+    "id": "retrieval-protein-per-food",
+    "message": "how much protein is in a half cup of cooked beans?",
+    "intents": ["ask_question"],
+    "citations_from": "Protein",
+    "reference_locator": "Protein foods",
+    "reference": "About 7 grams of protein in a half cup of cooked beans, next to about 6 grams in an egg and about 21 grams in three ounces of cooked chicken or fish.",
+    "reference_contexts": [
+      "One egg carries about 6 grams of protein, a half cup of cooked beans about 7 grams, 3 ounces of cooked chicken or fish about 21 grams, and a cup of milk about 8 grams."
+    ]
+  },
+  {
+    "id": "retrieval-added-sugars",
+    "message": "how much added sugar is too much in a day?",
+    "intents": ["ask_question"],
+    "citations_from": "Dietary Guidelines for Americans, 2025-2030",
+    "reference_locator": "page 4",
+    "reference": "Added sugars should stay under 10 percent of the day's calories, from age two onwards.",
+    "reference_contexts": [
+      "Limit added sugars to less than 10 percent of calories per day, starting at age 2."
+    ]
+  },
+  {
+    "id": "retrieval-saturated-fat",
+    "message": "what is the limit on saturated fat?",
+    "intents": ["ask_question"],
+    "citations_from": "Dietary Guidelines for Americans, 2025-2030",
+    "reference_locator": "page 4",
+    "reference": "Under 10 percent of the day's calories, and it should be replaced with unsaturated fat rather than with refined starch.",
+    "reference_contexts": [
+      "Limit saturated fat to less than 10 percent of calories per day, replacing it with unsaturated fat rather than with refined starch."
+    ]
+  },
+  {
+    "id": "retrieval-kinds-of-fat",
+    "message": "which fats should I be eating more of?",
+    "intents": ["ask_question"],
+    "citations_from": "Fats",
+    "reference_locator": "Kinds of fat",
+    "reference": "The unsaturated fats: olive and canola oil, nuts, seeds, avocado and fatty fish. Replacing saturated fat with them lowers cardiovascular risk, while replacing it with refined starch or sugar does not.",
+    "reference_contexts": [
+      "Unsaturated fats — the monounsaturated and polyunsaturated fats in olive and canola oil, nuts, seeds, avocado, and fatty fish — are the ones to favour."
+    ]
+  },
+  {
+    "id": "retrieval-fibre-amount",
+    "message": "how much fibre should I eat every day?",
+    "intents": ["ask_question"],
+    "citations_from": "Fiber",
+    "reference_locator": "How much fiber",
+    "reference": "About 25 to 34 grams a day depending on age and sex, and most people eat about half of that. Increase it gradually and drink more water alongside.",
+    "reference_contexts": [
+      "Adults need about 25 to 34 grams of dietary fibre a day, depending on age and sex, and most people in the United States eat about half that."
+    ]
+  },
+  {
+    "id": "retrieval-fibre-sources",
+    "message": "which foods carry the most fibre?",
+    "intents": ["ask_question"],
+    "citations_from": "Fiber",
+    "reference_locator": "Where fiber comes from",
+    "reference": "Beans and lentils carry roughly 6 to 8 grams per half cup cooked, alongside whole grains such as oats, barley and brown rice, and fruit and vegetables eaten with the skin on.",
+    "reference_contexts": [
+      "The richest ordinary sources are beans and lentils, which carry roughly 6 to 8 grams of fibre per half cup cooked; whole grains such as oats, barley, and brown rice; and fruit and vegetables eaten with the skin on."
+    ]
+  },
+  {
+    "id": "retrieval-whole-grains",
+    "message": "what makes a grain a whole grain?",
+    "intents": ["ask_question"],
+    "citations_from": "Carbohydrates",
+    "reference_locator": "Whole grains",
+    "reference": "A whole grain keeps all three parts of the kernel: the bran, the germ and the endosperm. At least half of the grains eaten each day should be whole.",
+    "reference_contexts": [
+      "Make at least half of the grains eaten each day whole grains. A whole grain keeps all three parts of the kernel: the bran, the germ, and the endosperm."
+    ]
+  },
+  {
+    "id": "retrieval-starch-and-weight",
+    "message": "do I have to cut out starch to lose weight?",
+    "intents": ["ask_question"],
+    "citations_from": "Carbohydrates",
+    "reference_locator": "Sugars and starches",
+    "reference": "No. Starch from whole grains, beans and starchy vegetables is the body's ordinary fuel, and there is no need to avoid it to lose weight; added sugars are what the guidance limits.",
+    "reference_contexts": [
+      "Starch from whole grains, beans, and starchy vegetables is the body's ordinary fuel, and there is no need to avoid it in order to lose weight."
+    ]
+  },
+  {
+    "id": "retrieval-fruit-and-veg-amount",
+    "message": "how much fruit and vegetables should be on the plate?",
+    "intents": ["ask_question"],
+    "citations_from": "Dietary Guidelines for Americans, 2025-2030",
+    "reference_locator": "page 5",
+    "reference": "Half the plate. For about 2,000 calories a day that is roughly 2 cup-equivalents of fruit and 2.5 cup-equivalents of vegetables, with whole fruit chosen more often than juice.",
+    "reference_contexts": [
+      "Make half the plate fruits and vegetables. For an adult eating about 2,000 calories a day, that is about 2 cup-equivalents of fruit and about 2.5 cup-equivalents of vegetables each day."
+    ]
+  },
+  {
+    "id": "retrieval-calcium-without-dairy",
+    "message": "where can I get calcium if I do not drink milk?",
+    "intents": ["ask_question"],
+    "citations_from": "Dietary Guidelines for Americans, 2025-2030",
+    "reference_locator": "page 6",
+    "reference": "From fortified soy beverages, fortified juices, canned fish with soft bones, and some leafy greens.",
+    "reference_contexts": [
+      "People who avoid dairy can meet calcium needs from fortified soy beverages, fortified juices, canned fish with soft bones, and some leafy greens."
+    ]
+  },
+  {
+    "id": "retrieval-alcohol-limit",
+    "message": "what does the guidance say about how much alcohol is alright?",
+    "intents": ["ask_question"],
+    "citations_from": "Dietary Guidelines for Americans, 2025-2030",
+    "reference_locator": "page 7",
+    "reference": "Adults who do not drink should not start. Those of legal drinking age who do should keep to 2 drinks or less a day for men and 1 or less for women, and drinking less is better than drinking more.",
+    "reference_contexts": [
+      "Adults who do not drink alcohol should not start. Adults of legal drinking age who choose to drink should limit intake to 2 drinks or less a day for men and 1 drink or less a day for women."
+    ]
+  },
+  {
+    "id": "retrieval-potassium-sources",
+    "message": "which foods are high in potassium?",
+    "intents": ["ask_question"],
+    "citations_from": "Vitamins and Minerals",
+    "reference_locator": "Nutrients of public health concern",
+    "reference": "Potatoes, beans, lentils, bananas, tomatoes, oranges, leafy greens and dairy. Potassium is one of the nutrients of public health concern.",
+    "reference_contexts": [
+      "Potassium is carried by potatoes, beans, lentils, bananas, tomatoes, oranges, leafy greens, and dairy."
+    ]
+  },
+  {
+    "id": "retrieval-vitamins-versus-minerals",
+    "message": "what is the difference between a vitamin and a mineral?",
+    "intents": ["ask_question"],
+    "citations_from": "Vitamins and Minerals",
+    "reference_locator": "Vitamins and minerals compared",
+    "reference": "Vitamins are organic compounds made by living things and break down with heat, air and light; minerals are elements from soil and water and keep their form through cooking.",
+    "reference_contexts": [
+      "Vitamins are organic compounds made by living things, and they break down with heat, air, and light. Minerals are elements from soil and water, and they keep their form through cooking."
+    ]
+  },
+  {
+    "id": "retrieval-vegan-b12",
+    "message": "what should someone eating vegan watch out for?",
+    "intents": ["ask_question"],
+    "citations_from": "Eating Vegetarian",
+    "reference_locator": "Nutrients to watch",
+    "reference": "Vitamin B12 above all, since it occurs naturally only in animal foods and needs a fortified food or a supplement, then iron, zinc, calcium, iodine and long-chain omega-3 fats.",
+    "reference_contexts": [
+      "The nutrients that need attention are vitamin B12, iron, zinc, calcium, iodine, and long-chain omega-3 fatty acids. Vitamin B12 occurs naturally only in animal foods, so a vegan pattern needs a fortified food or a supplement."
+    ]
+  },
+  {
+    "id": "retrieval-eating-before-exercise",
+    "message": "should I eat before a workout?",
+    "intents": ["ask_question"],
+    "citations_from": "Eating, Exercise, and Sports",
+    "reference_locator": "Eating around exercise",
+    "reference": "For ordinary exercise under an hour, nothing special is needed beyond a normal pattern and water. Before a longer or harder session, a carbohydrate-based snack one to three hours ahead digests more easily than a high-fat or very high-fibre meal.",
+    "reference_contexts": [
+      "For ordinary exercise lasting under an hour, no special eating is needed beyond a normal balanced pattern and water. Before a longer or harder session, a carbohydrate-based snack one to three hours ahead is easier to digest than a high-fat or very high-fibre meal."
+    ]
+  },
+  {
+    "id": "retrieval-serving-versus-portion",
+    "message": "what is the difference between a serving and a portion?",
+    "intents": ["ask_question"],
+    "citations_from": "Strategies for Success",
+    "reference_locator": "Portions and servings",
+    "reference": "A serving is a measured amount used on a label or in guidance; a portion is what actually goes on the plate, and a single packaged item can hold two or three servings.",
+    "reference_contexts": [
+      "A serving is a measured amount used on a label or in guidance; a portion is what a person actually puts on the plate, and the two are often very different."
+    ]
+  },
+  {
+    "id": "retrieval-reading-a-label",
+    "message": "how do I read the percent daily value on a label?",
+    "intents": ["ask_question"],
+    "citations_from": "Food Additives and Compounds",
+    "reference_locator": "Reading the label",
+    "reference": "5 percent or less of the Daily Value is low and 20 percent or more is high, and every number applies to the serving size printed at the top rather than to the package.",
+    "reference_contexts": [
+      "The percent Daily Value column tells whether a serving is high or low in a nutrient: 5 percent or less is low, 20 percent or more is high."
+    ]
+  }
+]
