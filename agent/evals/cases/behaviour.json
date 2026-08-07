@@ -133,16 +133,15 @@
   },
   {
     "id": "behaviour-mixed-intent-update-then-recommend",
-    "why": "The second Intent reads what the first produced: the Profile the recommender filters on is the one this Turn just changed, not the one it was a moment ago.",
+    "why": "The second Intent reads what the first produced: the Profile the recommender filters on is the one this Turn just changed, not the one it was a moment ago. No allergen-absence assertion belongs here — the update_profile confirmation names the allergen on purpose, which is why that Intent is not allergy-checked at all. The absence claim is the draft Recommendation case in the safety group.",
     "message": "add shrimp to my allergies, and then tell me what to eat tonight",
     "intents": ["update_profile", "recommend"],
-    "absent": ["shrimp"],
     "profile_after": {"field": "allergies", "contains": "shrimp"}
   },
   {
     "id": "behaviour-clarify-an-unclassifiable-message",
     "why": "The clarify path, reached the way it usually is: the router is not confident enough to classify the message at all, so the Coach asks rather than guessing.",
-    "message": "the same as the other one, more or less",
+    "message": "and the other thing?",
     "clarification": true
   },
   {

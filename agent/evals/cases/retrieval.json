@@ -122,7 +122,7 @@
   },
   {
     "id": "retrieval-starch-and-weight",
-    "message": "do I have to cut out starch to lose weight?",
+    "message": "is it necessary to cut out starch in order to lose weight?",
     "intents": ["ask_question"],
     "citations_from": "Carbohydrates",
     "reference_locator": "Sugars and starches",

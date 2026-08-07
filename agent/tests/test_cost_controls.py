@@ -469,6 +469,50 @@ async def test_the_composers_prompt_is_never_trimmed_and_the_overrun_is_recorded
     assert row.over_budget is True
 
 
+async def test_a_provider_that_accepts_and_never_answers_climbs_the_ladder(monkeypatch):
+    """Counting attempts is not by itself a bound on time.
+
+    A provider that takes the connection and then says nothing would hold a Turn
+    open for ever, which is the one thing the four-attempt bound exists to
+    prevent. The eval gate found it: two cases in sixty-four hung on a call that
+    never answered. A timed-out attempt is transient, so it climbs.
+    """
+    import asyncio
+
+    from nutrigraph_agent import providers
+    from nutrigraph_agent.providers import Models, ProviderUnavailable
+
+    monkeypatch.setattr(providers, "ATTEMPT_SECONDS", 0.01)
+    tried: list[str] = []
+
+    class Hanging:
+        def __init__(self, model: str) -> None:
+            self.model = model
+
+        def with_structured_output(self, schema, *, include_raw: bool = False):
+            return self
+
+        async def ainvoke(self, messages):
+            tried.append(self.model)
+            await asyncio.sleep(10)
+
+    models = Models(
+        factory=Hanging,
+        schema_model=SCHEMA_MODEL,
+        prose_model=PROSE_MODEL,
+        sleep=lambda _seconds: asyncio.sleep(0),
+    )
+
+    with pytest.raises(ProviderUnavailable):
+        await models.for_turn(known_names=[]).fill(
+            RouterDecision, system="classify", user="anything"
+        )
+
+    # Three rungs, because the schema tier is already the weaker one and has
+    # nothing below it to fall to — the ladder's own rule, not a fourth number.
+    assert tried == [SCHEMA_MODEL] * len(ladder(SCHEMA_MODEL, SCHEMA_MODEL))
+
+
 def test_the_ladder_has_four_rungs_and_the_last_one_is_the_weaker_model():
     plan = ladder("gemini-3.5-flash", "gemini-3.5-flash-lite")
 

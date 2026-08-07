@@ -74,6 +74,16 @@ BACKOFF_SECONDS = (1.0, 3.0)
 # never hang, because there is no fifth attempt to make.
 MAX_ATTEMPTS = 4
 
+# How long one attempt may take. The count of attempts is not by itself a bound
+# on time: a provider that accepts the connection and then says nothing would
+# hold a Turn open for ever, which is exactly what the bound above exists to
+# prevent. A timed-out attempt is transient, so it climbs to the next rung like
+# any other stop, and the fourth one ends the Turn on the fallback message.
+#
+# The eval gate found this: two cases in sixty-four hung on a provider call that
+# never answered, and a build that hangs is worse than one that fails.
+ATTEMPT_SECONDS = 30.0
+
 # What is worth retrying, read off the exception rather than off an imported
 # vendor type: the provider is a configuration string, and importing
 # `google.api_core.exceptions` here would be the code path per vendor that this
@@ -278,7 +288,7 @@ class TurnModels:
             if wait:
                 await self.models.sleep(wait)
             try:
-                return await run(model), model
+                return await asyncio.wait_for(run(model), ATTEMPT_SECONDS), model
             except Exception as exc:
                 if not is_transient(exc):
                     # A schema the provider could not fill, or a bad key. Three
