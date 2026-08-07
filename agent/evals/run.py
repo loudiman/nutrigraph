@@ -299,7 +299,15 @@ async def run_case(case: Case, deps_for, graph_for) -> dict[str, Any]:
     return outcome
 
 
-async def run_all(cases: list[Case], *, concurrency: int) -> list[dict[str, Any]]:
+# How long one case may take before the run gives up on it. The retry ladder
+# bounds the number of attempts a Turn makes, not the wall-clock of a provider
+# call that never answers, and a build that hangs is worse than one that fails:
+# a case that ran out of time is a schema failure like any other Turn that did
+# not finish, and it says so with the case's name beside it.
+CASE_SECONDS = 120.0
+
+
+async def run_all(cases: list[Case], *, concurrency: int, timeout: float) -> list[dict[str, Any]]:
     from langgraph.checkpoint.memory import InMemorySaver
     from psycopg_pool import AsyncConnectionPool
 
@@ -333,9 +341,16 @@ async def run_all(cases: list[Case], *, concurrency: int) -> list[dict[str, Any]
         async def one(case: Case) -> dict[str, Any]:
             async with limit:
                 started = time.perf_counter()
-                outcome = await run_case(
-                    case, deps_for, lambda: build_graph(InMemorySaver())
-                )
+                try:
+                    outcome = await asyncio.wait_for(
+                        run_case(case, deps_for, lambda: build_graph(InMemorySaver())),
+                        timeout,
+                    )
+                except TimeoutError:
+                    outcome = {
+                        "id": case.id, "group": case.group,
+                        "error": f"the Turn did not answer within {timeout:.0f}s",
+                    }
                 outcome["seconds"] = round(time.perf_counter() - started, 2)
                 log.info("%s (%.1fs)", case.id, outcome["seconds"])
                 return outcome
@@ -392,6 +407,7 @@ def main(argv: list[str] | None = None) -> int:
         "run that names its cases is a skip list with the sign flipped",
     )
     parser.add_argument("--concurrency", type=int, default=6)
+    parser.add_argument("--case-timeout", type=float, default=CASE_SECONDS)
     parser.add_argument(
         "--no-prepare", action="store_true",
         help="the database already holds the schema, the dishes and the Corpus",
@@ -412,7 +428,9 @@ def main(argv: list[str] | None = None) -> int:
     started = time.perf_counter()
     if not args.no_prepare:
         prepare(settings.database_url, _models(settings), cases)
-    outcomes = asyncio.run(run_all(cases, concurrency=args.concurrency))
+    outcomes = asyncio.run(
+        run_all(cases, concurrency=args.concurrency, timeout=args.case_timeout)
+    )
     by_id = {o["id"]: o for o in outcomes}
 
     failures = [f for case in cases for f in check(case.spec, by_id[case.id])]
