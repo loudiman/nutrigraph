@@ -210,19 +210,34 @@ def test_the_prose_scan_ignores_what_the_structured_items_already_hold():
     assert allergens_in_prose(["peanut"], draft, []) == ["peanut"]
 
 
-def test_the_prose_scan_reads_only_the_food_sentences_of_the_draft():
-    """The Coach's own fixed sentences are this codebase's words, not a model's,
-    and none of them offers the User a food."""
-    fixed = (DISCLAIMER, HELPLINE, TELL_ME,
-             f"Where you did not give a weight I counted {int(DECLARED_SERVING_G)} g "
-             f"for one serving, which is my assumption and not a measurement.",
-             "My source prints no fibre and sodium for part of that, so those "
-             "totals are short rather than complete.")
-    for sentence in fixed:
+def test_the_prose_scan_does_not_read_the_coachs_own_fixed_sentences():
+    """They are this codebase's words rather than a model's, and none of them
+    offers the User a food — the same reason a Refusal is not scanned at all."""
+    for sentence in (DISCLAIMER, HELPLINE, TELL_ME):
         assert food_sentences(sentence) == [], sentence
 
     draft = "I logged dinner: rice. " + TELL_ME
     assert food_sentences(draft) == ["I logged dinner: rice."]
+
+
+async def test_the_fixed_sentences_of_a_real_answer_are_all_covered(seam):
+    """The drift guard. Sinigang is a calculated row whose source prints no
+    fibre, logged without a weight, so one answer carries every fixed sentence
+    `compose` can write. A reworded one fails here rather than quietly becoming
+    a food sentence the scan then reads."""
+    seam.provider.script(
+        LOGGED, ParsedMeal(items=[ParsedItem(name="sinigang", quantity=1, unit="bowl")])
+    )
+
+    events = await seam.turn("I had a bowl of sinigang")
+
+    text = answer(events).reply.text
+    assert f"I counted {int(DECLARED_SERVING_G)} g" in text and "prints no fibre" in text
+    read = food_sentences(text)
+    assert [s for s in read if s.startswith(("Where you did not", "My source prints"))] == []
+    assert TELL_ME not in read
+    # What is left is the record of the Meal and the marking on its figures.
+    assert [s for s in read if "sinigang" in s] == read
 
 
 # --- exactly one regeneration, and then the safe message ------------------------

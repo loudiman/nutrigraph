@@ -344,7 +344,8 @@ def allergens_named(allergies: Sequence[str], text: str) -> list[str]:
 # The Coach's own fixed sentences. None of them names a food, all of them are
 # this codebase's words rather than a model's, and so none of them is a food
 # sentence — the same reason a Refusal is not scanned at all. `test_allergy.py`
-# fails if one of these strings changes and stops being covered here.
+# drives a Turn whose answer carries every one that `meal.compose` can write and
+# fails if a reworded sentence stops being covered here.
 NOT_ABOUT_FOOD = (
     "I am not a doctor",  # DISCLAIMER
     "If eating itself has become hard",  # HELPLINE
