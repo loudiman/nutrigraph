@@ -9,13 +9,47 @@ from typing import Any
 from uuid import UUID
 
 from .deps import Deps
-from .graph import TURN_CONTEXT_KEY, TurnContext, UnknownUser
-from .guardrail import safe_reply, scan_reply
-from .models import AnswerEvent, ErrorEvent, NodeEvent, TurnEvent
+from .graph import ALLERGY_CHECKED_INTENTS, TURN_CONTEXT_KEY, TurnContext, UnknownUser
+from .guardrail import allergens_in_prose, safe_reply, scan_reply
+from .models import AnswerEvent, CoachReply, ErrorEvent, NodeEvent, TurnEvent
 
 log = logging.getLogger("nutrigraph.agent.turn")
 
 FALLBACK_ERROR = "The Coach could not finish that. Nothing was saved. Please try again."
+
+
+async def allergy_checked(ctx: TurnContext, reply: CoachReply) -> CoachReply:
+    """The prose half of the allergy check, on the two paths it belongs to.
+
+    The structured comparison already ran inside the Intent path, against the
+    `allergies` array on the Profile row. This reads the food sentences of the
+    finished draft for an allergen no Item holds — the "try a peanut sauce with
+    that" that the structured data cannot see.
+
+    A conflict strikes the food out and forces exactly one regeneration. A
+    second conflict, or a path that offers no way to write the answer again,
+    ends the Turn with the fixed safe message. There is no third attempt, so a
+    Turn cannot loop here.
+    """
+    assert ctx.profile is not None
+    allergies = ctx.profile.allergies
+    found = allergens_in_prose(allergies, reply.text, ctx.foods)
+    if not found:
+        return reply
+    log.warning(
+        "the allergy check struck a food out of the answer",
+        extra={"turn_id": str(ctx.turn_id), "allergens": found},
+    )
+    if ctx.redraft is None:
+        return safe_reply()
+    reply = await ctx.redraft(found)
+    if allergens_in_prose(allergies, reply.text, ctx.foods):
+        log.warning(
+            "the allergy check blocked the answer",
+            extra={"turn_id": str(ctx.turn_id), "allergens": found},
+        )
+        return safe_reply()
+    return reply
 
 
 async def run_turn(
@@ -62,6 +96,11 @@ async def run_turn(
             log.warning("the text scan blocked the answer",
                         extra={"turn_id": str(turn_id), "claim": claim})
             reply = safe_reply()
+        # The allergy check, on `recommend` and `log_meal` and on nothing else.
+        # An answer on any other path may name an allergen as a fact, so the
+        # Intent decides whether this runs at all.
+        elif ctx.intent in ALLERGY_CHECKED_INTENTS and ctx.profile is not None:
+            reply = await allergy_checked(ctx, reply)
 
         # Store the raw message and the trace, then release the answer.
         await deps.db.store_message(

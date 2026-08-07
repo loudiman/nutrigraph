@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import logging
 import operator
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from time import perf_counter
@@ -78,11 +79,14 @@ INTENT_PATHS = {
 # `update_profile` is absent, and must stay absent. A correct confirmation of
 # "I am allergic to shrimp" names shrimp, and an allergy check on that path
 # destroys the very answer the User asked for. The prototype found this.
+# `ask_question` and `review_day` are absent for the same reason.
 #
-# There are two places the allergen check can arrive: a node on this path, and
-# the allergen half of `guardrail.scan_reply`, which `run_turn` runs on the
-# finished text of every answer that is not a Refusal. Neither may see an
-# `update_profile` confirmation. `tests/test_update_profile.py` fails at both.
+# The check arrived in two halves, neither of them a node: the structured
+# comparison runs inside the Intent path, on the food names its own data holds,
+# and `guardrail.allergens_in_prose` runs at the seam in `run_turn`, on the
+# finished text. Neither may see an `update_profile` confirmation, and
+# `tests/test_update_profile.py` fails at both — the node list it asserts is
+# also what stops the check being added here as a node.
 ALLERGY_CHECKED_INTENTS = ("recommend", "log_meal")
 
 ROUTER_SYSTEM = f"""You classify one message from a User to a nutrition Coach.
@@ -188,6 +192,13 @@ class TurnContext:
     # What the node currently running has to report on its metric row.
     call: ModelCall | None = None
     intent: str | None = None
+    # What the Turn's structured data says its foods are, and how to write the
+    # answer again without one of them. Only an Intent path in
+    # `ALLERGY_CHECKED_INTENTS` sets these; a path that leaves `redraft` unset
+    # and whose draft names an allergen ends with the safe message, because the
+    # answer is never sent and there is nothing to write again.
+    foods: list[str] = field(default_factory=list)
+    redraft: Callable[[Sequence[str]], Awaitable[CoachReply]] | None = None
 
     def record(self, call: ModelCall) -> None:
         self.call = call
@@ -469,6 +480,12 @@ async def log_meal(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     # Both schema calls the node made — the parse and any choice — on one row.
     ctx.record(logged.call)
     ctx.reply = logged.reply
+    # The structured half of the allergy check already ran, inside `compose`,
+    # and warned about what it found. These two are what the prose half at the
+    # seam needs: the foods the Items hold, and the one regeneration it may ask
+    # for. A Meal is never un-logged for an allergen; only the answer changes.
+    ctx.foods = logged.foods
+    ctx.redraft = logged.again
     return {"messages": [{"role": "coach", "text": logged.reply.text}]}
 
 

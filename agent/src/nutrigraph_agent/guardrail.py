@@ -28,6 +28,7 @@ validation.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from .models import CoachReply, ReplyPart
@@ -282,8 +283,11 @@ SAFE_MESSAGE = (
 def scan_reply(text: str) -> str | None:
     """What the finished text says that it may not. `None` means it may go out.
 
-    The allergen half of this scan arrives with the allergy-check slice and
-    lands in this function; the stream contract above it does not change.
+    This is the medical-claim half. The allergen half is `allergens_in_prose`
+    below, and it is a separate function rather than a second return value from
+    this one because the two failures are answered differently: a medical claim
+    ends the Turn, while an allergen is struck out and the answer is written
+    again. The stream contract above both is unchanged.
     """
     found = MEDICAL_CLAIM.search(text)
     return found.group(0) if found else None
@@ -296,3 +300,80 @@ def safe_reply() -> CoachReply:
         parts=[ReplyPart(intent="blocked", text=SAFE_MESSAGE)],
         disclaimers=[DISCLAIMER],
     )
+
+
+# --- the allergy check ---------------------------------------------------------
+#
+# It runs on `recommend` and `log_meal`, and on no other path. The list is
+# `graph.ALLERGY_CHECKED_INTENTS`, and `update_profile`, `ask_question` and
+# `review_day` are absent from it on purpose: a correct answer on those paths
+# may name the allergen as a fact — a confirmation of "I am allergic to shrimp"
+# says shrimp, and so does a cited answer about peanut allergy — and the check
+# would destroy the very answer the User asked for. The prototype found this.
+#
+# Two comparisons, and neither of them is a model.
+#
+#  1. The structured one, `allergens_named`, which the Intent path runs on the
+#     food names its own data holds, before the answer is written.
+#  2. The prose one, `allergens_in_prose`, which `turn.run_turn` runs on the
+#     finished draft for a food the model named only in a sentence.
+#
+# This is a second line of defence. The recommender removes allergens in SQL
+# before the model ever sees a candidate, so a hit here means something upstream
+# failed — which is exactly why it exists.
+
+
+def allergens_named(allergies: Sequence[str], text: str) -> list[str]:
+    """The Profile allergies this text names, in the Profile's own order.
+
+    An exact word comparison against `user_profile.allergies`, which is a text
+    array on the Profile row the Turn already loaded — so there is no join, no
+    second query, no fuzzy match, and no model.
+
+    ponytail: a trailing plural `s` is the only inflection handled. A synonym
+    list per allergen wants a source to take one from, and there is not one.
+    """
+    return [
+        allergen
+        for allergen in allergies
+        if (word := allergen.strip())
+        and re.search(rf"\b{re.escape(word)}s?\b", text, re.IGNORECASE)
+    ]
+
+
+# The Coach's own fixed sentences. None of them names a food, all of them are
+# this codebase's words rather than a model's, and so none of them is a food
+# sentence — the same reason a Refusal is not scanned at all. `test_allergy.py`
+# fails if one of these strings changes and stops being covered here.
+NOT_ABOUT_FOOD = (
+    "I am not a doctor",  # DISCLAIMER
+    "If eating itself has become hard",  # HELPLINE
+    "Tell me if I got any of that wrong",  # meal.TELL_ME
+    "Where you did not give a weight",  # the assumed portion, in meal.compose
+    "My source prints no",  # the short totals, in meal.compose
+)
+
+SENTENCE = re.compile(r"(?<=[.?!])\s+")
+
+
+def food_sentences(text: str) -> list[str]:
+    """The sentences of a draft that are about a food. The prose scan reads
+    these and nothing else."""
+    return [s for s in SENTENCE.split(text) if s and not s.startswith(NOT_ABOUT_FOOD)]
+
+
+def allergens_in_prose(
+    allergies: Sequence[str], text: str, foods: Sequence[str]
+) -> list[str]:
+    """The Profile allergies the draft names in prose, and the structured data
+    does not — the "try a peanut sauce with that" the first comparison cannot
+    see, because that food is in no Item.
+
+    An allergen the Items already hold is excluded, because the first comparison
+    dealt with it. On `log_meal` the answer names such an allergen on purpose,
+    in the warning, and reading the Coach's own warning as a violation would
+    take the warning down with the answer.
+    """
+    known = allergens_named(allergies, " ".join(foods))
+    named = allergens_named(allergies, " ".join(food_sentences(text)))
+    return [allergen for allergen in named if allergen not in known]

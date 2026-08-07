@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -37,7 +38,7 @@ from uuid import UUID
 
 from .db import Database, MealItemRow, UnmatchedItem
 from .food import CANDIDATES, FoodCandidate, FoodSearch
-from .guardrail import scan_reply
+from .guardrail import allergens_named, scan_reply
 from .models import (
     CoachReply,
     FoodChoice,
@@ -181,6 +182,14 @@ class MealLog:
     call: ModelCall
     items: list[Logged]
     meal_id: UUID | None = None
+    # How to write the answer again without a food. The prose scan at the seam
+    # calls this exactly once, and never a second time.
+    again: Callable[[Sequence[str]], Awaitable[CoachReply]] | None = None
+
+    @property
+    def foods(self) -> list[str]:
+        """What the structured Items say the foods are, for the allergy check."""
+        return [item_words(item.row) for item in self.items]
 
 
 def normalize(text: str) -> str:
@@ -325,6 +334,22 @@ def item_row(item: ParsedItem, attempt: Attempt, *, ordinal: int) -> MealItemRow
     )
 
 
+def item_words(row: MealItemRow) -> str:
+    """Everything the structured Item says the food is: what the User called it,
+    what it matched, and the dish table's own tags.
+
+    The tags are why this is worth more than the name. A User allergic to peanut
+    who logs kare-kare has said no peanut and matched no food called peanut, and
+    the dish table's `peanut` tag is the only structured place that knows. A
+    FoodData Central row carries no tags, and then this is the two names.
+
+    The structured comparison and the prose scan's exclusion list both read this
+    one string, so the two halves of the check cannot disagree about a food.
+    """
+    tags = (row.nutrients or {}).get("tags") or []
+    return " ".join([row.said_as, row.food_name or "", *tags])
+
+
 def _corrected(item: ParsedItem, open_items: list[UnmatchedItem]) -> UUID | None:
     """The Item this entry fixes, if it fixes one. The parse names the food word
     it is correcting; the identifier is looked up here, so a model cannot name a
@@ -363,10 +388,23 @@ def _list(names: list[str]) -> str:
     return f"{', '.join(names[:-1])} and {names[-1]}"
 
 
-def compose(profile: Profile, meal_type: str, items: list[Logged]) -> str:
-    """The answer. It names what was counted and what was not, marks a value
-    that is not a direct measurement, says when the portion was assumed rather
-    than stated, and invites a correction."""
+def compose(
+    profile: Profile,
+    meal_type: str,
+    items: list[Logged],
+    *,
+    without: Sequence[str] = (),
+) -> str:
+    """The answer. It names what was counted and what was not, warns about an
+    Item the Profile is allergic to, marks a value that is not a direct
+    measurement, says when the portion was assumed rather than stated, and
+    invites a correction.
+
+    `without` is the allergen the prose scan struck out, and it is the second
+    and last time this runs for one Turn. Only the source notes are dropped for
+    it: the lines above them are the record of what the User said they ate, and
+    a record is not edited to make an answer pass a scan.
+    """
     corrections = [i for i in items if i.corrected is not None]
     counted = [i for i in items if i.counted and i.corrected is None]
     missed = [i for i in items if not i.counted and i.corrected is None]
@@ -387,20 +425,38 @@ def compose(profile: Profile, meal_type: str, items: list[Logged]) -> str:
     if not lines:
         lines.append(f"{profile.name}, {NOTHING_TO_LOG}")
 
+    # The structured check. An exact word comparison against the `allergies`
+    # text array on the Profile row this Turn already loaded, so there is no
+    # join and no second query. The Item stays and the answer warns: a Meal is
+    # the record of what the User ate, and removing a food from it would be the
+    # Coach editing what they said rather than telling them what it found.
+    for item in items:
+        hit = allergens_named(profile.allergies, item_words(item.row))
+        if hit:
+            lines.append(
+                f"Careful, {item.row.said_as} matches {_list(hit)} on your allergy list."
+            )
+
+    notes: list[str] = []
     for item in items:
         match = item.match
         if match is None:
             continue
         if match.value_kind == "proxy":
-            lines.append(
+            notes.append(
                 f"The {item.row.said_as} figures are a stand-in and not the dish "
                 f"itself: {stand_in(match.source_note or '')}"
             )
         elif match.value_kind == "calculated":
-            lines.append(
+            notes.append(
                 f"The {item.row.said_as} figures are calculated from component "
                 f"foods rather than measured, and are likely understated."
             )
+    # A source note is FNRI's wording about a food, and it is the one place in
+    # this answer a food can be named that no Item holds. It is therefore the
+    # one place the prose scan can strike out, and dropping it is the whole of
+    # "remove the food and write it again".
+    lines += [note for note in notes if not allergens_named(without, note)]
 
     if any(i.row.portion_assumed for i in items):
         lines.append(
@@ -492,12 +548,21 @@ async def log_meal(
         if item.corrected is not None:
             await db.correct_meal_item(item.corrected, item.row)
 
-    text = compose(profile, meal_type, items)
+    def write(without: Sequence[str] = ()) -> CoachReply:
+        text = compose(profile, meal_type, items, without=without)
+        return CoachReply(text=text, parts=[ReplyPart(intent="log_meal", text=text)])
+
+    async def write_again(without: Sequence[str]) -> CoachReply:
+        # No provider call, and none is wanted: the answer is assembled from
+        # facts this module holds, so writing it again is writing it again.
+        return write(without)
+
     return MealLog(
-        reply=CoachReply(text=text, parts=[ReplyPart(intent="log_meal", text=text)]),
+        reply=write(),
         call=call,
         items=items,
         meal_id=meal_id,
+        again=write_again,
     )
 
 
