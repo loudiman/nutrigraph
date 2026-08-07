@@ -440,6 +440,41 @@ async def test_a_turn_over_budget_trims_the_history_and_records_the_overrun(seam
     assert row.over_budget is True
 
 
+async def test_the_profile_and_todays_meals_reach_the_provider_on_an_over_budget_turn(seam):
+    """The end of the same rule, at the seam. Only `route` and
+    `answer_question` assemble a prompt out of parts, so they are the two nodes
+    that trim; the Profile and today's Meals are never handed to the trimmer at
+    all, and this is what that means for a Turn that is far over budget.
+    """
+    seam.provider.script(
+        ATE, ParsedMeal(items=[ParsedItem(name="zzzfoodzzz", quantity=1)])
+    )
+    await seam.turn("I ate zzzfoodzzz")
+    for i in range(1, 9):
+        await seam.turn(f"marker-{i} " + "eaten rice " * 800)
+    seam.provider.script(
+        RouterDecision(intents=["update_profile"], confidence=0.95),
+        ProfileUpdate(field="weight_kg", new_value="80", old_value="78"),
+        ATE,
+        ATE_EGGS,
+        CHOSE_EGG,
+    )
+    seam.food.results = {"egg": [EGG]}
+    before = len(seam.provider.seen)
+
+    await seam.turn("I weigh 80 kg now")
+    await seam.turn("I ate two eggs")
+
+    prompts = "\n".join(c.sent for c in seam.provider.seen[before:])
+    # The Profile, as the extractor is given it, and today's unmatched Meal
+    # Item, which is what lets the next Turn offer a correction.
+    assert "weight_kg: 78" in prompts
+    assert "allergies: peanut" in prompts
+    assert "zzzfoodzzz" in prompts
+    # And the Thread was still cut, so this was an over-budget Turn.
+    assert "marker-1" not in prompts
+
+
 async def test_a_turn_inside_the_budget_records_no_overrun(seam):
     await seam.turn("I ate two eggs")
 
