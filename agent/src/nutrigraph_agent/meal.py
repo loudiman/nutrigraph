@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
@@ -38,15 +38,7 @@ from uuid import UUID
 from .db import Database, DayTotal, MealItemRow, UnmatchedItem
 from .food import CANDIDATES, FoodCandidate, FoodSearch
 from .guardrail import scan_reply
-from .models import (
-    CoachReply,
-    FoodChoice,
-    MealType,
-    ParsedItem,
-    ParsedMeal,
-    Profile,
-    ReplyPart,
-)
+from .models import FoodChoice, MealType, ParsedItem, ParsedMeal, Profile
 from .providers import ModelCall, TurnModels
 
 log = logging.getLogger("nutrigraph.agent.meal")
@@ -174,12 +166,21 @@ class Logged:
 
 @dataclass
 class MealLog:
-    """What one `log_meal` produced: the answer, what the calls cost, and the
-    Items, which the caller stores and a test reads."""
+    """What one `log_meal` produced: the sentences, what the calls cost, and the
+    Items, which the caller stores and a test reads.
 
-    reply: CoachReply
+    Not a `CoachReply`. One node builds that, for whatever Intents the Turn ran,
+    and this module is one of them — so what comes back here is the finished
+    sentences and the markings within them, and the composer decides how the
+    User reads them.
+    """
+
+    text: str
     call: ModelCall
     items: list[Logged]
+    # The markings the composer may not drop: a stand-in value, a calculated
+    # one, an assumed portion, a total the source left short.
+    disclaimers: list[str] = field(default_factory=list)
     meal_id: UUID | None = None
 
 
@@ -503,14 +504,7 @@ async def log_meal(
 
     text, markings = compose(profile, meal_type, items)
     return MealLog(
-        reply=CoachReply(
-            text=text,
-            parts=[ReplyPart(intent="log_meal", text=text)],
-            disclaimers=markings,
-        ),
-        call=call,
-        items=items,
-        meal_id=meal_id,
+        text=text, call=call, items=items, disclaimers=markings, meal_id=meal_id
     )
 
 

@@ -576,9 +576,9 @@ async def log_meal(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     ctx.intent_results.append(
         IntentResult(
             intent="log_meal",
-            text=logged.reply.text,
+            text=logged.text,
             facts=day_line(total),
-            disclaimers=logged.reply.disclaimers,
+            disclaimers=logged.disclaimers,
         )
     )
     return {}
