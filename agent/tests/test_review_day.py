@@ -16,7 +16,13 @@ import pytest
 from nutrigraph_agent.db import DAY_TOTAL, MealItemRow
 from nutrigraph_agent.food import COLUMNS
 from nutrigraph_agent.meal import MANILA
-from nutrigraph_agent.models import DayRequest, Profile, RouterDecision, UPDATABLE_FIELDS
+from nutrigraph_agent.models import (
+    UPDATABLE_FIELDS,
+    ComposedReply,
+    DayRequest,
+    Profile,
+    RouterDecision,
+)
 from nutrigraph_agent.review import DAILY_SHIFT, review_day, targets_for
 
 from .conftest import PROSE_MODEL, SCHEMA_MODEL, answer
@@ -131,8 +137,8 @@ async def test_a_review_without_targets_gives_the_total_and_no_gap(db):
     day = await review(db, profile=thin)
 
     assert day.target_delta == {}
-    assert "I cannot work out your targets until I know your height" in day.reply.text
-    assert "618 kcal" in day.reply.text
+    assert "I cannot work out your targets until I know your height" in day.text
+    assert "618 kcal" in day.text
 
 
 # --- the totals and the gap -------------------------------------------------
@@ -156,7 +162,7 @@ async def test_the_review_states_the_gap_against_the_target_for_each_nutrient(db
 
     assert set(day.target_delta) == set(COLUMNS)
     assert day.target_delta["kcal"] == pytest.approx(761.0 - targets["kcal"])
-    text = day.reply.text
+    text = day.text
     assert "Against your targets" in text
     for nutrient in ("energy", "protein", "fat", "carbohydrate", "fibre", "sodium"):
         assert nutrient in text
@@ -167,7 +173,7 @@ async def test_the_review_states_the_gap_against_the_target_for_each_nutrient(db
 async def test_every_value_the_review_states_is_metric(db):
     await a_day(db, matched("pandesal", PANDESAL), matched("egg", EGGS, ordinal=1))
 
-    text = (await review(db)).reply.text
+    text = (await review(db)).text
 
     assert " kcal" in text and " g of" in text and " mg of" in text
     for imperial in ("oz", "ounce", "lb", "pound", "cal/oz"):
@@ -186,15 +192,19 @@ async def test_an_unmatched_item_contributes_nothing_and_is_named(db):
     # not a zero, and not a guess at what it might have been.
     assert day.totals["kcal"] == pytest.approx(618.0)
     assert day.unmatched == ["kwek kwek"]
-    assert "kwek kwek" in day.reply.text
+    assert "kwek kwek" in day.text
 
 
 async def test_a_total_holding_an_unmatched_food_says_it_is_short_by_an_unknown_amount(db):
     await a_day(db, matched("pandesal", PANDESAL), unmatched("kwek kwek"))
 
-    text = (await review(db)).reply.text
+    day = await review(db)
 
-    assert "short by an unknown amount" in text
+    assert "short by an unknown amount" in day.text
+    # And it is a marking, not only a sentence: the composer carries it as a
+    # disclaimer and puts it back if the words it wrote dropped it.
+    assert any("short by an unknown amount" in d for d in day.disclaimers)
+    assert any("kwek kwek" in d for d in day.disclaimers)
 
 
 async def test_a_day_of_nothing_but_unmatched_food_gives_no_total_at_all(db):
@@ -203,7 +213,7 @@ async def test_a_day_of_nothing_but_unmatched_food_gives_no_total_at_all(db):
     day = await review(db)
 
     assert day.totals == {}
-    text = day.reply.text
+    text = day.text
     # Named, and said plainly — with no total above for it to be short against.
     assert "the only thing you logged today was kwek kwek" in text
     assert "no total to give you at all" in text
@@ -214,11 +224,14 @@ async def test_a_day_with_no_meals_says_so_rather_than_reporting_zeros(db):
     day = await review(db)
 
     assert day.totals == {} and day.target_delta == {} and day.unmatched == []
-    text = day.reply.text
+    text = day.text
     assert "you have logged nothing for today" in text
     # Nothing logged is a different fact from nothing eaten, so there is not a
     # number anywhere in this answer to be read as a result.
     assert not any(character.isdigit() for character in text)
+    # The whole answer is the marking, so a composer joining it to another part
+    # cannot reduce it to silence.
+    assert day.disclaimers == [text]
 
 
 async def test_a_nutrient_the_source_does_not_print_is_absent_never_zero(db):
@@ -232,7 +245,7 @@ async def test_a_nutrient_the_source_does_not_print_is_absent_never_zero(db):
     # Nothing carried either, which is a different fact from a total of zero.
     assert (
         "My source prints no fibre and sodium for anything you ate"
-        in day.reply.text
+        in day.text
     )
 
 
@@ -244,7 +257,7 @@ async def test_a_total_the_source_only_partly_covers_says_it_is_short(db):
     day = await review(db)
 
     assert day.total.complete("kcal") and not day.total.complete("sodium_mg")
-    assert "My source prints no fibre and sodium for part of what you ate" in day.reply.text
+    assert "My source prints no fibre and sodium for part of what you ate" in day.text
 
 
 # --- which day, and where it is read from -----------------------------------
@@ -258,7 +271,7 @@ async def test_a_question_about_an_earlier_day_reads_that_days_meals(db):
 
     assert day.totals["kcal"] == pytest.approx(143.0)
     assert day.day.date() == YESTERDAY.date()
-    assert "yesterday you have" in day.reply.text
+    assert "yesterday you have" in day.text
 
 
 async def test_the_totals_come_from_one_sql_sum_over_the_numeric_columns(db):
@@ -305,8 +318,48 @@ async def test_the_review_is_reachable_from_the_turn_seam(seam):
 
     events = await seam.turn("how did I eat today?")
 
-    assert [e.node for e in events[:4]] == ["load_profile", "guard", "route", "review_day"]
-    text = answer(events).reply.text
-    assert text.startswith("Lou, today you have 618 kcal of energy")
-    assert "kwek kwek" in text and "short by an unknown amount" in text
+    assert [e.node for e in events[:5]] == [
+        "load_profile", "guard", "route", "review_day", "compose_reply",
+    ]
+    reply = answer(events).reply
+    # One part, so there is nothing to join and no composer call: the sentences
+    # this path assembled from facts reach the User as they were written.
+    assert reply.text.startswith("Lou, today you have 618 kcal of energy")
+    assert "kwek kwek" in reply.text and "short by an unknown amount" in reply.text
+    assert [p.intent for p in reply.parts] == ["review_day"]
     assert [r.intent for r in seam.db.events if r.node == "review_day"] == ["review_day"]
+
+
+async def test_a_marking_the_composer_dropped_is_put_back(seam):
+    """The composer writes the words on a two-Intent Turn, and a model being
+    brief must not be able to drop the sentence that says the total is short."""
+    await a_day(seam.db, matched("pandesal", PANDESAL), unmatched("kwek kwek"))
+    seam.provider.script(
+        RouterDecision(intents=["review_day", "recommend"], confidence=0.95),
+        DayRequest(days_ago=0),
+        # Every marking gone, and a total presented as if it were the whole day.
+        ComposedReply(text="Lou, you have had 618 kcal today. Have some fish."),
+    )
+
+    events = await seam.turn("how did I eat, and what should I eat next?")
+
+    reply = answer(events).reply
+    assert "kwek kwek" in reply.text
+    assert "short by an unknown amount" in reply.text
+    assert any("short by an unknown amount" in d for d in reply.disclaimers)
+    assert [p.intent for p in reply.parts] == ["review_day", "recommend"]
+
+
+async def test_a_day_with_no_meals_says_so_even_when_the_composer_writes_the_words(seam):
+    """The composer joined another part's numbers in, so the answer holds digits
+    the review did not produce. What may not happen is the day reading as a
+    result, and the sentence that says it is not one survives whole."""
+    seam.provider.script(
+        RouterDecision(intents=["review_day", "recommend"], confidence=0.95),
+        DayRequest(days_ago=0),
+        ComposedReply(text="Lou, your day is at 0 kcal. Try 2 eggs."),
+    )
+
+    events = await seam.turn("how did I eat, and what should I eat next?")
+
+    assert "you have logged nothing for today" in answer(events).reply.text

@@ -274,7 +274,12 @@ async def test_no_node_beyond_the_intent_path_runs_on_an_update_profile_turn(sea
     nodes = [e.node for e in events if isinstance(e, NodeEvent)]
     # `guard` belongs here: it is the deterministic detector, it runs before the
     # router, and it reads the User's message, never the Coach's answer.
-    assert nodes == ["load_profile", "guard", "route", "update_profile"], (
+    # `compose_reply` belongs here: it is the one node that produces a
+    # `CoachReply`, it runs on every Intent path, and with one part it composes
+    # nothing — it makes no provider call and hands the confirmation through.
+    assert nodes == [
+        "load_profile", "guard", "route", "update_profile", "compose_reply",
+    ], (
         "a node was added to the update_profile path; if it is an allergy "
         "check, it must not be"
     )

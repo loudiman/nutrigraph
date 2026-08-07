@@ -20,10 +20,14 @@ logging slice applied to one Meal, applied now to a whole day.
 fact from nothing eaten, and the review says the first rather than reporting the
 second.
 
-**The answer is assembled here, not by a model.** The one provider call this
+**The sentences are assembled here, not by a model.** The one provider call this
 path makes reads which day the User asked about; every sentence after that is a
-fact this module holds, so a marking the User depends on cannot be dropped by a
-model that decided to be brief.
+fact this module holds. What the path does not do is build the reply: one node
+does that for whatever Intents the Turn ran. So the markings — a food that added
+nothing, a total short by an unknown amount, a nutrient nothing carried, a target
+that was worked out rather than measured, and a day with nothing logged at all —
+travel as their own list beside the sentences, and the composer puts back any of
+them the words dropped.
 """
 
 from __future__ import annotations
@@ -35,7 +39,7 @@ from datetime import datetime, timedelta
 from .db import Database, DayTotal
 from .food import COLUMNS
 from .meal import MANILA, OFTEN_MISSING, _list, day_bounds
-from .models import CoachReply, DayRequest, Profile, ReplyPart
+from .models import DayRequest, Profile
 from .providers import ModelCall, TurnModels
 
 log = logging.getLogger("nutrigraph.agent.review")
@@ -135,7 +139,13 @@ class Targets:
 @dataclass
 class DayReview:
     """One day, reviewed: what was counted, what it is measured against, and
-    what the total does not include."""
+    what the total does not include.
+
+    Not a `CoachReply`. One node builds that, for whatever Intents the Turn ran,
+    and this module is one of them — so what comes back here is the finished
+    sentences and the markings within them, and the composer decides how the
+    User reads them.
+    """
 
     day: datetime
     totals: dict[str, float]
@@ -146,8 +156,15 @@ class DayReview:
     # The foods that contributed nothing, by the words the User used.
     unmatched: list[str]
     total: DayTotal
-    reply: CoachReply
+    text: str
     call: ModelCall
+    # What the composer may not drop: a food that added nothing, a total short
+    # by an unknown amount, a nutrient nothing carried, a target that was worked
+    # out rather than measured, and a day with nothing logged at all.
+    disclaimers: list[str] = field(default_factory=list)
+    # What the next Intent may reason against, and the User does not need read
+    # back word for word.
+    facts: str = ""
 
     @property
     def logged(self) -> bool:
@@ -235,6 +252,19 @@ def _gap(column: str, delta: float) -> str:
     )
 
 
+def target_line(targets: Targets) -> str:
+    """The targets, as one line of fact for whatever reads the day next.
+
+    A Turn that reviews the day and then asks what to eat next answers the
+    second against these rather than against arithmetic of its own.
+    """
+    if not targets.values:
+        return ""
+    return "The daily targets, derived from the Profile and the Goal: " + ", ".join(
+        named(column, targets.values[column]) for column in COLUMNS
+    )
+
+
 def which_day(now: datetime, days_ago: int) -> datetime:
     return now.astimezone(MANILA) - timedelta(days=days_ago)
 
@@ -256,14 +286,28 @@ def compose(
     total: DayTotal,
     targets: Targets,
     delta: dict[str, float],
-) -> str:
-    """The answer. It reports the totals and the gap together, names every food
-    that contributed nothing, and never lets an incomplete total read as
-    complete."""
+) -> tuple[str, list[str]]:
+    """The answer, and the markings within it that may not be lost.
+
+    It reports the totals and the gap together, names every food that
+    contributed nothing, and never lets an incomplete total read as complete.
+
+    The markings come back a second time as their own list because this answer
+    is not always the last word: on a two-Intent Turn the composer joins it to
+    another part, and every one of these is a sentence that stops a number being
+    read as more certain than it is — a food that added nothing, a total short
+    by an unknown amount, a nutrient nothing carried, a target that was worked
+    out rather than measured, and a day with nothing logged at all. The composer
+    carries them as disclaimers and puts back any the words dropped.
+    """
     if total.counted == 0 and total.not_counted == 0:
-        return f"{profile.name}, " + NOTHING_LOGGED.format(day=day)
+        # A day with no Meals is not a day of zeros, and this sentence is the
+        # whole answer, so it is the whole marking too.
+        nothing = f"{profile.name}, " + NOTHING_LOGGED.format(day=day)
+        return nothing, [nothing]
 
     lines: list[str] = []
+    markings: list[str] = []
     if total.counted:
         counted = [named(c, total.values[c]) for c in HEADLINE if c in total.values]
         lines.append(f"{profile.name}, {day} you have {_list(counted)}.")
@@ -278,32 +322,34 @@ def compose(
         # to be short against. The foods are named here instead, because naming
         # them is the part that must not be lost.
         they = "were" if len(total.unmatched) > 1 else "was"
-        lines.append(
+        nothing_counted = (
             f"{profile.name}, the only thing you logged {day} {they} "
             f"{_list(total.unmatched)}, which I could not match to a food I hold, "
             f"so I have no total to give you at all."
         )
+        lines.append(nothing_counted)
+        markings.append(nothing_counted)
 
     if delta:
         lines.append(
             "Against your targets, " + _list([_gap(c, delta[c]) for c in COLUMNS
                                               if c in delta]) + "."
         )
-        lines.append(DERIVED)
+        markings.append(DERIVED)
         if not targets.sex_specific:
-            lines.append(
+            markings.append(
                 "Your Profile does not state a sex, so the energy target does not "
                 "use a sex-specific constant and is an estimate either way."
             )
     elif targets.missing:
-        lines.append(
+        markings.append(
             f"I cannot work out your targets until I know {_list(targets.missing)}, "
             f"so that is the total on its own and no gap."
         )
 
     if total.unmatched and total.counted:
         they = "they are" if len(total.unmatched) > 1 else "it is"
-        lines.append(
+        markings.append(
             f"That total does not include {_list(total.unmatched)}, because I could "
             f"not match {'them' if len(total.unmatched) > 1 else 'it'} to a food I "
             f"hold, so {they} logged but uncounted and the total above is short by "
@@ -324,16 +370,18 @@ def compose(
         if not total.complete(column) and word not in absent
     )
     if absent:
-        lines.append(
+        markings.append(
             f"My source prints no {_list(absent)} for anything you ate, so there is "
             f"no {_list(absent)} total to give you at all."
         )
     if partial:
-        lines.append(
+        markings.append(
             f"My source prints no {_list(partial)} for part of what you ate, so those "
             f"totals are short rather than complete."
         )
-    return " ".join(lines)
+    # A marking that is already one of the lines keeps its place there and is not
+    # said twice; the rest follow the answer, as they do on the meal path.
+    return " ".join([*lines, *(m for m in markings if m not in lines)]), markings
 
 
 async def review_day(
@@ -366,7 +414,7 @@ async def review_day(
         total.not_counted,
         extra={"user_id": profile.user_id},
     )
-    text = compose(
+    text, markings = compose(
         profile,
         day=day_word(asked.days_ago, day),
         total=total,
@@ -380,6 +428,8 @@ async def review_day(
         target_delta=delta,
         unmatched=list(total.unmatched),
         total=total,
-        reply=CoachReply(text=text, parts=[ReplyPart(intent="review_day", text=text)]),
+        text=text,
         call=call,
+        disclaimers=markings,
+        facts=target_line(targets),
     )

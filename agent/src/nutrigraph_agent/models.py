@@ -3,10 +3,10 @@ a build step generates `gateway/src/generated/agent.ts` from it."""
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, RootModel, model_validator
+from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
 
 class Profile(BaseModel):
@@ -86,6 +86,25 @@ class RouterDecision(BaseModel):
     out_of_scope: bool = Field(
         default=False, description="The request falls outside what a nutrition Coach does."
     )
+
+    @field_validator("intents", mode="before")
+    @classmethod
+    def at_most_two_and_each_one_once(cls, value: Any) -> Any:
+        """A third Intent is dropped, not run, and not a schema failure.
+
+        The limit is stated twice on purpose: `max_length` is what the provider
+        is shown, and this is what happens when it answers with three anyway.
+        Failing validation there would spend the retry and then the whole Turn on
+        a message the Coach understood perfectly well — the first two Intents are
+        the answer, and the third is what is over the limit.
+
+        A repeat is dropped for the same reason and one of its own: the second
+        Intent runs on what the first produced, so the same path twice is a loop
+        that reads its own output, not a Turn that does two jobs.
+        """
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            return value  # not the shape this rule is about; let the field reject it
+        return list(dict.fromkeys(value))[:2]
 
 
 class Citation(BaseModel):
@@ -240,11 +259,30 @@ class ReplyPart(BaseModel):
 
 
 class CoachReply(BaseModel):
-    """The Coach's complete answer to one User message."""
+    """The Coach's complete answer to one User message.
+
+    One node builds this, whatever the Turn did. `parts` holds one entry for
+    each Intent that ran, so a Turn that did two jobs cannot report one.
+    """
 
     text: str
     parts: list[ReplyPart] = Field(default_factory=list)
     disclaimers: list[str] = Field(default_factory=list)
+
+
+class ComposedReply(BaseModel):
+    """The only thing the composer asks a model for: the words.
+
+    `parts` and `disclaimers` are assembled in code from what each Intent path
+    reported, because a model that decided to be brief must not be able to drop
+    an Intent from the record or a marking from the reply.
+    """
+
+    text: str = Field(
+        min_length=1,
+        description="One reply covering every part you were given, in at most "
+        "five short sentences. The User is reading this while cooking.",
+    )
 
 
 class TurnRequest(BaseModel):
