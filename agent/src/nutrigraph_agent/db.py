@@ -48,6 +48,12 @@ limit %(limit)s
 # questions, and the second one searches the Corpus for itself.
 RETRIEVAL_SIMILARITY = 0.95
 
+# pgvector stores a `float4`, so a vector written at exactly the floor reads
+# back a fraction of a millionth either side of it and an exact `>= 0.95` would
+# turn away a question that is, to every digit anyone means by it, at the floor.
+# The comparison allows the rounding and nothing more.
+FLOAT4_TOLERANCE = 1e-6
+
 # How long a food match stands. The FoodData Central catalogue moves slowly,
 # and a month-old choice of `fdcId` for 'pandesal' is still the right choice.
 FOOD_MATCH_DAYS = 30
@@ -433,7 +439,7 @@ class PostgresDatabase:
                 READ_RETRIEVAL,
                 {
                     "query": vector_literal(embedding),
-                    "floor": RETRIEVAL_SIMILARITY,
+                    "floor": RETRIEVAL_SIMILARITY - FLOAT4_TOLERANCE,
                 },
             )
             row = await cur.fetchone()
