@@ -135,6 +135,11 @@ class Gap:
     amount: float = 0.0
     targets: Targets = field(default_factory=Targets)
     total: DayTotal = field(default_factory=DayTotal)
+    # The nutrients there is a target for and no measurement of: the day holds
+    # counted Items and the source printed nothing for this column on them. The
+    # gap is unknown rather than whole, so it does not choose the food, and the
+    # answer says so.
+    unmeasured: list[str] = field(default_factory=list)
 
     @property
     def logged(self) -> bool:
@@ -173,18 +178,32 @@ def gap_for(targets: Targets, total: DayTotal) -> Gap:
 
     One SQL sum produced the totals and `review.targets_for` produced the
     targets; nothing here derives either a second time.
+
+    A null is not a zero, and here the difference decides what to suggest. A day
+    with nothing counted has eaten none of anything, so the gap is the whole
+    target — that is the cold start, and it is a fact. A day that holds counted
+    Items whose source printed no fibre has an *unknown* fibre gap, not a full
+    one, so that nutrient is left out of the ranking rather than sending the
+    Coach after the biggest number on the page.
     """
-    values = {
-        column: targets.values[column] - total.values.get(column, 0.0)
-        for column in targets.values
-    }
+    values: dict[str, float] = {}
+    unmeasured: list[str] = []
+    for column, target in targets.values.items():
+        if column in total.values:
+            values[column] = target - total.values[column]
+        elif total.counted == 0:
+            values[column] = target
+        else:
+            unmeasured.append(column)
     short = {
         column: value
         for column, value in values.items()
         if column in RANKED and value >= GAP_FLOOR[column]
     }
     if not short:
-        return Gap(values=values, targets=targets, total=total)
+        return Gap(values=values, targets=targets, total=total, unmeasured=unmeasured)
+    # The largest gap is the largest *share* of its own target: 1,200 kcal and
+    # 90 g of protein are not comparable as numbers, and they are as fractions.
     nutrient = max(short, key=lambda column: short[column] / targets.values[column])
     return Gap(
         values=values,
@@ -192,6 +211,7 @@ def gap_for(targets: Targets, total: DayTotal) -> Gap:
         amount=short[nutrient],
         targets=targets,
         total=total,
+        unmeasured=unmeasured,
     )
 
 
@@ -295,6 +315,12 @@ def markings_for(
         markings.append(DERIVED)
     elif gap.targets.missing:
         markings.append(NO_TARGETS.format(missing=_list(gap.targets.missing)))
+    if gap.unmeasured:
+        markings.append(
+            f"My source prints no {_list([SAYS[c][0] for c in gap.unmeasured])} for "
+            f"part of what you ate, so I do not know that gap and did not choose "
+            f"this on it."
+        )
     if not gap.logged:
         markings.append(COLD_START)
     return markings

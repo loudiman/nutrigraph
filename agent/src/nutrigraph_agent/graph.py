@@ -602,6 +602,12 @@ async def update_profile(state: TurnState, config: RunnableConfig) -> dict[str, 
         log.info("value does not fit the field", extra={"field": update.field})
         return {}
     await ctx.deps.db.update_profile(profile.user_id, field=update.field, value=new)
+    # And on this Turn's own copy, because a Turn runs two Intents: "I am
+    # allergic to pork, what should I eat tonight" states the fact and then asks
+    # the question it changes the answer to. The next Turn reads PostgreSQL
+    # again either way; this is what stops the second Intent of *this* Turn
+    # working from the Profile as it was a moment ago.
+    ctx.profile = profile.model_copy(update={update.field: new})
     text = (
         f"{ctx.name}, I changed your {update.field.replace('_', ' ')} "
         f"from {_say(old)} to {_say(new)}."
