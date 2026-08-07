@@ -17,6 +17,7 @@ import pytest
 from nutrigraph_agent.models import (
     Answer,
     Citation,
+    DayRequest,
     FoodChoice,
     ParsedItem,
     ParsedMeal,
@@ -42,12 +43,12 @@ IDENTIFIERS = (
 
 # Every shape of Turn: one that dispatches, one that clarifies, one that logs a
 # Meal — which is the shape with the most provider calls in it — one that
-# retrieves from the Corpus and answers, and one whose first router answer
-# failed the schema and had to be asked again.
+# reviews a day, one that retrieves from the Corpus and answers, and one whose
+# first router answer failed the schema and had to be asked again.
 SHAPES = {
-    "dispatch": [RouterDecision(intents=["review_day"], confidence=0.95)],
+    "dispatch": [RouterDecision(intents=["recommend"], confidence=0.95)],
     "clarify": [RouterDecision(intents=[], confidence=0.1)],
-    "retry": ["intents had three entries", RouterDecision(intents=["review_day"], confidence=0.9)],
+    "retry": ["intents had three entries", RouterDecision(intents=["recommend"], confidence=0.9)],
     "log_meal": [
         RouterDecision(intents=["log_meal"], confidence=0.95),
         ParsedMeal(
@@ -57,6 +58,10 @@ SHAPES = {
             ]
         ),
         FoodChoice(fdc_id="748967", reason="the plain whole egg"),
+    ],
+    "review_day": [
+        RouterDecision(intents=["review_day"], confidence=0.95),
+        DayRequest(days_ago=1),
     ],
     "ask_question": [
         RouterDecision(intents=["ask_question"], confidence=0.95),

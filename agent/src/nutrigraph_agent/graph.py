@@ -8,13 +8,15 @@ reach an Intent path — including the Corpus, which an out-of-scope question is
 never allowed to search. `refuse` is the only node that writes a Refusal, and
 both detectors — the rule list and the router's `out_of_scope` flag — end there.
 
-Three Intent paths are built, all after both detectors, and `INTENT_PATHS` names
+Four Intent paths are built, all after both detectors, and `INTENT_PATHS` names
 the node each starts at. `update_profile` writes the change to PostgreSQL and to
 nothing else, so the Profile the next Turn reads is the changed one.
 `ask_question` is `retrieve` then `answer_question`: a question the guardrail
 permits, a general chronic-disease question among them, passes through `guard`
 untouched and is answered from the Corpus with a Citation on every claim.
 `log_meal` writes the Meal and then reads the day it counts against.
+`review_day` sums the day out of PostgreSQL and states the gap against the
+targets the Goal produces, naming whatever the sum could not include.
 
 **The multi-Intent Turn, and it costs one loop edge.** The router returns an
 ordered list of at most two Intents. Each Intent path appends one `IntentResult`
@@ -84,6 +86,7 @@ from .models import (
     RouterDecision,
 )
 from .providers import ModelCall, SchemaFailure, TurnModels
+from .review import review_day as run_review_day
 
 # The key is underscore-prefixed so LangGraph keeps it out of checkpoint metadata.
 TURN_CONTEXT_KEY = "__turn"
@@ -101,6 +104,7 @@ INTENT_PATHS = {
     "update_profile": "update_profile",
     "ask_question": "retrieve",
     "log_meal": "log_meal",
+    "review_day": "review_day",
 }
 
 # The Intents whose answer is scanned against the Profile's allergies.
@@ -629,6 +633,44 @@ async def log_meal(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     return {}
 
 
+async def review_day(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
+    """How the day went: the totals, the targets the Goal produces, and the gap.
+
+    The Meals are read from PostgreSQL, not from the checkpoint, so a question
+    about an earlier day is answered from the same place as today's — the Thread
+    never restarts, and it is not where a Meal lives.
+
+    What the sum could not include travels as disclaimers, not as prose the
+    composer may shorten. A food that contributed nothing, a total that is short
+    by an unknown amount, a nutrient nothing carried, and a day with nothing
+    logged at all are each a marking the composer puts back if the words drop
+    it, because each of them is what stops a number being read as complete.
+    """
+    ctx = turn_context(config)
+    ctx.intent = "review_day"
+    profile = ctx.profile
+    assert profile is not None
+    review = await run_review_day(
+        db=ctx.deps.db,
+        turn=models(ctx),
+        profile=profile,
+        message=ctx.raw_message,
+        # The same clock the Meal was stamped with, so "today" means the day the
+        # User is living in and not the day the container thinks it is.
+        now=datetime.now(MANILA),
+    )
+    ctx.record(review.call)
+    ctx.intent_results.append(
+        IntentResult(
+            intent="review_day",
+            text=review.text,
+            facts=review.facts,
+            disclaimers=review.disclaimers,
+        )
+    )
+    return {}
+
+
 async def dispatch(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     """The stub each remaining Intent path replaces. It reports what the router
     decided for one Intent, like any other path, and the composer says it.
@@ -766,6 +808,7 @@ def build_graph(checkpointer: Any):
         ("clarify", clarify),
         ("update_profile", update_profile),
         ("log_meal", log_meal),
+        ("review_day", review_day),
         ("retrieve", retrieve),
         ("answer_question", answer_question),
         ("dispatch", dispatch),
@@ -779,14 +822,22 @@ def build_graph(checkpointer: Any):
     builder.add_conditional_edges(
         "route",
         next_node,
-        ["clarify", "update_profile", "log_meal", "retrieve", "dispatch", "refuse"],
+        [
+            "clarify", "update_profile", "log_meal", "review_day", "retrieve",
+            "dispatch", "refuse",
+        ],
     )
     # Where every Intent path ends: back for the second Intent, or on to the one
     # composer. The loop edge is these lists naming each other's entry nodes.
-    onwards = ["update_profile", "log_meal", "retrieve", "dispatch", "compose_reply"]
+    onwards = [
+        "update_profile", "log_meal", "review_day", "retrieve", "dispatch",
+        "compose_reply",
+    ]
     builder.add_conditional_edges("update_profile", after_update, [*onwards, "clarify"])
     # Logging a Meal never interrupts the Turn, so `clarify` is not among these.
     builder.add_conditional_edges("log_meal", after_intent, onwards)
+    # Nor does reviewing a day: a day the Coach cannot total is answered, not asked about.
+    builder.add_conditional_edges("review_day", after_intent, onwards)
     builder.add_edge("retrieve", "answer_question")
     builder.add_conditional_edges("answer_question", after_intent, onwards)
     builder.add_conditional_edges("dispatch", after_intent, onwards)
