@@ -273,19 +273,20 @@ class DraftingGraph:
     foods: list[str] = field(default_factory=list)
     regenerates: bool = True
     asked: list[list[str]] = field(default_factory=list)
-    # A second part, on the Intent named, for the two-Intent cases.
+    # A second part, on the Intent named, for the two-Intent cases. It runs
+    # first unless `beside_last`, and which side it runs on is the whole of one
+    # test: a checked Intent that finished first must still be checked.
     beside: tuple[str, str] | None = None
+    beside_last: bool = False
 
     async def astream(self, inputs, config, stream_mode):
         ctx = config["configurable"][TURN_CONTEXT_KEY]
         ctx.profile = await ctx.deps.db.load_profile(inputs["user_id"])
         ctx.models = ctx.deps.models.for_turn(known_names=[ctx.profile.name])
         ctx.foods = list(self.foods)
-        if self.beside is not None:
-            ctx.intent_results.append(
-                IntentResult(intent=self.beside[0], text=self.beside[1])
-            )
-            yield {self.beside[0]: {}}
+        if self.beside is not None and not self.beside_last:
+            async for step in self._beside(ctx):
+                yield step
         ctx.intent_results.append(
             IntentResult(
                 intent=self.intent,
@@ -294,10 +295,19 @@ class DraftingGraph:
             )
         )
         yield {self.intent: {}}
+        if self.beside is not None and self.beside_last:
+            async for step in self._beside(ctx):
+                yield step
         # The real composer, and the real way it hands the seam its one
         # regeneration. Nothing about the check is faked here but the paths.
         await compose_reply(inputs, config)
         yield {"compose_reply": {}}
+
+    async def _beside(self, ctx):
+        ctx.intent_results.append(
+            IntentResult(intent=self.beside[0], text=self.beside[1])
+        )
+        yield {self.beside[0]: {}}
 
     def _again(self, without):
         self.asked.append(list(without))
@@ -404,8 +414,11 @@ CONFIRMED = "Lou, I changed your allergies from nothing to peanut."
 
 
 async def test_the_check_runs_when_a_checked_intent_is_not_the_last_one(seam):
-    """`log_meal` first, `ask_question` second. Reading only the Intent that
-    finished last would skip the check on a Turn that logged a Meal."""
+    """`log_meal` first, `ask_question` second — the order "I ate two eggs, is
+    that enough protein" produces. The Intent that finished last is not on the
+    list, and reading only that one would skip the check on a Turn that logged
+    a Meal. `beside_last` is what puts them in that order, and it is the whole
+    of this test: the same parts the other way round prove nothing here."""
     seam.provider.script(
         ComposedReply(text="Lou, I logged dinner: bangus. Try it with a peanut sauce."),
         ComposedReply(text="Lou, I logged dinner: bangus, and calamansi goes well."),
@@ -414,10 +427,12 @@ async def test_the_check_runs_when_a_checked_intent_is_not_the_last_one(seam):
         drafts=["I logged dinner: bangus.", "I logged dinner: bangus."],
         intent="log_meal",
         beside=("ask_question", "Grilled fish is a lean protein."),
+        beside_last=True,
     )
 
     events = await drive(seam, graph, "I had bangus, what goes with it?")
 
+    assert [p.intent for p in answer(events).reply.parts] == ["log_meal", "ask_question"]
     assert graph.asked == [["peanut"]]  # the composer named it; the check saw it
     assert "peanut" not in answer(events).reply.text
 
