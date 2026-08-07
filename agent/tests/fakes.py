@@ -38,7 +38,7 @@ from nutrigraph_agent.food import CANDIDATES, COLUMNS, FoodCandidate, candidate
 from nutrigraph_agent.models import (
     UPDATABLE_FIELDS,
     Profile,
-    Recommendation,
+    RankedFoods,
     RouterDecision,
 )
 from nutrigraph_agent.providers import Models
@@ -79,7 +79,7 @@ NAME_PLACEHOLDER = re.compile(r"\[NAME_\d+\]")
 # What the ranker writes when a test is about something else. The food is a real
 # row of the dish table, because a name that is not a candidate is rejected —
 # which is the whole of the recommend path's contract with a model.
-SUGGESTED = Recommendation(
+SUGGESTED = RankedFoods(
     suggestion="[NAME_1], try Lechon manok next.",
     reason="It carries the most protein of anything left on your list.",
     foods=["Lechon manok"],

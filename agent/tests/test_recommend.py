@@ -23,7 +23,7 @@ from nutrigraph_agent.models import (
     ParsedMeal,
     Profile,
     ProfileUpdate,
-    Recommendation,
+    RankedFoods,
     RouterDecision,
 )
 from nutrigraph_agent.recommend import (
@@ -53,7 +53,7 @@ def prompts(seam) -> list[str]:
 def ranking_prompt(seam) -> str:
     """What the ranker was shown. It is the last prose-tier call on a one-Intent
     Turn, and the only place a candidate list can be."""
-    return next(c.sent for c in seam.provider.seen if c.asked_for is Recommendation)
+    return next(c.sent for c in seam.provider.seen if c.asked_for is RankedFoods)
 
 
 async def a_meal(db, *, grams: float, values: dict, name="Pandesal", source="local",
@@ -212,7 +212,7 @@ async def test_a_suggestion_naming_a_food_that_was_not_a_candidate_fails(seam):
     a row."""
     seam.provider.script(
         WANTS,
-        Recommendation(
+        RankedFoods(
             suggestion="[NAME_1], have a tuna poke bowl.",
             reason="It is high in protein.",
             foods=["tuna poke bowl"],
@@ -281,11 +281,11 @@ async def test_the_ranker_climbs_the_same_ladder_as_every_other_call(seam):
     from .fakes import ResourceExhausted
 
     seam.provider.script(WANTS, SUGGESTED)
-    seam.provider.fail_on(Recommendation, *[ResourceExhausted("429")] * 3)
+    seam.provider.fail_on(RankedFoods, *[ResourceExhausted("429")] * 3)
 
     events = await seam.turn(ASK)
 
-    assert seam.provider.attempts_on(Recommendation) == [
+    assert seam.provider.attempts_on(RankedFoods) == [
         PROSE_MODEL, PROSE_MODEL, PROSE_MODEL, SCHEMA_MODEL
     ]
     assert "Lechon manok" in answer(events).reply.text
@@ -405,7 +405,7 @@ async def test_a_proxy_row_is_marked_and_a_calculated_row_is_never_measured(seam
     """Nothing here adjusts a transcribed value; it says what the value is."""
     seam.provider.script(
         WANTS,
-        Recommendation(
+        RankedFoods(
             suggestion="[NAME_1], try Sisig.",
             reason="It closes the protein gap.",
             foods=["Sisig"],
@@ -466,7 +466,7 @@ async def test_a_food_the_check_strikes_is_said_again_from_the_rows(seam):
     asking for another draft is how a Turn learns to loop."""
     seam.provider.script(
         WANTS,
-        Recommendation(
+        RankedFoods(
             suggestion="[NAME_1], try Lechon manok with a peanut sauce.",
             reason="It closes the protein gap.",
             foods=["Lechon manok"],
@@ -478,7 +478,7 @@ async def test_a_food_the_check_strikes_is_said_again_from_the_rows(seam):
     reply = answer(events).reply
     assert "peanut" not in reply.text
     # One ranker call, and no second one: the answer was rebuilt from the rows.
-    assert len(seam.provider.attempts_on(Recommendation)) == 1
+    assert len(seam.provider.attempts_on(RankedFoods)) == 1
 
 
 # --- the measurement ----------------------------------------------------------

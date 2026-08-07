@@ -256,9 +256,14 @@ SUGGESTION_MAX_CHARS = 400
 REASON_MAX_CHARS = 300
 
 
-class Recommendation(BaseModel):
-    """What to eat next, ranked and explained from the candidates the SQL
-    filters left standing.
+class RankedFoods(BaseModel):
+    """The only thing the ranker asks a model for: which of the candidates, and
+    why.
+
+    Not the Recommendation. The Recommendation is what the path assembles —
+    the sentences, the markings, and the row that both measurement signals read
+    — and this is the ranking it is assembled around, which is exactly the
+    slice's ordering: code finds, and the model ranks.
 
     The model does one job here: it ranks and it explains. It does not find the
     food — `foods` is copied from the candidate list, and a name that is not on

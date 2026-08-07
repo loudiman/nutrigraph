@@ -41,7 +41,7 @@ from uuid import UUID
 from .budget import fit
 from .db import Candidate, Database, DayTotal
 from .meal import MANILA, _list, day_bounds, stand_in
-from .models import Profile, Recommendation
+from .models import Profile, RankedFoods
 from .providers import ModelCall, SchemaFailure, TurnModels
 from .review import DERIVED, SAYS, Targets, amount, named, targets_for
 
@@ -147,7 +147,7 @@ class Gap:
 
 
 @dataclass
-class Suggestion:
+class Recommendation:
     """What one `recommend` produced: the sentences, what the call cost, and the
     foods named — which is what the `recommendation` row records and what both
     measurement signals read.
@@ -333,7 +333,7 @@ async def recommend(
     profile: Profile,
     turn_id: UUID,
     now: datetime,
-) -> Suggestion:
+) -> Recommendation:
     """One suggestion: the gap, the filtered rows, and only then a model."""
     targets = targets_for(profile)
     start, end = day_bounds(now.astimezone(MANILA))
@@ -377,7 +377,7 @@ async def recommend(
             # ladder and the one schema retry are `compose`'s, so a rate-limit
             # stop falls to the weaker model rather than ending the Turn.
             written, call = await turn.compose(
-                Recommendation, system=RANK_SYSTEM, user=prompt
+                RankedFoods, system=RANK_SYSTEM, user=prompt
             )
             foods = check_foods(written.foods, candidates)
             reason = turn.restore(written.reason)
@@ -428,7 +428,7 @@ async def recommend(
         marks = markings_for(gap, names, allowed, without=without)
         return " ".join([said, *(m for m in marks if m not in said)]), marks
 
-    return Suggestion(
+    return Recommendation(
         text=" ".join([text, *(m for m in markings if m not in text)]),
         call=call,
         foods=foods,

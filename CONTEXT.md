@@ -62,8 +62,12 @@ The classified purpose of a User message. One message carries at most two Intent
 ### The answers
 
 **Recommendation**:
-A proposed change to what the User eats next, produced from the Profile, the Goal, and the logged Meals.
-_Avoid_: Suggestion, tip, advice
+A proposed change to what the User eats next, produced from the Profile, the Goal, and the logged Meals. It names only Candidates, it always carries a reason, and it is measured two ways: whether the User accepted it, and whether a Meal holding one of its foods appeared within a day.
+_Avoid_: Suggestion, tip, advice. "Suggestion" is only ever the sentence inside a Recommendation, never the Recommendation itself.
+
+**Candidate**:
+One Food a Recommendation is allowed to name. Candidates are found by query — from the local Filipino dish table and from the Foods this User has already logged — with the allergies, the disliked foods and the diet-pattern conflicts already removed. A model ranks Candidates and explains the choice; it never adds one.
+_Avoid_: Option, choice, shortlist
 
 **Refusal**:
 The Coach's answer when a request falls outside its job. A Refusal states the boundary, gives a disclaimer, and points to a professional.
