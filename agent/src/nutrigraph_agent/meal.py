@@ -30,23 +30,15 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
-from .db import Database, MealItemRow, UnmatchedItem
+from .db import Database, DayTotal, MealItemRow, UnmatchedItem
 from .food import CANDIDATES, FoodCandidate, FoodSearch
 from .guardrail import scan_reply
-from .models import (
-    CoachReply,
-    FoodChoice,
-    MealType,
-    ParsedItem,
-    ParsedMeal,
-    Profile,
-    ReplyPart,
-)
+from .models import FoodChoice, MealType, ParsedItem, ParsedMeal, Profile
 from .providers import ModelCall, TurnModels
 
 log = logging.getLogger("nutrigraph.agent.meal")
@@ -174,12 +166,21 @@ class Logged:
 
 @dataclass
 class MealLog:
-    """What one `log_meal` produced: the answer, what the calls cost, and the
-    Items, which the caller stores and a test reads."""
+    """What one `log_meal` produced: the sentences, what the calls cost, and the
+    Items, which the caller stores and a test reads.
 
-    reply: CoachReply
+    Not a `CoachReply`. One node builds that, for whatever Intents the Turn ran,
+    and this module is one of them — so what comes back here is the finished
+    sentences and the markings within them, and the composer decides how the
+    User reads them.
+    """
+
+    text: str
     call: ModelCall
     items: list[Logged]
+    # The markings the composer may not drop: a stand-in value, a calculated
+    # one, an assumed portion, a total the source left short.
+    disclaimers: list[str] = field(default_factory=list)
     meal_id: UUID | None = None
 
 
@@ -377,10 +378,19 @@ def _list(names: list[str]) -> str:
     return f"{', '.join(names[:-1])} and {names[-1]}"
 
 
-def compose(profile: Profile, meal_type: str, items: list[Logged]) -> str:
-    """The answer. It names what was counted and what was not, marks a value
-    that is not a direct measurement, says when the portion was assumed rather
-    than stated, and invites a correction."""
+def compose(profile: Profile, meal_type: str, items: list[Logged]) -> tuple[str, list[str]]:
+    """The answer, and the markings within it that may not be lost.
+
+    It names what was counted and what was not, marks a value that is not a
+    direct measurement, says when the portion was assumed rather than stated,
+    and invites a correction.
+
+    The markings come back a second time as their own list because this answer
+    is not always the last word: on a two-Intent Turn the composer joins it to
+    another part, and a marking dropped there would be a wrong number presented
+    as a right one. The composer carries them as disclaimers and puts back any
+    that did not survive, so they cannot be lost to a model being brief.
+    """
     corrections = [i for i in items if i.corrected is not None]
     counted = [i for i in items if i.counted and i.corrected is None]
     missed = [i for i in items if not i.counted and i.corrected is None]
@@ -401,23 +411,24 @@ def compose(profile: Profile, meal_type: str, items: list[Logged]) -> str:
     if not lines:
         lines.append(f"{profile.name}, {NOTHING_TO_LOG}")
 
+    markings: list[str] = []
     for item in items:
         match = item.match
         if match is None:
             continue
         if match.value_kind == "proxy":
-            lines.append(
+            markings.append(
                 f"The {item.row.said_as} figures are a stand-in and not the dish "
                 f"itself: {stand_in(match.source_note or '')}"
             )
         elif match.value_kind == "calculated":
-            lines.append(
+            markings.append(
                 f"The {item.row.said_as} figures are calculated from component "
                 f"foods rather than measured, and are likely understated."
             )
 
     if any(i.row.portion_assumed for i in items):
-        lines.append(
+        markings.append(
             f"Where you did not give a weight I counted {int(DECLARED_SERVING_G)} g "
             f"for one serving, which is my assumption and not a measurement."
         )
@@ -429,13 +440,12 @@ def compose(profile: Profile, meal_type: str, items: list[Logged]) -> str:
         if column not in i.row.values
     })
     if thin:
-        lines.append(
+        markings.append(
             f"My source prints no {_list(thin)} for part of that, so those totals "
             f"are short rather than complete."
         )
 
-    lines.append(TELL_ME)
-    return " ".join(lines)
+    return " ".join([*lines, *markings, TELL_ME]), markings
 
 
 async def log_meal(
@@ -506,12 +516,9 @@ async def log_meal(
         if item.corrected is not None:
             await db.correct_meal_item(item.corrected, item.row)
 
-    text = compose(profile, meal_type, items)
+    text, markings = compose(profile, meal_type, items)
     return MealLog(
-        reply=CoachReply(text=text, parts=[ReplyPart(intent="log_meal", text=text)]),
-        call=call,
-        items=items,
-        meal_id=meal_id,
+        text=text, call=call, items=items, disclaimers=markings, meal_id=meal_id
     )
 
 
@@ -520,3 +527,53 @@ def day_bounds(day: datetime) -> tuple[datetime, datetime]:
     local = day.astimezone(MANILA)
     start = local.replace(hour=0, minute=0, second=0, microsecond=0)
     return start, start + timedelta(days=1)
+
+
+# What each summed column is called when the day is read back, and the unit it
+# is read back in. `kcal` is its own unit, which is why this is not a bare map.
+DAY_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    ("kcal", "", " kcal"),
+    ("protein_g", " g", " protein"),
+    ("fat_g", " g", " fat"),
+    ("carb_g", " g", " carbohydrate"),
+    ("fibre_g", " g", " fibre"),
+    ("sodium_mg", " mg", " sodium"),
+)
+
+NOTHING_COUNTED_TODAY = "Nothing has been counted for today yet."
+
+
+def day_line(total: DayTotal) -> str:
+    """The day so far, as one line of fact for whatever reads it next.
+
+    This is read after the Meal is written, so the numbers include it. That
+    ordering is the whole point of the two-Intent Turn: a question about the
+    day, asked in the same breath as the Meal, is answered from a total that
+    already holds it.
+
+    A column the source did not print is named as short rather than summed into
+    a number that looks complete, which is the same rule `DayTotal.missing`
+    exists for.
+    """
+    if not total.values:
+        return NOTHING_COUNTED_TODAY
+    numbers = ", ".join(
+        f"{total.values[column]:.1f}{unit}{word}"
+        for column, unit, word in DAY_COLUMNS
+        if column in total.values
+    )
+    line = f"The day so far, this Meal included: {numbers}."
+    short = [
+        word.strip()
+        for column, _, word in DAY_COLUMNS
+        if column in total.values and not total.complete(column)
+    ]
+    if short:
+        line += (
+            f" The {_list(short)} total is short rather than complete: my source "
+            f"prints none for part of what was counted."
+        )
+    if total.not_counted:
+        eaten = "food" if total.not_counted == 1 else "foods"
+        line += f" {total.not_counted} {eaten} logged today could not be counted at all."
+    return line

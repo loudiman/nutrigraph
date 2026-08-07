@@ -30,6 +30,7 @@ from nutrigraph_agent.meal import normalize
 from nutrigraph_agent.models import (
     Answer,
     Citation,
+    ComposedReply,
     FoodChoice,
     ParsedItem,
     ParsedMeal,
@@ -61,6 +62,15 @@ ATE_EGGS = ParsedMeal(items=[ParsedItem(name="egg", quantity=2, unit="piece")])
 CHOSE_EGG = FoodChoice(fdc_id="748967", reason="the plain whole egg")
 
 QUESTION = "is an egg a good source of protein?"
+
+# A Turn with two Intents, so `compose_reply` makes its prose-tier call. Both
+# land on the stub, which keeps the call count to the router and the composer.
+TWO_STUBS = RouterDecision(intents=["review_day", "recommend"], confidence=0.95)
+COMPOSED = ComposedReply(text="[NAME_1], here is both of those.")
+
+# The sentence issue #36 names: two Intents, and the second answers from a day
+# total the first has already written to.
+BOTH = RouterDecision(intents=["log_meal", "ask_question"], confidence=0.95)
 
 
 def cache_dump(seam) -> str:
@@ -309,6 +319,59 @@ async def test_a_stop_that_is_not_transient_is_raised_at_once(seam):
     assert seam.provider.slept == []
     assert events[-1].code == "turn_failed"
     assert events[-1].message == FALLBACK_ERROR
+
+
+async def test_the_composer_climbs_the_same_ladder_as_every_other_call(seam):
+    """`compose` is a provider call, so it is on the ladder — and it starts on
+    Flash, so unlike the schema tier it has a rung below it to fall to."""
+    seam.provider.script(TWO_STUBS, COMPOSED)
+    seam.provider.fail(None, *[ResourceExhausted("429")] * 3)
+
+    events = await seam.turn("how did my day go, and what should I eat tonight?")
+
+    assert [c.model for c in seam.provider.seen] == [
+        SCHEMA_MODEL, PROSE_MODEL, PROSE_MODEL, PROSE_MODEL, SCHEMA_MODEL
+    ]
+    assert seam.provider.slept == list(BACKOFF_SECONDS)
+    # And the words arrived, with the User's name put back into them.
+    assert answer(events).reply.text.startswith("Lou,")
+
+
+async def test_a_composer_the_provider_never_answers_ends_the_turn_with_the_fallback(seam):
+    """Not `COULD_NOT_COMPOSE`, which is what a schema the model could not fill
+    twice ends on. A provider that stopped at every rung is the ladder running
+    out, and that ends the Turn on the fixed message with an `error` event."""
+    seam.provider.script(TWO_STUBS, COMPOSED)
+    seam.provider.fail(None, *[ResourceExhausted("429")] * MAX_ATTEMPTS)
+
+    events = await seam.turn("how did my day go, and what should I eat tonight?")
+
+    assert events[-1].code == "provider_unavailable"
+    assert events[-1].message == FALLBACK_ERROR
+    assert len(seam.provider.seen) - 1 == MAX_ATTEMPTS
+
+
+async def test_the_composers_prompt_is_never_trimmed_and_the_overrun_is_recorded(seam):
+    """The node the 'true by construction' argument did not cover.
+
+    `compose_reply` assembles a prompt out of parts, and one of those parts
+    carries the day's totals — today's Meals. Every part is a `keep`, so a Turn
+    far over budget reaches the composer with the totals whole and records the
+    overrun instead.
+    """
+    seam.food.results = {"egg": [EGG]}
+    seam.provider.script(BOTH, ATE_EGGS, CHOSE_EGG, CITED, COMPOSED)
+
+    await seam.turn(
+        "I ate two eggs, is that enough protein? " + "eaten rice " * 5_000
+    )
+
+    composing = seam.provider.seen[-1].sent
+    # Today's Meals, in full, in the prompt of a Turn that was far over budget.
+    assert "25.2 g protein" in composing
+    assert "this Meal included" in composing
+    row = next(r for r in seam.db.events if r.node == "compose_reply")
+    assert row.over_budget is True
 
 
 def test_the_ladder_has_four_rungs_and_the_last_one_is_the_weaker_model():

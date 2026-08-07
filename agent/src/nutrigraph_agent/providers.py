@@ -2,8 +2,14 @@
 
 **The model routing rule, not a list of nodes.** Work that fills a fixed schema
 from text uses the schema tier; work that reasons or writes prose for the User
-uses the prose tier. A node inherits its model from the rule by choosing `fill`
-or `write`, and never names a model.
+uses the prose tier. A node inherits its model from the rule by choosing `fill`,
+`write` or `compose`, and never names a model.
+
+`compose` is the third method the rule produces rather than a fourth tier: the
+composer writes prose for the User, so it takes the prose model, and its output
+is schema-validated, so it takes the same structured-output path and the same
+one retry as `fill`. What it must not do is take the schema tier because it
+happens to fill a schema — the User reads what it writes.
 
 **The redaction wrapper.** `fill` and `write` redact before the call and restore
 after it, including on the retry after a schema failure (ADR 0002). A node
@@ -16,7 +22,10 @@ line, here, and nowhere else in the codebase — a test asserts that. Changing
 the two model names beside it, moves every call. There is no code path per
 provider to leave behind.
 
-**The retry ladder, bounded at four attempts.** On a free tier a rate-limit stop
+**The retry ladder, bounded at four attempts.** Every call `fill`, `compose`,
+`write` and the two embedding methods make climbs it, for the same reason a node
+cannot skip the Redactor: it is on the way out, not something a call site opts
+into. On a free tier a rate-limit stop
 is normal traffic, not an exception, and the ladder treats it that way: two
 retries about a second and then three seconds apart, then the same call on the
 weaker tier, because a slightly worse answer beats no answer. A stop that is not
@@ -288,7 +297,32 @@ class TurnModels:
         self, schema: type[Schema], *, system: str, user: str, retries: int = 1
     ) -> tuple[Schema, ModelCall]:
         """Fill a fixed schema from text. The schema tier, by the routing rule."""
-        primary = self.models.schema_model
+        return await self._fill(
+            schema, self.models.schema_model, system=system, user=user, retries=retries
+        )
+
+    async def compose(
+        self, schema: type[Schema], *, system: str, user: str, retries: int = 1
+    ) -> tuple[Schema, ModelCall]:
+        """Write prose for the User into a fixed schema. The prose tier.
+
+        The one retry is `fill`'s: the failure and the corrected attempt are two
+        provider calls, so both appear in the trace rather than the first one
+        disappearing behind the second.
+
+        The retry ladder is `fill`'s too, because both go through `_fill`. The
+        composer starts on Flash, so it has a rung below it: a rate-limit stop
+        there falls to Flash-Lite rather than ending a Turn whose Intent paths
+        have already done their work and written it down.
+        """
+        return await self._fill(
+            schema, self.models.prose_model, system=system, user=user, retries=retries
+        )
+
+    async def _fill(
+        self, schema: type[Schema], primary: str, *, system: str, user: str, retries: int
+    ) -> tuple[Schema, ModelCall]:
+        """The schema call both tiers make, and the ladder both climb."""
         model_name, tokens_in, tokens_out = primary, 0, 0
         note = ""
         for attempt in range(retries + 1):
