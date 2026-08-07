@@ -111,12 +111,18 @@ def prepare(database_url: str, models, cases: list[Case]) -> None:
     seed_local_foods(database_url)
 
     with psycopg.connect(database_url) as conn:
+        # Everything the eval's own Users left behind last time. A run has to be
+        # repeatable on a database that is not thrown away — a Meal logged by
+        # yesterday's run is in today's day total, and a Profile that already
+        # holds the allergy a case is about has nothing left to change.
+        for table in ("meal", "recommendation", "interaction_event", "message"):
+            conn.execute(f"delete from {table} where user_id like 'eval-%%'")
         for case in cases:
             if case.draft is not None:
                 continue
             row = {"user_id": case.user_id, **PROFILES[case.profile]}
             conn.execute(UPSERT, tuple(row[column] for column in COLUMNS))
-    log.info("seeded one Profile for each case")
+    log.info("seeded one Profile for each case, and cleared what the last run left")
 
     documents = load_corpus()
     passages = {
@@ -309,6 +315,10 @@ async def run_all(cases: list[Case], *, concurrency: int) -> list[dict[str, Any]
         settings.database_url,
         open=False,
         check=AsyncConnectionPool.check_connection,
+        # One connection for each case in flight, and one to spare. The default
+        # is four, and cases queueing behind each other for a connection is a
+        # run that takes minutes for no reason a User would ever see.
+        max_size=concurrency + 1,
         kwargs={"prepare_threshold": 0},
     )
     await pool.open()
@@ -376,6 +386,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rows", type=Path, help="where to write the judge's rows")
     parser.add_argument("--outcomes", type=Path, help="where to write every outcome")
     parser.add_argument("--group", choices=GROUPS, action="append")
+    parser.add_argument(
+        "--case", action="append",
+        help="run one case by id. For working on a case, never for a gate: a "
+        "run that names its cases is a skip list with the sign flipped",
+    )
     parser.add_argument("--concurrency", type=int, default=6)
     parser.add_argument(
         "--no-prepare", action="store_true",
@@ -384,7 +399,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    # psycopg's async mode cannot run on Windows' default event loop, and this
+    # is a command a developer runs on a laptop as well as in the build.
+    from nutrigraph_agent._windows import use_selector_event_loop
+
+    use_selector_event_loop()
     cases = load_cases(tuple(args.group) if args.group else GROUPS)
+    if args.case:
+        cases = [case for case in cases if case.id in set(args.case)]
     settings = _settings()
 
     started = time.perf_counter()

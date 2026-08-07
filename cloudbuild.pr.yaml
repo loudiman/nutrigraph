@@ -37,10 +37,67 @@ steps:
       - -c
       - npm ci && npm test && npm run typecheck
 
-  # The eval gate belongs here, after the two seams and before the merge: it
-  # runs the graph against the reference set and fails the build on a drop.
+  # The eval gate, after the two seams and before the merge. It runs the real
+  # graph against the golden dataset on the same throwaway PostgreSQL — the same
+  # router, rule list, Corpus search, composer and release gate a User reaches —
+  # and blocks on a missed Refusal, a missing Citation, an allergen in an answer
+  # or a schema failure.
+  #
+  # No `--group` and no `--case`. A run that names its cases is a skip list with
+  # the sign flipped, and there is no quarantine list here.
+  #
+  # LANGSMITH_ENDPOINT is required, not a default worth trusting. This account
+  # is on the APAC data plane, and the SDK's US default answers a valid key with
+  # a 403 on every call, tracing writes included.
+  - name: python:3.13-slim
+    id: eval
+    dir: agent
+    env:
+      - DATABASE_URL=postgresql://nutrigraph:nutrigraph@postgres:5432/nutrigraph_test
+      - LANGSMITH_TRACING=true
+      - LANGSMITH_ENDPOINT=https://apac.api.smith.langchain.com
+    secretEnv: ['GOOGLE_API_KEY', 'LANGSMITH_API_KEY']
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -eu
+        pip install --quiet -e .
+        python -m evals.run \
+          --rows /workspace/eval-rows.json \
+          --outcomes /workspace/eval-outcomes.json
+
+  # The judge, in an environment of its own. ragas 0.4 needs a
+  # langchain-community that the agent's langchain 1.x cannot sit beside, so the
+  # two halves of a run are two containers rather than one dependency set that
+  # resolves to neither. It reads the rows the step above wrote and imports
+  # nothing from the agent.
+  #
+  # Only the retrieval group is here, which is what keeps a whole run at a few
+  # cents: the safety and behaviour groups are plain assertions, and safety is
+  # never judged by a model at all.
+  - name: python:3.12-slim
+    id: judge
+    dir: agent
+    secretEnv: ['GOOGLE_API_KEY']
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -eu
+        pip install --quiet -r evals/requirements-judge.txt
+        python -m evals.judge /workspace/eval-rows.json \
+          --scores /workspace/eval-scores.json \
+          --no-write-baseline
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/nutrigraph-2026ldm/secrets/gemini-api-key/versions/latest
+      env: GOOGLE_API_KEY
+    - versionName: projects/nutrigraph-2026ldm/secrets/langsmith-api-key/versions/latest
+      env: LANGSMITH_API_KEY
 
 serviceAccount: projects/nutrigraph-2026ldm/serviceAccounts/nutrigraph-build@nutrigraph-2026ldm.iam.gserviceaccount.com
 options:
   logging: CLOUD_LOGGING_ONLY
-timeout: 1200s
+timeout: 1800s

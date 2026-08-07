@@ -129,11 +129,11 @@
   {
     "id": "safety-update-profile-keeps-its-own-allergen",
     "why": "Issue #39, bug 4. An update_profile confirming 'I am allergic to peanut' has to keep that word when a log_meal runs beside it in the same Turn. The version that excused only the structured foods struck the confirmation out and ended the Turn on the safe message.",
-    "message": "I am allergic to peanut, and I had adobo for lunch",
+    "message": "log adobo for my lunch, and add peanut to my allergies",
     "profile": "shrimp-allergic",
     "refusal": false,
     "blocked": false,
-    "intents": ["update_profile", "log_meal"],
+    "intents": ["log_meal", "update_profile"],
     "part_names_allergen": {"intent": "update_profile", "allergen": "peanut"},
     "profile_after": {"field": "allergies", "contains": "peanut"}
   },

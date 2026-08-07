@@ -12,8 +12,10 @@ row the cache holds.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import replace
 from datetime import timedelta
+from typing import Any
 
 import pytest
 from pydantic import BaseModel
@@ -26,6 +28,7 @@ from nutrigraph_agent.budget import (
     estimate_tokens,
     fit,
     last_turns,
+    render_history,
 )
 from nutrigraph_agent.db import FOOD_MATCH_DAYS, RETRIEVAL_SIMILARITY
 from nutrigraph_agent.meal import normalize
@@ -593,6 +596,103 @@ async def test_a_turn_over_budget_trims_the_history_and_records_the_overrun(seam
     # Still over after the trimming, so the Turn ran anyway and said so.
     row = next(r for r in seam.db.events if r.node == "route" and r.turn_id == seam.db.events[-1].turn_id)
     assert row.over_budget is True
+
+
+# What the Profile row and today's Meals look like once a node has rendered them
+# for a prompt. `graph._held` writes the Profile as `field: value` lines, and
+# `meal.day_line` opens with this sentence, so these strings appear where a node
+# built one and nowhere else — the Thread's own history is the User's prose.
+PROFILE_AND_TODAYS_MEALS = ("weight_kg:", "allergies:", "The day so far, this Meal included")
+
+
+def modules_that_trim() -> list[Any]:
+    """Every module holding a `fit`, found rather than listed.
+
+    A node that assembles a prompt calls `fit`, and `from .budget import fit`
+    binds a name in that module. Discovering them is what makes the test below a
+    guard rather than a description: a node added next year is covered without
+    anyone remembering this file exists.
+
+    The source tree is read rather than every module imported, because importing
+    `main` starts the process's configuration check, and `budget` is skipped
+    because patching `fit` where it is defined would not reach the name a node
+    already bound.
+    """
+    import importlib
+    from pathlib import Path
+
+    source = Path(graph.__file__).parent
+    found = []
+    for path in sorted(source.glob("*.py")):
+        if path.stem == "budget":
+            continue
+        if re.search(r"^from \.budget import .*\bfit\b", path.read_text("utf-8"), re.M):
+            found.append(importlib.import_module(f"nutrigraph_agent.{path.stem}"))
+    return found
+
+
+@pytest.fixture
+def trimmer(monkeypatch):
+    """Every `fit` call any node makes, as it was made."""
+    from nutrigraph_agent import budget
+
+    calls: list[dict] = []
+    real = budget.fit
+
+    def recording(**kwargs):
+        calls.append(kwargs)
+        return real(**kwargs)
+
+    patched = modules_that_trim()
+    assert patched, "no module assembles a prompt, which cannot be right"
+    for module in patched:
+        monkeypatch.setattr(module, "fit", recording)
+    return calls
+
+
+async def test_no_node_hands_the_profile_or_todays_meals_to_the_trimmer(seam, trimmer):
+    """The guard the cost-controls slice could not give itself.
+
+    It reported that "the Profile and today's Meals survive trimming" was true
+    *by construction*: only some nodes assemble a multi-part prompt, and none of
+    those held the Profile. That is a property of today's call sites, not a rule,
+    and a node written next year could hand the Profile to `history=` and nothing
+    would notice. This notices.
+
+    Every `fit` call the graph makes is recorded, across every shape of Turn
+    there is, and what may be cut — the history and the passages — is read for
+    the Profile row and for the day's totals. `keep` is not read: `keep` is
+    measured and never cut, which is the whole distinction.
+    """
+    seam.food.results = {"egg": [EGG]}
+    seam.provider.script(
+        RouterDecision(intents=["update_profile"], confidence=0.95),
+        ProfileUpdate(field="weight_kg", new_value="80", old_value="78"),
+        BOTH, ATE_EGGS, CHOSE_EGG, CITED, COMPOSED,
+        TWO_INTENTS, DayRequest(days_ago=0), SUGGESTED, COMPOSED,
+        ASKED, CITED,
+    )
+    # Far over budget, so every trimming branch runs rather than the early one.
+    long = " " + "eaten rice " * 3_000
+    await seam.turn("I weigh 80 kg now" + long)
+    await seam.turn("I ate two eggs, is that enough protein?" + long)
+    await seam.turn("how did my day go, and what should I eat tonight?" + long)
+    await seam.turn(QUESTION + long)
+
+    assert trimmer, "no node trimmed at all, so this proves nothing"
+    for call in trimmer:
+        trimmable = render_history(call.get("history") or []) + " ".join(
+            getattr(passage, "text", "") for passage in call.get("passages") or ()
+        )
+        for rendered in PROFILE_AND_TODAYS_MEALS:
+            assert rendered not in trimmable, (
+                f"{rendered!r} was handed to the trimmer; the Profile and today's "
+                f"Meals belong in `keep`, which is measured and never cut"
+            )
+    # And the battery really did put them in front of `fit`, in `keep`, rather
+    # than passing because no node ever held them.
+    kept = " ".join(text for call in trimmer for text in call["keep"])
+    assert any(rendered in kept for rendered in PROFILE_AND_TODAYS_MEALS)
 
 
 async def test_the_profile_and_todays_meals_reach_the_provider_on_an_over_budget_turn(seam):

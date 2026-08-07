@@ -1,0 +1,12 @@
+# The judge's environment, and only the judge's. It is installed on its own,
+# never beside the agent: ragas 0.4 imports
+# `langchain_community.chat_models.vertexai`, which needs a langchain-core below
+# 1.0, and the agent runs on langchain 1.x. One environment holding both
+# resolves to neither, so the two halves of an eval run are two processes.
+#
+# Every pin here is exact. ragas has shipped nothing for about five months and
+# 0.4 broke the older import paths outright, so an unpinned version is a build
+# that breaks on a day nobody changed anything. The pin is the decision.
+ragas==0.4.3
+langchain-community==0.3.31
+google-genai==2.17.0
