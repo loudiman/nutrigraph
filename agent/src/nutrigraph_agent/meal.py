@@ -361,7 +361,7 @@ def _corrected(item: ParsedItem, open_items: list[UnmatchedItem]) -> UUID | None
     return found.meal_item_id if found else None
 
 
-def stand_in(note: str) -> str:
+def stand_in(note: str, *, without: Sequence[str] = ()) -> str:
     """What a proxy row says it actually is, in a form the reply scan will pass.
 
     The first sentence of the note carries it; the rest is the transcription
@@ -373,13 +373,21 @@ def stand_in(note: str) -> str:
     replaced whole, so quoting such a sentence would take the marking down with
     the rest of the answer — the one thing that must never be lost. Where it
     would, the entry is named instead, which still says what stood in.
+
+    `without` is an allergen the prose scan struck out, and it collides the same
+    way: PhilFCT's note on the pancit molo proxy says the entry is not the
+    pork-and-shrimp filling a household uses, which is the sentence a User
+    allergic to shrimp may not be shown. It is dropped on the same terms and
+    for the same reason — the marking survives, the quotation does not.
     """
     body = re.sub(r"^[A-Z]+:\s*", "", note.strip())
     sentence = body.split(". ")[0].rstrip(".") + "."
-    if scan_reply(sentence) is None:
+    if scan_reply(sentence) is None and not allergens_named(without, sentence):
         return sentence
     named = re.search(r"'[^']+'", sentence)
-    return f"the PhilFCT entry {named.group(0)}." if named else "a different food."
+    if named and not allergens_named(without, named.group(0)):
+        return f"the PhilFCT entry {named.group(0)}."
+    return "a different food."
 
 
 def _list(names: list[str]) -> str:
@@ -445,7 +453,7 @@ def compose(
         if match.value_kind == "proxy":
             notes.append(
                 f"The {item.row.said_as} figures are a stand-in and not the dish "
-                f"itself: {stand_in(match.source_note or '')}"
+                f"itself: {stand_in(match.source_note or '', without=without)}"
             )
         elif match.value_kind == "calculated":
             notes.append(
@@ -454,8 +462,10 @@ def compose(
             )
     # A source note is FNRI's wording about a food, and it is the one place in
     # this answer a food can be named that no Item holds. It is therefore the
-    # one place the prose scan can strike out, and dropping it is the whole of
-    # "remove the food and write it again".
+    # one place the prose scan can strike out, and `stand_in` above drops the
+    # quotation while keeping the marking, which is what the User depends on.
+    # Whatever still names the allergen after that goes, marking and all: the
+    # answer not naming it is the harder requirement of the two.
     lines += [note for note in notes if not allergens_named(without, note)]
 
     if any(i.row.portion_assumed for i in items):
