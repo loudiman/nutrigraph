@@ -23,7 +23,12 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from nutrigraph_agent.graph import ALLERGY_CHECKED_INTENTS, TURN_CONTEXT_KEY
+from nutrigraph_agent.graph import (
+    ALLERGY_CHECKED_INTENTS,
+    TURN_CONTEXT_KEY,
+    IntentResult,
+    compose_reply,
+)
 from nutrigraph_agent.guardrail import (
     DISCLAIMER,
     HELPLINE,
@@ -37,10 +42,9 @@ from nutrigraph_agent.models import (
     INTENTS,
     Answer,
     Citation,
-    CoachReply,
+    ComposedReply,
     ParsedItem,
     ParsedMeal,
-    ReplyPart,
     RouterDecision,
 )
 from nutrigraph_agent.turn import run_turn
@@ -259,23 +263,35 @@ class DraftingGraph:
     foods: list[str] = field(default_factory=list)
     regenerates: bool = True
     asked: list[list[str]] = field(default_factory=list)
+    # A second part, on the Intent named, for the two-Intent cases.
+    beside: tuple[str, str] | None = None
 
     async def astream(self, inputs, config, stream_mode):
         ctx = config["configurable"][TURN_CONTEXT_KEY]
         ctx.profile = await ctx.deps.db.load_profile(inputs["user_id"])
-        ctx.intent = self.intent
-        ctx.foods = self.foods
-        ctx.reply = self._reply(self.drafts[0])
-        if self.regenerates:
-            ctx.redraft = self._again
+        ctx.models = ctx.deps.models.for_turn(known_names=[ctx.profile.name])
+        ctx.foods = list(self.foods)
+        if self.beside is not None:
+            ctx.intent_results.append(
+                IntentResult(intent=self.beside[0], text=self.beside[1])
+            )
+            yield {self.beside[0]: {}}
+        ctx.intent_results.append(
+            IntentResult(
+                intent=self.intent,
+                text=self.drafts[0],
+                again=self._again if self.regenerates else None,
+            )
+        )
         yield {self.intent: {}}
+        # The real composer, and the real way it hands the seam its one
+        # regeneration. Nothing about the check is faked here but the paths.
+        await compose_reply(inputs, config)
+        yield {"compose_reply": {}}
 
-    def _reply(self, text: str) -> CoachReply:
-        return CoachReply(text=text, parts=[ReplyPart(intent=self.intent, text=text)])
-
-    async def _again(self, without):
+    def _again(self, without):
         self.asked.append(list(without))
-        return self._reply(self.drafts[len(self.asked)])
+        return self.drafts[len(self.asked)], []
 
 
 async def drive(seam, graph, message: str = "what should I eat tonight?"):
@@ -365,6 +381,76 @@ async def test_the_check_does_not_run_on_a_forbidden_path(seam, intent):
 
     assert answer(events).reply.text == draft
     assert graph.asked == []
+
+
+# --- the two-Intent Turn -------------------------------------------------------
+#
+# A Turn runs up to two Intents and one node composes the reply from both, so
+# the check cannot ask which Intent finished last, and it cannot read the whole
+# composed text as though every sentence came from a path it is allowed to edit.
+
+
+CONFIRMED = "Lou, I changed your allergies from nothing to peanut."
+
+
+async def test_the_check_runs_when_a_checked_intent_is_not_the_last_one(seam):
+    """`log_meal` first, `ask_question` second. Reading only the Intent that
+    finished last would skip the check on a Turn that logged a Meal."""
+    seam.provider.script(
+        ComposedReply(text="Lou, I logged dinner: bangus. Try it with a peanut sauce."),
+        ComposedReply(text="Lou, I logged dinner: bangus, and calamansi goes well."),
+    )
+    graph = DraftingGraph(
+        drafts=["I logged dinner: bangus.", "I logged dinner: bangus."],
+        intent="log_meal",
+        beside=("ask_question", "Grilled fish is a lean protein."),
+    )
+
+    events = await drive(seam, graph, "I had bangus, what goes with it?")
+
+    assert graph.asked == [["peanut"]]  # the composer named it; the check saw it
+    assert "peanut" not in answer(events).reply.text
+
+
+async def test_a_part_on_an_unchecked_intent_keeps_its_own_word(seam):
+    """"I'm allergic to peanut, and I ate two eggs" is one Turn with two
+    Intents. The confirmation names peanut because that is the correct answer,
+    and the `log_meal` running beside it may not take the word away."""
+    seam.provider.script(ComposedReply(text=f"{CONFIRMED} I logged breakfast: egg."))
+    graph = DraftingGraph(
+        drafts=["I logged breakfast: egg."],
+        intent="log_meal",
+        beside=("update_profile", CONFIRMED),
+    )
+
+    events = await drive(seam, graph, "I'm allergic to peanut, and I ate two eggs")
+
+    reply = answer(events).reply
+    assert CONFIRMED in reply.text
+    assert graph.asked == []
+    assert [p.intent for p in reply.parts] == ["update_profile", "log_meal"]
+
+
+async def test_the_exclusion_is_one_allergen_and_not_the_whole_check(seam):
+    """What the unchecked part spoke for is the word it used. Every other
+    allergy on the Profile is still checked in the same composed reply."""
+    allergic_to(seam, "peanut", "shrimp")
+    seam.provider.script(
+        ComposedReply(text=f"{CONFIRMED} I logged breakfast: egg. Try a shrimp paste."),
+        ComposedReply(text=f"{CONFIRMED} I logged breakfast: egg."),
+    )
+    graph = DraftingGraph(
+        drafts=["I logged breakfast: egg."] * 2,
+        intent="log_meal",
+        beside=("update_profile", CONFIRMED),
+    )
+
+    events = await drive(seam, graph, "I'm allergic to peanut, and I ate two eggs")
+
+    assert graph.asked == [["shrimp"]]  # shrimp struck out, peanut spoken for
+    reply = answer(events).reply
+    assert "shrimp" not in reply.text
+    assert CONFIRMED in reply.text  # and the confirmation survived the strike
 
 
 async def test_a_cited_answer_about_the_users_own_allergen_is_not_blocked(seam):

@@ -9,6 +9,7 @@ from nutrigraph_agent.models import (
     INTENTS,
     AnswerEvent,
     CoachReply,
+    ComposedReply,
     ErrorEvent,
     NodeEvent,
     RouterDecision,
@@ -23,14 +24,19 @@ SURE = RouterDecision(intents=["review_day"], confidence=0.95)
 
 
 async def test_a_turn_calls_the_router_once_and_dispatches_what_it_decided(seam):
-    seam.provider.script(RouterDecision(intents=["review_day", "recommend"], confidence=0.9))
+    seam.provider.script(
+        RouterDecision(intents=["review_day", "recommend"], confidence=0.9),
+        ComposedReply(text="Lou, your day and what to eat next."),
+    )
 
     events = await seam.turn("how did my day go, and what should I eat tonight?")
 
     reply = answer(events).reply
     assert isinstance(reply, CoachReply)
     assert [p.intent for p in reply.parts] == ["review_day", "recommend"]
-    assert [c.model for c in seam.provider.seen] == [SCHEMA_MODEL]
+    # One router call on the schema tier, and one composer call on the prose
+    # tier. Neither stub asked a model anything of its own.
+    assert [c.model for c in seam.provider.seen] == [SCHEMA_MODEL, PROSE_MODEL]
 
 
 async def test_the_intent_list_is_never_longer_than_two_and_holds_only_the_five(seam):
@@ -44,8 +50,10 @@ async def test_the_intent_list_is_never_longer_than_two_and_holds_only_the_five(
 async def test_node_events_arrive_before_one_answer_event(seam):
     events = await seam.turn("I ate two eggs")
 
-    assert [type(e) for e in events] == [NodeEvent] * 4 + [AnswerEvent]
-    assert [e.node for e in events[:4]] == ["load_profile", "guard", "route", "dispatch"]
+    assert [type(e) for e in events] == [NodeEvent] * 5 + [AnswerEvent]
+    assert [e.node for e in events[:5]] == [
+        "load_profile", "guard", "route", "dispatch", "compose_reply",
+    ]
 
 
 async def test_raw_message_is_stored_unredacted_with_the_turn_identifier(seam):
@@ -182,7 +190,9 @@ async def test_every_node_writes_an_interaction_event_row(seam):
     await seam.turn("I ate two eggs", turn_id=turn_id)
 
     rows = seam.db.events
-    assert [r.node for r in rows] == ["load_profile", "guard", "route", "dispatch"]
+    assert [r.node for r in rows] == [
+        "load_profile", "guard", "route", "dispatch", "compose_reply",
+    ]
     assert {r.turn_id for r in rows} == {turn_id}
     assert all(r.latency_ms >= 0 for r in rows)
 

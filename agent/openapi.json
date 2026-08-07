@@ -187,7 +187,7 @@
           "text"
         ],
         "title": "CoachReply",
-        "description": "The Coach's complete answer to one User message."
+        "description": "The Coach's complete answer to one User message.\n\nOne node builds this, whatever the Turn did. `parts` holds one entry for\neach Intent that ran, so a Turn that did two jobs cannot report one."
       },
       "ErrorEvent": {
         "properties": {

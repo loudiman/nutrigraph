@@ -18,32 +18,65 @@ log = logging.getLogger("nutrigraph.agent.turn")
 FALLBACK_ERROR = "The Coach could not finish that. Nothing was saved. Please try again."
 
 
+def allergy_checked_turn(ctx: TurnContext) -> bool:
+    """Whether the allergy check runs at all: did any Intent this Turn ran
+    belong to it. A Turn runs up to two, so the question is not which Intent
+    finished last."""
+    return any(r.intent in ALLERGY_CHECKED_INTENTS for r in ctx.intent_results)
+
+
+def spoken_for(ctx: TurnContext) -> list[str]:
+    """What the prose scan may not strike out of the finished reply.
+
+    Two things. The food names the structured data holds, because the structured
+    comparison already dealt with those and the warning it produced names the
+    allergen on purpose — reading the Coach's own warning as a violation would
+    take the warning down with the answer. And whatever a part on an Intent that
+    is not allergy-checked said, because that part may name the allergen as a
+    fact: an `update_profile` confirming "I am allergic to shrimp" is the case,
+    and it may not lose its own word to a `log_meal` running beside it.
+
+    The second exclusion is one allergen wide, not one sentence wide, and it
+    cannot be narrower: the composer joins the parts into prose, so by the time
+    this reads the reply there is no sentence left to attribute to a part. So on
+    a Turn where an unchecked part names an allergen, that one word is out of
+    the check's reach for that Turn — which is the ticket's own ordering, since
+    the check does not run on those Intents at all. Every other allergy on the
+    Profile is still checked in the same reply, and the structured comparison on
+    the Items is untouched either way.
+    """
+    return [
+        *ctx.foods,
+        *(r.text for r in ctx.intent_results if r.intent not in ALLERGY_CHECKED_INTENTS),
+    ]
+
+
 async def allergy_checked(ctx: TurnContext, reply: CoachReply) -> CoachReply:
     """The prose half of the allergy check, on the two paths it belongs to.
 
     The structured comparison already ran inside the Intent path, against the
     `allergies` array on the Profile row. This reads the food sentences of the
-    finished draft for an allergen no Item holds — the "try a peanut sauce with
+    composed reply for an allergen no Item holds — the "try a peanut sauce with
     that" that the structured data cannot see.
 
-    A conflict strikes the food out and forces exactly one regeneration. A
-    second conflict, or a path that offers no way to write the answer again,
-    ends the Turn with the fixed safe message. There is no third attempt, so a
-    Turn cannot loop here.
+    A conflict strikes the food out and forces exactly one regeneration, through
+    the composer, which is the only thing that builds a reply. A second conflict,
+    or parts that offer no way to say themselves again, ends the Turn with the
+    fixed safe message. There is no third attempt, so a Turn cannot loop here.
     """
     assert ctx.profile is not None
     allergies = ctx.profile.allergies
-    found = allergens_in_prose(allergies, reply.text, ctx.foods)
+    found = allergens_in_prose(allergies, reply.text, spoken_for(ctx))
     if not found:
         return reply
     log.warning(
         "the allergy check struck a food out of the answer",
         extra={"turn_id": str(ctx.turn_id), "allergens": found},
     )
-    if ctx.redraft is None:
+    if ctx.redraft is None:  # pragma: no cover - `compose_reply` always sets it
         return safe_reply()
     reply = await ctx.redraft(found)
-    if allergens_in_prose(allergies, reply.text, ctx.foods):
+    if allergens_in_prose(allergies, reply.text, spoken_for(ctx)):
         log.warning(
             "the allergy check blocked the answer",
             extra={"turn_id": str(ctx.turn_id), "allergens": found},
@@ -97,9 +130,9 @@ async def run_turn(
                         extra={"turn_id": str(turn_id), "claim": claim})
             reply = safe_reply()
         # The allergy check, on `recommend` and `log_meal` and on nothing else.
-        # An answer on any other path may name an allergen as a fact, so the
-        # Intent decides whether this runs at all.
-        elif ctx.intent in ALLERGY_CHECKED_INTENTS and ctx.profile is not None:
+        # An answer on any other path may name an allergen as a fact, so what
+        # the Turn's Intents were decides whether this runs at all.
+        elif allergy_checked_turn(ctx) and ctx.profile is not None:
             reply = await allergy_checked(ctx, reply)
 
         # Store the raw message and the trace, then release the answer.
