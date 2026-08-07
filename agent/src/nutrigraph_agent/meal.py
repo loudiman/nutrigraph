@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -37,7 +38,7 @@ from uuid import UUID
 
 from .db import Database, DayTotal, MealItemRow, UnmatchedItem
 from .food import CANDIDATES, FoodCandidate, FoodSearch
-from .guardrail import scan_reply
+from .guardrail import allergens_named, scan_reply
 from .models import FoodChoice, MealType, ParsedItem, ParsedMeal, Profile
 from .providers import ModelCall, TurnModels
 
@@ -178,10 +179,19 @@ class MealLog:
     text: str
     call: ModelCall
     items: list[Logged]
-    # The markings the composer may not drop: a stand-in value, a calculated
-    # one, an assumed portion, a total the source left short.
+    # The markings the composer may not drop: an Item the Profile is allergic
+    # to, a stand-in value, a calculated one, an assumed portion, a total the
+    # source left short.
     disclaimers: list[str] = field(default_factory=list)
     meal_id: UUID | None = None
+    # How these sentences read again without a food, when the prose scan at the
+    # seam strikes one out. The composer asks for it exactly once.
+    again: Callable[[Sequence[str]], tuple[str, list[str]]] | None = None
+
+    @property
+    def foods(self) -> list[str]:
+        """What the structured Items say the foods are, for the allergy check."""
+        return [item_words(item.row) for item in self.items]
 
 
 def normalize(text: str) -> str:
@@ -340,6 +350,22 @@ def item_row(item: ParsedItem, attempt: Attempt, *, ordinal: int) -> MealItemRow
     )
 
 
+def item_words(row: MealItemRow) -> str:
+    """Everything the structured Item says the food is: what the User called it,
+    what it matched, and the dish table's own tags.
+
+    The tags are why this is worth more than the name. A User allergic to peanut
+    who logs kare-kare has said no peanut and matched no food called peanut, and
+    the dish table's `peanut` tag is the only structured place that knows. A
+    FoodData Central row carries no tags, and then this is the two names.
+
+    The structured comparison and the prose scan's exclusion list both read this
+    one string, so the two halves of the check cannot disagree about a food.
+    """
+    tags = (row.nutrients or {}).get("tags") or []
+    return " ".join([row.said_as, row.food_name or "", *tags])
+
+
 def _corrected(item: ParsedItem, open_items: list[UnmatchedItem]) -> UUID | None:
     """The Item this entry fixes, if it fixes one. The parse names the food word
     it is correcting; the identifier is looked up here, so a model cannot name a
@@ -351,7 +377,7 @@ def _corrected(item: ParsedItem, open_items: list[UnmatchedItem]) -> UUID | None
     return found.meal_item_id if found else None
 
 
-def stand_in(note: str) -> str:
+def stand_in(note: str, *, without: Sequence[str] = ()) -> str:
     """What a proxy row says it actually is, in a form the reply scan will pass.
 
     The first sentence of the note carries it; the rest is the transcription
@@ -363,13 +389,21 @@ def stand_in(note: str) -> str:
     replaced whole, so quoting such a sentence would take the marking down with
     the rest of the answer — the one thing that must never be lost. Where it
     would, the entry is named instead, which still says what stood in.
+
+    `without` is an allergen the prose scan struck out, and it collides the same
+    way: PhilFCT's note on the pancit molo proxy says the entry is not the
+    pork-and-shrimp filling a household uses, which is the sentence a User
+    allergic to shrimp may not be shown. It is dropped on the same terms and
+    for the same reason — the marking survives, the quotation does not.
     """
     body = re.sub(r"^[A-Z]+:\s*", "", note.strip())
     sentence = body.split(". ")[0].rstrip(".") + "."
-    if scan_reply(sentence) is None:
+    if scan_reply(sentence) is None and not allergens_named(without, sentence):
         return sentence
     named = re.search(r"'[^']+'", sentence)
-    return f"the PhilFCT entry {named.group(0)}." if named else "a different food."
+    if named and not allergens_named(without, named.group(0)):
+        return f"the PhilFCT entry {named.group(0)}."
+    return "a different food."
 
 
 def _list(names: list[str]) -> str:
@@ -378,18 +412,31 @@ def _list(names: list[str]) -> str:
     return f"{', '.join(names[:-1])} and {names[-1]}"
 
 
-def compose(profile: Profile, meal_type: str, items: list[Logged]) -> tuple[str, list[str]]:
+def compose(
+    profile: Profile,
+    meal_type: str,
+    items: list[Logged],
+    *,
+    without: Sequence[str] = (),
+) -> tuple[str, list[str]]:
     """The answer, and the markings within it that may not be lost.
 
-    It names what was counted and what was not, marks a value that is not a
-    direct measurement, says when the portion was assumed rather than stated,
-    and invites a correction.
+    It names what was counted and what was not, warns about an Item the Profile
+    is allergic to, marks a value that is not a direct measurement, says when
+    the portion was assumed rather than stated, and invites a correction.
 
     The markings come back a second time as their own list because this answer
     is not always the last word: on a two-Intent Turn the composer joins it to
     another part, and a marking dropped there would be a wrong number presented
     as a right one. The composer carries them as disclaimers and puts back any
-    that did not survive, so they cannot be lost to a model being brief.
+    that did not survive, so they cannot be lost to a model being brief. The
+    allergy warning is a marking for exactly that reason, and the strongest of
+    them: a Coach being brief may not be brief about that.
+
+    `without` is the allergen the prose scan struck out, and passing it is the
+    second and last time this runs for one Turn. Only the source notes are
+    dropped for it: the lines above them are the record of what the User said
+    they ate, and a record is not edited to make an answer pass a scan.
     """
     corrections = [i for i in items if i.corrected is not None]
     counted = [i for i in items if i.counted and i.corrected is None]
@@ -411,21 +458,46 @@ def compose(profile: Profile, meal_type: str, items: list[Logged]) -> tuple[str,
     if not lines:
         lines.append(f"{profile.name}, {NOTHING_TO_LOG}")
 
+    # The structured check. An exact word comparison against the `allergies`
+    # text array on the Profile row this Turn already loaded, so there is no
+    # join and no second query. The Item stays and the answer warns: a Meal is
+    # the record of what the User ate, and removing a food from it would be the
+    # Coach editing what they said rather than telling them what it found.
+    #
+    # It is a marking rather than a plain line so that the composer carries it
+    # as a disclaimer and puts it back if the words dropped it. Every other
+    # marking here stops a number being read as more certain than it is; this
+    # one is the only one that stops a User eating something.
     markings: list[str] = []
+    for item in items:
+        hit = allergens_named(profile.allergies, item_words(item.row))
+        if hit:
+            markings.append(
+                f"Careful, {item.row.said_as} matches {_list(hit)} on your allergy list."
+            )
+
+    notes: list[str] = []
     for item in items:
         match = item.match
         if match is None:
             continue
         if match.value_kind == "proxy":
-            markings.append(
+            notes.append(
                 f"The {item.row.said_as} figures are a stand-in and not the dish "
-                f"itself: {stand_in(match.source_note or '')}"
+                f"itself: {stand_in(match.source_note or '', without=without)}"
             )
         elif match.value_kind == "calculated":
-            markings.append(
+            notes.append(
                 f"The {item.row.said_as} figures are calculated from component "
                 f"foods rather than measured, and are likely understated."
             )
+    # A source note is FNRI's wording about a food, and it is the one place in
+    # this answer a food can be named that no Item holds. It is therefore the
+    # one place the prose scan can strike out, and `stand_in` above drops the
+    # quotation while keeping the marking, which is what the User depends on.
+    # Whatever still names the allergen after that goes, marking and all: the
+    # answer not naming it is the harder requirement of the two.
+    markings += [note for note in notes if not allergens_named(without, note)]
 
     if any(i.row.portion_assumed for i in items):
         markings.append(
@@ -516,9 +588,19 @@ async def log_meal(
         if item.corrected is not None:
             await db.correct_meal_item(item.corrected, item.row)
 
-    text, markings = compose(profile, meal_type, items)
+    def write(without: Sequence[str] = ()) -> tuple[str, list[str]]:
+        # Writing it again asks nobody anything: every sentence is a fact this
+        # module already holds, which is why it can be said a second time at all.
+        return compose(profile, meal_type, items, without=without)
+
+    text, markings = write()
     return MealLog(
-        text=text, call=call, items=items, disclaimers=markings, meal_id=meal_id
+        text=text,
+        call=call,
+        items=items,
+        disclaimers=markings,
+        meal_id=meal_id,
+        again=write,
     )
 
 

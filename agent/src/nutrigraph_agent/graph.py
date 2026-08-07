@@ -38,10 +38,12 @@ an Intent, a Refusal is a template from `guardrail` rather than anybody's
 composition, and `clarify` is the graph's one interrupt, asked before any Intent
 path runs. Nothing composes there because nothing ran.
 
-**Order.** The composer runs after every Intent path, which is after the allergy
-check on the paths that have one, and before the guardrail text scan in
-`run_turn` — the answer is held back until that scan passes, so the composer
-writing the text does not put it on the screen.
+**Order.** The composer runs after every Intent path, which is after the
+structured half of the allergy check on the paths that have one, and before the
+guardrail text scan in `run_turn` — the answer is held back until that scan
+passes, so the composer writing the text does not put it on the screen. The
+prose half of the allergy check runs there too, on the composed text, and its
+one regeneration goes back through the composer.
 
 The state holds only what survives the Turn. Everything rebuilt every Turn
 lives on the `TurnContext`, which travels in the config and therefore never
@@ -56,7 +58,8 @@ from __future__ import annotations
 
 import logging
 import operator
-from dataclasses import dataclass, field
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from time import perf_counter
 from typing import Annotated, Any, TypedDict
@@ -112,11 +115,18 @@ INTENT_PATHS = {
 # `update_profile` is absent, and must stay absent. A correct confirmation of
 # "I am allergic to shrimp" names shrimp, and an allergy check on that path
 # destroys the very answer the User asked for. The prototype found this.
+# `ask_question` and `review_day` are absent for the same reason.
 #
-# There are two places the allergen check can arrive: a node on this path, and
-# the allergen half of `guardrail.scan_reply`, which `run_turn` runs on the
-# finished text of every answer that is not a Refusal. Neither may see an
-# `update_profile` confirmation. `tests/test_update_profile.py` fails at both.
+# The check is two halves, neither of them a node: the structured comparison
+# runs inside the Intent path, on the food names its own data holds, and
+# `guardrail.allergens_in_prose` runs at the seam in `run_turn`, on the text the
+# composer finished. Neither may see an `update_profile` confirmation, and
+# `tests/test_update_profile.py` fails at both — the node list it asserts is
+# also what stops the check being added here as a node.
+#
+# A Turn runs up to two Intents, so the seam asks whether *any* of them is on
+# this list rather than which one ran last. What a part on an Intent that is not
+# on the list said is left alone, for the same reason that Intent is absent.
 ALLERGY_CHECKED_INTENTS = ("recommend", "log_meal")
 
 ROUTER_SYSTEM = f"""You classify one message from a User to a nutrition Coach.
@@ -238,6 +248,13 @@ class IntentResult:
 
     `disclaimers` are the markings that may not be lost. The composer carries
     them onto the reply and puts back any the words dropped.
+
+    `again` is how this part reads without a food the allergy check struck out
+    of the finished reply. Only the path knows what may go and what may not — a
+    Meal's record of what was eaten may not, and the FNRI note quoted beside it
+    may — so the path reports the way rather than the composer guessing at it. A
+    path that reports none keeps its text, and the check then falls back to the
+    safe message rather than shipping the food.
     """
 
     intent: str
@@ -245,6 +262,7 @@ class IntentResult:
     facts: str = ""
     citations: list[Citation] = field(default_factory=list)
     disclaimers: list[str] = field(default_factory=list)
+    again: Callable[[Sequence[str]], tuple[str, list[str]]] | None = None
 
 
 @dataclass
@@ -271,6 +289,15 @@ class TurnContext:
     subject: Subject | None = None
     refused: bool = False
     nodes_run: list[str] = field(default_factory=list)
+    # What the Turn's structured data says its foods are — everything the
+    # allergy check compared against before the answer was written, so the prose
+    # half at the seam does not strike out a food the structured half already
+    # dealt with. Only an Intent path in `ALLERGY_CHECKED_INTENTS` adds to it.
+    foods: list[str] = field(default_factory=list)
+    # How to compose the reply again without a food. `compose_reply` sets it,
+    # because `compose_reply` is the only node that composes; the allergy check
+    # at the seam calls it exactly once and never a second time.
+    redraft: Callable[[Sequence[str]], Awaitable[CoachReply]] | None = None
     # What the node currently running has to report on its metric row.
     call: ModelCall | None = None
     intent: str | None = None
@@ -622,12 +649,19 @@ async def log_meal(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     ctx.record(logged.call)
     start, end = day_bounds(now)
     total = await ctx.deps.db.day_total(profile.user_id, start=start, end=end)
+    # The structured half of the allergy check already ran, inside `compose`,
+    # and what it found is on the result as a marking the composer may not drop.
+    # These two are what the prose half at the seam needs: the foods the Items
+    # hold, and the way to say this part again without one of them. A Meal is
+    # never un-logged for an allergen; only the words change.
+    ctx.foods += logged.foods
     ctx.intent_results.append(
         IntentResult(
             intent="log_meal",
             text=logged.text,
             facts=day_line(total),
             disclaimers=logged.disclaimers,
+            again=logged.again,
         )
     )
     return {}
@@ -699,28 +733,16 @@ def _for_composer(ctx: TurnContext) -> str:
     return "\n\n".join(blocks)
 
 
-async def compose_reply(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
-    """The one node that produces a `CoachReply` for an Intent path.
-
-    One part needs no composing: there is nothing to join, and a model asked to
-    rewrite sentences a path already assembled from facts can only lose one. Two
-    parts are worth a call, and it goes to the prose tier because the User reads
-    what comes back. The schema failure retries once with the error inside
-    `compose`, so both attempts are two calls in the trace, and a second failure
-    ends the Turn on the fixed message rather than on a half-written answer.
-
-    Whichever way the words arrive, `parts` and `disclaimers` are built here from
-    what the paths reported. So `parts` holds one entry for every Intent that
-    ran, and a marking raised on any path survives even if the words dropped it.
+async def composed(ctx: TurnContext) -> CoachReply:
+    """The reply, from what the paths reported. Called by the node below, and
+    once more by the allergy check when it strikes a food out.
 
     Nothing in this prompt may be trimmed, and the budget is told so rather than
     left to infer it: one of the parts carries the day's totals, which is
     today's Meals. A Turn over budget here runs anyway and records the overrun,
     like every other node.
     """
-    ctx = turn_context(config)
     results = ctx.intent_results
-    ctx.intent = results[-1].intent if results else None
     disclaimers = list(dict.fromkeys(d for r in results for d in r.disclaimers))
 
     if len(results) <= 1:
@@ -737,12 +759,12 @@ async def compose_reply(state: TurnState, config: RunnableConfig) -> dict[str, A
         # what may never be dropped.
         ctx.over_budget = fit(keep=[COMPOSE_SYSTEM, prompt]).over_budget
         try:
-            composed, call = await turn.compose(
+            reply, call = await turn.compose(
                 ComposedReply, system=COMPOSE_SYSTEM, user=prompt
             )
             ctx.record(call)
             # The provider wrote the placeholders back; the User reads the name.
-            text = turn.restore(composed.text)
+            text = turn.restore(reply.text)
         except SchemaFailure:
             log.warning(
                 "the composer did not fill the schema twice",
@@ -761,7 +783,56 @@ async def compose_reply(state: TurnState, config: RunnableConfig) -> dict[str, A
         ],
         disclaimers=disclaimers,
     )
-    return {"messages": [{"role": "coach", "text": text}]}
+    return ctx.reply
+
+
+async def compose_again_without(ctx: TurnContext, food: Sequence[str]) -> CoachReply:
+    """Every part said again without a food, and the reply composed from those.
+
+    This is the one regeneration the allergy check forces, and it goes through
+    the composer because the composer is the only thing that builds a reply. A
+    part that reported no way to say itself again keeps its text, so the food is
+    still there when the check looks the second time — and the second look ends
+    the Turn on the safe message rather than on a third attempt.
+    """
+    said_again: list[IntentResult] = []
+    for result in ctx.intent_results:
+        if result.again is None:
+            said_again.append(result)
+            continue
+        text, disclaimers = result.again(food)
+        said_again.append(replace(result, text=text, disclaimers=disclaimers))
+    ctx.intent_results = said_again
+    return await composed(ctx)
+
+
+async def compose_reply(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
+    """The one node that produces a `CoachReply` for an Intent path.
+
+    One part needs no composing: there is nothing to join, and a model asked to
+    rewrite sentences a path already assembled from facts can only lose one. Two
+    parts are worth a call, and it goes to the prose tier because the User reads
+    what comes back. The schema failure retries once with the error inside
+    `compose`, so both attempts are two calls in the trace, and a second failure
+    ends the Turn on the fixed message rather than on a half-written answer.
+
+    Whichever way the words arrive, `parts` and `disclaimers` are built in
+    `composed` from what the paths reported. So `parts` holds one entry for every
+    Intent that ran, and a marking raised on any path survives even if the words
+    dropped it.
+    """
+    ctx = turn_context(config)
+    ctx.intent = ctx.intent_results[-1].intent if ctx.intent_results else None
+    reply = await composed(ctx)
+    # The allergy check reads the finished text after this node, and composing
+    # again is the only way it may change one. `compose_reply` hands it the way
+    # rather than the check reaching into the graph for it.
+    #
+    # ponytail: a second composer call happens after `measured` wrote this
+    # node's row, so its cost is logged and not summed. A row of its own is
+    # worth having when the check fires often enough to show up in the bill.
+    ctx.redraft = lambda food: compose_again_without(ctx, food)
+    return {"messages": [{"role": "coach", "text": reply.text}]}
 
 
 def measured(name: str, node: Any) -> Any:
