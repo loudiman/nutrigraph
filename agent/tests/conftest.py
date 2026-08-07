@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import UUID, uuid4
 
 import pytest
@@ -13,7 +13,7 @@ from nutrigraph_agent.graph import build_graph
 from nutrigraph_agent.models import AnswerEvent, TurnEvent
 from nutrigraph_agent.turn import run_turn
 
-from .fakes import FakeDatabase, FakeProvider
+from .fakes import FakeDatabase, FakeFoodSearch, FakeProvider
 
 SCHEMA_MODEL = "gemini-3.5-flash-lite"
 PROSE_MODEL = "gemini-3.5-flash"
@@ -28,6 +28,7 @@ class TurnSeam:
     db: FakeDatabase
     provider: FakeProvider
     checkpointer: InMemorySaver
+    food: FakeFoodSearch = field(default_factory=FakeFoodSearch)
 
     def reconnect(self) -> None:
         """A Session ends and a new one opens. The Thread continues."""
@@ -39,6 +40,7 @@ class TurnSeam:
             models=self.provider.models(
                 schema_model=SCHEMA_MODEL, prose_model=PROSE_MODEL
             ),
+            food=self.food,
         )
         self.reconnect()
 

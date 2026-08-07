@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .db import Database
+from .food import FoodSearch
 from .providers import Models
 
 
@@ -29,4 +30,9 @@ class Deps:
     # The provider seam. A node never reaches a chat model directly: it asks
     # this for a Turn-bound `TurnModels`, which redacts before every call.
     models: Models
-    food: object = field(default_factory=lambda: NotWired("FoodData Central"))
+    # The food data seam. It stays `NotWired` where no key is configured, so a
+    # Turn that reaches for it fails loudly rather than quietly counting nothing
+    # — and a test can prove that a local dish was matched without it.
+    food: FoodSearch | NotWired = field(
+        default_factory=lambda: NotWired("FoodData Central")
+    )

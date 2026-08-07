@@ -139,6 +139,81 @@ class Answer(BaseModel):
         return self
 
 
+# The kind of eating occasion. The Meal Type comes from the time and from the
+# User's words, not from a list they pick.
+MEAL_TYPES = ("breakfast", "lunch", "dinner", "snack")
+
+MealType = Literal["breakfast", "lunch", "dinner", "snack"]
+
+ValueKind = Literal["direct", "proxy", "calculated"]
+
+
+class ParsedItem(BaseModel):
+    """One food inside a message, as the parse call read it.
+
+    `name` is what the User said, not what the Coach found: matching happens
+    after this, and an Item that matches nothing keeps this word.
+    """
+
+    name: str = Field(
+        min_length=1,
+        description="The food alone, as the User named it, lowercase and singular, "
+        "with no quantity and no sentence around it. Keep a Filipino food word "
+        "as the User wrote it.",
+    )
+    quantity: float | None = Field(
+        default=None,
+        gt=0,
+        description="The number the User said. Null when they gave none; never invented.",
+    )
+    unit: str | None = Field(
+        default=None,
+        description="The word the quantity counts: piece, slice, cup, bowl, plate, "
+        "serving, g, ml. Null when the User gave none.",
+    )
+    confidence: float = Field(
+        default=1.0, ge=0.0, le=1.0, description="How sure you are this is a food they ate."
+    )
+    corrects: str | None = Field(
+        default=None,
+        description="The food word from the list of foods the Coach could not "
+        "match, copied exactly, when this entry is the User's correction of it. "
+        "Null otherwise.",
+    )
+
+
+class ParsedMeal(BaseModel):
+    """One message read as one eating occasion."""
+
+    items: list[ParsedItem] = Field(default_factory=list)
+    meal_type: MealType | None = Field(
+        default=None,
+        description="Only when the User's own words say which. Null otherwise: the "
+        "time of day decides it then.",
+    )
+
+
+class FoodChoice(BaseModel):
+    """Which FoodData Central candidate is the food, and why.
+
+    A null `fdc_id` is a real answer, and the safer one: the Coach says plainly
+    that it could not count the food rather than putting a wrong number in the
+    User's day.
+    """
+
+    fdc_id: str | None = Field(
+        default=None,
+        description="The chosen candidate's fdc_id, copied exactly. Null when none "
+        "of the candidates is the food.",
+    )
+    reason: str = Field(
+        default="",
+        max_length=200,
+        description="One short phrase naming what made it the match, or what was "
+        "wrong with every candidate.",
+    )
+
+
 class ReplyPart(BaseModel):
     """One part of a reply, one for each Intent the Turn ran."""
 

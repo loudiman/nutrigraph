@@ -91,7 +91,10 @@ steps:
       # langchain-google-genai reads on its own, by convention, with no code
       # here naming it (providers.py, the one place that calls a provider,
       # never mentions a key).
-      - --set-env-vars=LANGSMITH_TRACING=true
+      # LANGSMITH_ENDPOINT is required, not a default worth trusting. This
+      # account is on the APAC data plane, and the SDK's US default answers a
+      # valid key with 403 on every call, tracing writes included.
+      - --set-env-vars=LANGSMITH_TRACING=true,LANGSMITH_ENDPOINT=https://apac.api.smith.langchain.com
       - --set-secrets=DATABASE_URL=neon-connection-string:latest,GOOGLE_API_KEY=gemini-api-key:latest,FDC_API_KEY=fdc-api-key:latest,LANGSMITH_API_KEY=langsmith-api-key:latest
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk

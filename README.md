@@ -2,7 +2,7 @@
 
 A conversational nutrition coach built on LangGraph, with a Node.js/Express API gateway in front of a Python/FastAPI agent service.
 
-**Status: guarded, and answering.** A rule list refuses what is outside the Coach's job before any model runs. Past it, one Gemini call classifies each message into Intents, and the Turn runs `update_profile` — the User changes a Profile fact by saying it — answers a nutrition question from a curated Corpus with a Citation on every claim, dispatches every other Intent to a stub, or asks one clarifying question. The work is charted as a Wayfinder map: [Map: NutriGraph build spec](https://github.com/loudiman/nutrigraph/issues/1). The vocabulary is fixed by [`CONTEXT.md`](CONTEXT.md) and the hard-to-reverse choices by [`docs/adr/`](docs/adr/).
+**Status: guarded, answering, and logging.** A rule list refuses what is outside the Coach's job before any model runs. Past it, one Gemini call classifies each message into Intents, and the Turn logs a Meal from an ordinary sentence, runs `update_profile` — the User changes a Profile fact by saying it — answers a nutrition question from a curated Corpus with a Citation on every claim, dispatches every other Intent to a stub, or asks one clarifying question. The work is charted as a Wayfinder map: [Map: NutriGraph build spec](https://github.com/loudiman/nutrigraph/issues/1). The vocabulary is fixed by [`CONTEXT.md`](CONTEXT.md) and the hard-to-reverse choices by [`docs/adr/`](docs/adr/).
 
 ## Layout
 
@@ -10,7 +10,7 @@ A conversational nutrition coach built on LangGraph, with a Node.js/Express API 
 gateway/                  Node and Express: the session, the turn identifier, the event stream
 agent/                    Python and FastAPI: the graph, the nodes, the migrations
 agent/migrations/         numbered SQL files, owned by the agent service — read its README first
-agent/seeds/              demo Profiles, and the Corpus manifest
+agent/seeds/              demo Profiles, the Corpus manifest, and the Filipino dish table
 gateway/public/           the minimal test client, and the demo-data-only warning above the box
 gateway/src/generated/    TypeScript types, generated from the agent's OpenAPI document
 deploy/                   the scheduled jobs the pipeline does not own
@@ -31,13 +31,13 @@ cloudbuild.yaml           every merge to main: build, migrate, deploy
 One container. Both services run natively with file reloading, so a graph change is visible in about a second.
 
 ```sh
-cp .env.example .env          # change POSTGRES_PORT if 5432 is taken, and set GOOGLE_API_KEY
+cp .env.example .env          # change POSTGRES_PORT if 5432 is taken; set GOOGLE_API_KEY and FDC_API_KEY
 docker compose up -d
 
 cd agent
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/nutrigraph-migrate  # numbered SQL files, in order; safe to re-run
-.venv/bin/nutrigraph-seed     # the demo Profiles; safe to run twice
+.venv/bin/nutrigraph-seed     # the demo Profiles and the Filipino dish table; safe to run twice
 .venv/bin/nutrigraph-ingest   # the Corpus: fetch, chunk, embed, store; slow, safe to run twice
 .venv/bin/python -m nutrigraph_agent.main
 
@@ -110,6 +110,36 @@ The confirmation is written, not generated — the three values are known, so no
 **The allergy check must not run on this path.** It belongs to `recommend` and `log_meal`, which is what `ALLERGY_CHECKED_INTENTS` says. A correct confirmation of "I am allergic to shrimp" contains the word shrimp, and a check here reads the Coach's own answer as a violation and destroys it — the prototype showed exactly that. There are two places it can arrive: a node on this path, and the allergen half of `scan_reply`. Tests in `agent/tests/test_update_profile.py` fail at both, and that was checked by adding each in turn and watching them go red.
 
 A column name cannot be a query parameter, so `Database.update_profile` whitelists the field against the same tuple the extractor's schema is built from, before it takes a connection.
+
+## `log_meal`
+
+One ordinary sentence becomes a Meal. "I ate two eggs and pandesal" is one Meal with two Items, and the Meal Type comes from the time and from the User's own words, never from a list they pick.
+
+`guard` → `route` → `log_meal` → END. One edge, and it goes to END: **logging a Meal never interrupts the Turn**, because `clarify` is the only interrupt in the graph and this is not it.
+
+One schema call parses the sentence into `ParsedItem`s — name, quantity, unit, confidence — and then each food is matched in a fixed order:
+
+1. **The local Filipino dish table first.** An exact alias wins at once, and `local_food_alias` is indexed with `text_pattern_ops`, so the prefix fallback uses an index under any collation. It is one query, which is what makes it affordable to run before every FoodData Central call.
+2. **Otherwise the FoodData Central search endpoint**, taking the top ten candidates. Public domain, no redistribution duty, and the free data.gov key allows 1,000 requests an hour. Open Food Facts is not used.
+3. **Then one schema-constrained Gemini choice** from those candidates, with the chosen `fdc_id` and the reason recorded in `meal_item.match_note` and in the trace.
+
+A three-food Meal costs about six calls. That is acceptable at demo volume, and every choice is auditable.
+
+**When nothing matches, the Meal is still written.** Nothing the User said is lost: the Item is stored with status `unmatched`, no nutrient values and no guessed ones, and the answer names which foods were counted and which were not and invites a correction. A later message that corrects an unmatched food fills that Item in where it stands — the Meal does not move, so the day it counts against does not change either.
+
+**What the numbers are is said, not implied.** `local_food.value_kind` records whether a row is `direct`, a `proxy` — a canned or commercial product standing in for the home-cooked dish — or `calculated` from component foods with a stated understatement. Presenting a canned adobo's figures as home-cooked adobo without saying so is the failure that column exists to prevent, so the answer marks both kinds, and it marks a portion the Coach assumed rather than one the User weighed. The answer is assembled in code from facts already held, not written by a model, so a marking the User depends on cannot be dropped by a model that decided to be brief.
+
+**A null is never a zero.** PhilFCT prints nothing for fibre and sodium on part of its items, and a null is the truth there. A missing value is absent from the scaling, null in the column, and counted in the day total's `missing` map, so a day holding a dish whose sodium the source does not print says its sodium total is short rather than reporting one that silently omits it.
+
+`meal_item.nutrients` holds the whole source response as JSONB — the full PhilFCT panel, or the FoodData Central food object — so nothing is lost to the six plain nullable numeric columns beside it, and a day total is one SQL sum over those six.
+
+The dish table is `agent/seeds/filipino_dishes.json`, 21 rows transcribed from DOST-FNRI PhilFCT by [#26](https://github.com/loudiman/nutrigraph/issues/26), with the verbatim panels in `filipino_dishes_audit.json`. `nutrigraph-seed` loads it and is safe to run twice: a dish is keyed by its name and its aliases are replaced wholesale, and a name that normalizes onto another dish's alias fails the load rather than handing one dish's figures to another.
+
+```
+FDC_API_KEY=...   # the free data.gov key: https://fdc.nal.usda.gov/api-key-signup
+```
+
+Leaving it empty leaves the search seam unwired, so a Turn that needs it fails loudly instead of quietly counting nothing.
 
 ## The model routing rule
 

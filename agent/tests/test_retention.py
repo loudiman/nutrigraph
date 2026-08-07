@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import psycopg
 import pytest
@@ -25,13 +25,15 @@ REPO = Path(__file__).resolve().parents[2]
 USER = "demo-user-1"
 
 
-def message(conn: psycopg.Connection, *, text: str, age_days: int) -> str:
+def message(
+    conn: psycopg.Connection, *, text: str, age_days: int, turn_id: UUID | None = None
+) -> str:
     """One `message` row, written `age_days` ago."""
     return conn.execute(
         "insert into message (user_id, turn_id, role, raw_text, created_at) "
         "values (%s, %s, 'user', %s, now() - make_interval(days => %s)) "
         "returning message_id",
-        (USER, str(uuid4()), text, age_days),
+        (USER, str(turn_id or uuid4()), text, age_days),
     ).fetchone()[0]
 
 
@@ -131,38 +133,27 @@ def test_a_day_review_over_a_purged_period_still_reports_correct_totals(database
     """The day review sums the structured Items, never the free text, so nulling
     the free text cannot change a total.
 
-    ponytail: `meal` and `meal_item` are created here with the columns the
-    specification fixes, because the log_meal slice (#33) has not landed. When it
-    does, `create table if not exists` finds the real tables and this test reads
-    them instead — the assertion is the same either way.
+    The tables are the real ones now that the log_meal slice (#33) has landed,
+    and the purge still writes two columns of `message` and nothing else.
     """
+    turn = uuid4()
     with psycopg.connect(database, autocommit=True) as conn:
-        conn.execute(
-            "create table if not exists meal ("
-            "  meal_id uuid primary key default gen_random_uuid(),"
-            "  user_id text not null references user_profile (user_id),"
-            "  logged_at timestamptz not null default now(),"
-            "  meal_type text,"
-            "  message_id uuid references message (message_id))"
+        message(
+            conn,
+            text="I ate two eggs and pandesal",
+            age_days=RETENTION_DAYS + 1,
+            turn_id=turn,
         )
-        conn.execute(
-            "create table if not exists meal_item ("
-            "  item_id uuid primary key default gen_random_uuid(),"
-            "  meal_id uuid not null references meal (meal_id),"
-            "  name_as_said text not null,"
-            "  kcal numeric,"
-            "  protein_g numeric)"
-        )
-        said = message(conn, text="I ate two eggs and pandesal", age_days=RETENTION_DAYS + 1)
         meal = conn.execute(
-            "insert into meal (user_id, logged_at, meal_type, message_id) "
-            "values (%s, now() - make_interval(days => %s), 'breakfast', %s) "
+            "insert into meal (user_id, turn_id, eaten_at, meal_type) "
+            "values (%s, %s, now() - make_interval(days => %s), 'breakfast') "
             "returning meal_id",
-            (USER, RETENTION_DAYS + 1, said),
+            (USER, str(turn), RETENTION_DAYS + 1),
         ).fetchone()[0]
         conn.execute(
-            "insert into meal_item (meal_id, name_as_said, kcal, protein_g) values "
-            "(%s, 'two eggs', 143, 12.6), (%s, 'pandesal', 147, 4.2)",
+            "insert into meal_item (meal_id, ordinal, said_as, status, kcal, protein_g) "
+            "values (%s, 0, 'two eggs', 'matched', 143, 12.6),"
+            "       (%s, 1, 'pandesal', 'matched', 147, 4.2)",
             (meal, meal),
         )
 
@@ -172,7 +163,7 @@ def test_a_day_review_over_a_purged_period_still_reports_correct_totals(database
         totals = conn.execute(
             "select sum(i.kcal), sum(i.protein_g) from meal_item i "
             "join meal m on m.meal_id = i.meal_id "
-            "where m.user_id = %s and m.logged_at::date = "
+            "where m.user_id = %s and m.eaten_at::date = "
             "      (now() - make_interval(days => %s))::date",
             (USER, RETENTION_DAYS + 1),
         ).fetchone()
