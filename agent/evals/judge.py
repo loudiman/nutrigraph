@@ -61,6 +61,7 @@ def metrics() -> dict[str, Any]:
     response by generating questions from it and measuring how near they sit to
     the one that was asked.
     """
+    import instructor
     from ragas.embeddings import GoogleEmbeddings
     from ragas.llms import llm_factory
     from ragas.metrics.collections import (
@@ -71,7 +72,13 @@ def metrics() -> dict[str, Any]:
     )
 
     client = _client()
-    llm = llm_factory(JUDGE_MODEL, provider="google", client=client)
+    # Wrapped here rather than left to `llm_factory`, which wraps a google-genai
+    # client synchronously. Every metric scores through `ascore`, and a
+    # synchronous client raises "Cannot use agenerate() with a synchronous
+    # client" on the first row — twenty-one rows, four metrics, no score at all.
+    llm = llm_factory(
+        JUDGE_MODEL, provider="google", client=instructor.from_genai(client, use_async=True)
+    )
     embeddings = GoogleEmbeddings(client=client, model=JUDGE_EMBEDDING_MODEL)
     return {
         "faithfulness": Faithfulness(llm=llm),

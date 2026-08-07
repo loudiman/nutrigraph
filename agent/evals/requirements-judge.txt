@@ -10,3 +10,9 @@
 ragas==0.4.3
 langchain-community==0.3.31
 google-genai==2.17.0
+# The structured-output layer under ragas' Google path, named here because the
+# judge wraps the client itself: `llm_factory` wraps a google-genai client
+# synchronously, and every metric scores through `ascore`.
+instructor==1.15.4
+# instructor's Gemini schema mapping needs it and does not depend on it.
+jsonref==1.1.0
