@@ -394,7 +394,7 @@ class FakeProvider:
     decisions: deque[BaseModel | str] = field(default_factory=deque)
     # What the next calls raise before answering, one for each. The call is
     # recorded in `seen` first, so a test can read which model each rung used.
-    failures: deque[BaseException] = field(default_factory=deque)
+    failures: deque[BaseException | None] = field(default_factory=deque)
     # Every wait the retry ladder asked for, in order, instead of sat through.
     slept: list[float] = field(default_factory=list)
     # An Intent with no path of its own, so an unscripted Turn ends at the stub
@@ -412,8 +412,10 @@ class FakeProvider:
         self.decisions.extend(decisions)
         return self
 
-    def fail(self, *failures: BaseException) -> FakeProvider:
-        """The next calls stop, in this order, before they answer."""
+    def fail(self, *failures: BaseException | None) -> FakeProvider:
+        """The next calls stop, in this order, before they answer. `None` is a
+        call that succeeds, which is how a test aims a failure at the second
+        call of a Turn rather than at the router."""
         self.failures.extend(failures)
         return self
 
@@ -439,7 +441,9 @@ class FakeProvider:
     def _stop(self) -> None:
         """Raise the next scripted failure, if there is one."""
         if self.failures:
-            raise self.failures.popleft()
+            failure = self.failures.popleft()
+            if failure is not None:
+                raise failure
 
     def vector(self, text: str) -> list[float]:
         """What the provider returns: 3072 dimensions, and deliberately not unit
