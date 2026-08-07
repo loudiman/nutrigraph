@@ -249,7 +249,7 @@ class FakeDatabase:
     ) -> DayTotal:
         rows = [
             i.row
-            for i in self.items
+            for i in sorted(self.items, key=lambda i: (i.eaten_at, i.row.ordinal))
             if i.user_id == user_id and start <= i.eaten_at < end
         ]
         matched = [r for r in rows if r.status == "matched"]
@@ -264,6 +264,7 @@ class FakeDatabase:
             missing={
                 c: sum(1 for r in matched if c not in r.values) for c in COLUMNS
             },
+            unmatched=[r.said_as for r in rows if r.status == "unmatched"],
         )
 
 
@@ -301,7 +302,7 @@ class FakeProvider:
     # An Intent with no path of its own, so an unscripted Turn ends at the stub
     # and makes exactly one call. A scripted Turn names the Intent it wants.
     default: RouterDecision = field(
-        default_factory=lambda: RouterDecision(intents=["review_day"], confidence=0.92)
+        default_factory=lambda: RouterDecision(intents=["recommend"], confidence=0.92)
     )
     seen: list[ProviderCall] = field(default_factory=list)
     # Every text that reached the embedding model, as it reached it.

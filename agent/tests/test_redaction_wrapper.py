@@ -45,9 +45,9 @@ IDENTIFIERS = (
 # retrieves from the Corpus and answers, and one whose first router answer
 # failed the schema and had to be asked again.
 SHAPES = {
-    "dispatch": [RouterDecision(intents=["review_day"], confidence=0.95)],
+    "dispatch": [RouterDecision(intents=["recommend"], confidence=0.95)],
     "clarify": [RouterDecision(intents=[], confidence=0.1)],
-    "retry": ["intents had three entries", RouterDecision(intents=["review_day"], confidence=0.9)],
+    "retry": ["intents had three entries", RouterDecision(intents=["recommend"], confidence=0.9)],
     "log_meal": [
         RouterDecision(intents=["log_meal"], confidence=0.95),
         ParsedMeal(

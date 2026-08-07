@@ -19,17 +19,17 @@ from .conftest import PROSE_MODEL, SCHEMA_MODEL, answer
 UNSURE = RouterDecision(intents=[], confidence=0.2)
 # An Intent whose path is not built yet, so this file reads the stub and the
 # seam rather than an Intent's own behaviour, which its own file tests.
-SURE = RouterDecision(intents=["review_day"], confidence=0.95)
+SURE = RouterDecision(intents=["recommend"], confidence=0.95)
 
 
 async def test_a_turn_calls_the_router_once_and_dispatches_what_it_decided(seam):
-    seam.provider.script(RouterDecision(intents=["review_day", "recommend"], confidence=0.9))
+    seam.provider.script(RouterDecision(intents=["recommend", "review_day"], confidence=0.9))
 
     events = await seam.turn("how did my day go, and what should I eat tonight?")
 
     reply = answer(events).reply
     assert isinstance(reply, CoachReply)
-    assert [p.intent for p in reply.parts] == ["review_day", "recommend"]
+    assert [p.intent for p in reply.parts] == ["recommend", "review_day"]
     assert [c.model for c in seam.provider.seen] == [SCHEMA_MODEL]
 
 
@@ -188,7 +188,7 @@ async def test_every_node_writes_an_interaction_event_row(seam):
 
     router = next(r for r in rows if r.node == "route")
     assert router.model == SCHEMA_MODEL
-    assert router.intent == "review_day"
+    assert router.intent == "recommend"
     assert (router.input_tokens, router.output_tokens) == (11, 7)
     assert router.cost_usd > 0
 

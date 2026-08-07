@@ -91,6 +91,8 @@ order by mi.created_at
 DAY_TOTAL = f"""
 select count(*) filter (where mi.status = 'matched') as counted,
        count(*) filter (where mi.status = 'unmatched') as not_counted,
+       array_agg(mi.said_as order by m.eaten_at, mi.ordinal)
+           filter (where mi.status = 'unmatched') as unmatched,
        {", ".join(f"sum(mi.{c}) as {c}" for c in COLUMNS)},
        {", ".join(
            f"count(*) filter (where mi.status = 'matched' and mi.{c} is null) "
@@ -201,6 +203,10 @@ class DayTotal:
     not_counted: int = 0
     values: dict[str, float] = field(default_factory=dict)
     missing: dict[str, int] = field(default_factory=dict)
+    # The foods that contributed nothing at all, by the words the User used. An
+    # unmatched Item is not in the sum, so the review names these and says the
+    # total is short by an unknown amount rather than presenting it as complete.
+    unmatched: list[str] = field(default_factory=list)
 
     def complete(self, column: str) -> bool:
         return self.missing.get(column, 0) == 0
@@ -416,6 +422,8 @@ class PostgresDatabase:
             not_counted=row["not_counted"],
             values=_floats(row),
             missing={c: row[f"{c}_missing"] for c in COLUMNS},
+            # `array_agg` over no rows is null, not an empty array.
+            unmatched=list(row["unmatched"] or []),
         )
 
 

@@ -42,6 +42,7 @@ from .deps import Deps
 from .guardrail import OUT_OF_SCOPE, Subject, match_rule, refusal
 from .meal import MANILA
 from .meal import log_meal as run_log_meal
+from .review import review_day as run_review_day
 from .models import (
     INTENTS,
     LIST_FIELDS,
@@ -71,6 +72,7 @@ INTENT_PATHS = {
     "update_profile": "update_profile",
     "ask_question": "retrieve",
     "log_meal": "log_meal",
+    "review_day": "review_day",
 }
 
 # The Intents whose answer is scanned against the Profile's allergies.
@@ -472,6 +474,31 @@ async def log_meal(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     return {"messages": [{"role": "coach", "text": logged.reply.text}]}
 
 
+async def review_day(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
+    """How the day went: the totals, the targets the Goal produces, and the gap.
+
+    The Meals are read from PostgreSQL, not from the checkpoint, so a question
+    about an earlier day is answered from the same place as today's — the Thread
+    never restarts, and it is not where a Meal lives.
+    """
+    ctx = turn_context(config)
+    ctx.intent = "review_day"
+    profile = ctx.profile
+    assert profile is not None
+    review = await run_review_day(
+        db=ctx.deps.db,
+        turn=models(ctx),
+        profile=profile,
+        message=ctx.raw_message,
+        # The same clock the Meal was stamped with, so "today" means the day the
+        # User is living in and not the day the container thinks it is.
+        now=datetime.now(MANILA),
+    )
+    ctx.record(review.call)
+    ctx.reply = review.reply
+    return {"messages": [{"role": "coach", "text": review.reply.text}]}
+
+
 async def dispatch(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     """The stub each remaining Intent path replaces. It says what the router
     decided and stops."""
@@ -532,6 +559,7 @@ def build_graph(checkpointer: Any):
         ("clarify", clarify),
         ("update_profile", update_profile),
         ("log_meal", log_meal),
+        ("review_day", review_day),
         ("retrieve", retrieve),
         ("answer_question", answer_question),
         ("dispatch", dispatch),
@@ -544,12 +572,16 @@ def build_graph(checkpointer: Any):
     builder.add_conditional_edges(
         "route",
         next_node,
-        ["clarify", "update_profile", "log_meal", "retrieve", "dispatch", "refuse"],
+        [
+            "clarify", "update_profile", "log_meal", "review_day", "retrieve",
+            "dispatch", "refuse",
+        ],
     )
     builder.add_conditional_edges("update_profile", after_update, ["clarify", END])
     builder.add_edge("clarify", END)
     # One edge, and it goes to END. Logging a Meal never interrupts the Turn.
     builder.add_edge("log_meal", END)
+    builder.add_edge("review_day", END)
     builder.add_edge("retrieve", "answer_question")
     builder.add_edge("answer_question", END)
     builder.add_edge("dispatch", END)

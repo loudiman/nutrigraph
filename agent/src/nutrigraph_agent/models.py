@@ -214,6 +214,23 @@ class FoodChoice(BaseModel):
     )
 
 
+class DayRequest(BaseModel):
+    """Which day the User is asking about.
+
+    The only thing a model decides on the review path. Everything after it is a
+    SQL sum and this codebase's own sentences, so the review cannot lose a
+    marking to a model that decided to be brief.
+    """
+
+    days_ago: int = Field(
+        default=0,
+        ge=0,
+        le=30,
+        description="0 for today, 1 for yesterday, 2 for the day before that. "
+        "0 when the message names no day.",
+    )
+
+
 class ReplyPart(BaseModel):
     """One part of a reply, one for each Intent the Turn ran."""
 
