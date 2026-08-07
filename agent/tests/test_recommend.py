@@ -254,7 +254,7 @@ async def test_a_suggestion_is_written_down_with_the_foods_it_named(seam):
     turn_id = uuid4()
     seam.provider.script(WANTS, SUGGESTED)
 
-    await seam.turn(ASK, turn_id=turn_id)
+    events = await seam.turn(ASK, turn_id=turn_id)
 
     written = seam.db.recommendations[-1]
     assert written.foods == ["Lechon manok"]
@@ -262,6 +262,10 @@ async def test_a_suggestion_is_written_down_with_the_foods_it_named(seam):
     assert written.gap_nutrient == "kcal"
     # Null until the User says. That is the acceptance signal, unanswered.
     assert written.accepted is None
+    # And the identifier reaches the answer, because a User pressing yes has to
+    # name the suggestion they are answering.
+    part = next(p for p in answer(events).reply.parts if p.intent == "recommend")
+    assert part.recommendation_id == written.recommendation_id
 
 
 # --- the routing rule ---------------------------------------------------------

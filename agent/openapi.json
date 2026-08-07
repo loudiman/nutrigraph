@@ -366,6 +366,18 @@
             },
             "type": "array",
             "title": "Citations"
+          },
+          "recommendation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommendation Id"
           }
         },
         "type": "object",

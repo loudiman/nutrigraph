@@ -186,6 +186,8 @@ export interface components {
             text: string;
             /** Citations */
             citations?: components["schemas"]["Citation"][];
+            /** Recommendation Id */
+            recommendation_id?: string | null;
         };
         /**
          * TurnEventEnvelope

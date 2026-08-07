@@ -267,6 +267,10 @@ class IntentResult:
     text: str
     facts: str = ""
     citations: list[Citation] = field(default_factory=list)
+    # The Recommendation this path wrote down, on the one path that writes one.
+    # It reaches the answer so the User can accept or reject that suggestion by
+    # its identifier, which is the first of the two measurement signals.
+    recommendation_id: UUID | None = None
     disclaimers: list[str] = field(default_factory=list)
     again: Callable[[Sequence[str]], tuple[str, list[str]]] | None = None
 
@@ -751,6 +755,7 @@ async def recommend(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
         IntentResult(
             intent="recommend",
             text=suggested.text,
+            recommendation_id=suggested.recommendation_id,
             disclaimers=suggested.disclaimers,
             again=suggested.again,
         )
@@ -832,7 +837,12 @@ async def composed(ctx: TurnContext) -> CoachReply:
     ctx.reply = CoachReply(
         text=text,
         parts=[
-            ReplyPart(intent=r.intent, text=r.text, citations=r.citations)
+            ReplyPart(
+                intent=r.intent,
+                text=r.text,
+                citations=r.citations,
+                recommendation_id=r.recommendation_id,
+            )
             for r in results
         ],
         disclaimers=disclaimers,

@@ -306,6 +306,11 @@ class ReplyPart(BaseModel):
     intent: str
     text: str
     citations: list[Citation] = Field(default_factory=list)
+    # The Recommendation this part wrote down, on the one path that writes one.
+    # It travels out with the answer because the acceptance signal needs it: a
+    # User pressing yes has to name the suggestion they are answering, and this
+    # is the only place the identifier could otherwise be known.
+    recommendation_id: UUID | None = None
 
 
 class CoachReply(BaseModel):
