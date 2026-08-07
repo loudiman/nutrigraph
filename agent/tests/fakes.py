@@ -352,12 +352,26 @@ class FakeDatabase:
         )
 
 
+# What a call is keyed on, both to aim a failure at it and to read its attempts
+# back. A structured call is keyed on the schema it asked the provider to fill;
+# the two kinds that ask for no schema are keyed on these.
+WRITE = "the prose call that fills no schema"
+EMBED = "the embedding call"
+
+
 @dataclass
 class ProviderCall:
-    """One call as the provider received it. Nothing above this line ran."""
+    """One call as the provider received it. Nothing above this line ran.
+
+    `asked_for` is what the call was: the schema it asked the provider to fill,
+    or `WRITE`. It is what lets a test read one call's rungs out of a Turn that
+    made several — so a provider call added somewhere else in the graph cannot
+    shift the list a ladder test asserts. Issue #54 is what happens without it.
+    """
 
     model: str
     texts: list[str]
+    asked_for: Any = WRITE
 
     @property
     def sent(self) -> str:
@@ -393,9 +407,10 @@ class FakeProvider:
     call: the router first, then the Intent path's own."""
 
     decisions: deque[BaseModel | str] = field(default_factory=deque)
-    # What the next calls raise before answering, one for each. The call is
-    # recorded in `seen` first, so a test can read which model each rung used.
-    failures: deque[BaseException | None] = field(default_factory=deque)
+    # What the next calls raise before answering, keyed on which call they are
+    # aimed at rather than on where it falls in the Turn. The call is recorded
+    # in `seen` first, so a test can read which model each rung used.
+    failures: dict[Any, deque[BaseException]] = field(default_factory=dict)
     # Every wait the retry ladder asked for, in order, instead of sat through.
     slept: list[float] = field(default_factory=list)
     # An Intent with no path of its own, so an unscripted Turn ends at the stub
@@ -413,12 +428,25 @@ class FakeProvider:
         self.decisions.extend(decisions)
         return self
 
-    def fail(self, *failures: BaseException | None) -> FakeProvider:
-        """The next calls stop, in this order, before they answer. `None` is a
-        call that succeeds, which is how a test aims a failure at the second
-        call of a Turn rather than at the router."""
-        self.failures.extend(failures)
+    def fail_on(self, asked_for: Any, *failures: BaseException) -> FakeProvider:
+        """The next calls *of this kind* stop, in this order, before they answer.
+
+        Aimed at the call and not at a position in the Turn. Counting positions
+        is what issue #54 was: a Turn that gains a provider call somewhere else
+        moved the target, and a ladder test failed although the ladder was
+        untouched.
+        """
+        self.failures.setdefault(asked_for, deque()).extend(failures)
         return self
+
+    def attempts_on(self, asked_for: Any) -> list[str]:
+        """The models one call was tried on, in order: its rungs of the ladder.
+
+        This, and not `seen`, is what a test about the ladder reads. `seen` is
+        every call the Turn made, and what else the Turn happens to call is not
+        that test's business.
+        """
+        return [call.model for call in self.seen if call.asked_for == asked_for]
 
     async def sleep(self, seconds: float) -> None:
         self.slept.append(seconds)
@@ -439,12 +467,11 @@ class FakeProvider:
             sleep=self.sleep,
         )
 
-    def _stop(self) -> None:
-        """Raise the next scripted failure, if there is one."""
-        if self.failures:
-            failure = self.failures.popleft()
-            if failure is not None:
-                raise failure
+    def _stop(self, asked_for: Any) -> None:
+        """Raise the next failure aimed at this call, if there is one."""
+        queued = self.failures.get(asked_for)
+        if queued:
+            raise queued.popleft()
 
     def vector(self, text: str) -> list[float]:
         """What the provider returns: 3072 dimensions, and deliberately not unit
@@ -463,8 +490,8 @@ class _FakeChat:
     provider: FakeProvider
     model: str
 
-    def _record(self, messages: list[dict[str, str]]) -> ProviderCall:
-        call = ProviderCall(self.model, [m["content"] for m in messages])
+    def _record(self, messages: list[dict[str, str]], asked_for: Any) -> ProviderCall:
+        call = ProviderCall(self.model, [m["content"] for m in messages], asked_for)
         self.provider.seen.append(call)
         return call
 
@@ -472,8 +499,8 @@ class _FakeChat:
         return _FakeStructured(self, schema)
 
     async def ainvoke(self, messages: list[dict[str, str]]) -> SimpleNamespace:
-        call = self._record(messages)
-        self.provider._stop()
+        call = self._record(messages, WRITE)
+        self.provider._stop(WRITE)
         if self.provider.prose is not None:
             return _message(self.provider.prose)
         # A Coach answering a redacted prompt writes the placeholder back, which
@@ -492,11 +519,11 @@ class _FakeEmbeddings:
     model: str
 
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
-        self.provider._stop()
+        self.provider._stop(EMBED)
         return [self.provider.vector(text) for text in texts]
 
     async def aembed_query(self, text: str) -> list[float]:
-        self.provider._stop()
+        self.provider._stop(EMBED)
         return self.provider.vector(text)
 
 
@@ -506,10 +533,10 @@ class _FakeStructured:
     schema: Any
 
     async def ainvoke(self, messages: list[dict[str, str]]) -> dict[str, Any]:
-        self.chat._record(messages)
+        self.chat._record(messages, self.schema)
         # The stop happens before the script is read, so a failed rung does not
         # consume the answer the next rung is supposed to give.
-        self.chat.provider._stop()
+        self.chat.provider._stop(self.schema)
         answer = self.chat.provider._next()
         if isinstance(answer, str):
             return {"raw": _message(""), "parsed": None, "parsing_error": ValueError(answer)}

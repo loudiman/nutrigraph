@@ -16,7 +16,9 @@ from dataclasses import replace
 from datetime import timedelta
 
 import pytest
+from pydantic import BaseModel
 
+from nutrigraph_agent import graph
 from nutrigraph_agent.budget import (
     BUDGET_TOKENS,
     HISTORY_TURNS,
@@ -31,6 +33,7 @@ from nutrigraph_agent.models import (
     Answer,
     Citation,
     ComposedReply,
+    DayRequest,
     FoodChoice,
     ParsedItem,
     ParsedMeal,
@@ -46,7 +49,14 @@ from nutrigraph_agent.providers import (
 from nutrigraph_agent.turn import FALLBACK_ERROR
 
 from .conftest import PROSE_MODEL, SCHEMA_MODEL, answer
-from .fakes import EGG, EGGS_CHUNK, BadApiKey, ResourceExhausted, now_utc
+from .fakes import (
+    EGG,
+    EGGS_CHUNK,
+    WRITE,
+    BadApiKey,
+    ResourceExhausted,
+    now_utc,
+)
 
 ASKED = RouterDecision(intents=["ask_question"], confidence=0.95)
 ATE = RouterDecision(intents=["log_meal"], confidence=0.95)
@@ -261,94 +271,174 @@ async def test_a_refused_turn_and_a_clarified_turn_cache_nothing(seam):
 
 
 # --- the retry ladder ---------------------------------------------------------
+#
+# Every test below reads `attempts_on(<the call>)`, never the whole of
+# `seen`. The ladder is a property of one call, and what else a Turn happens to
+# ask the provider is not these tests' business. Asserting the Turn's whole
+# sequence is what issue #54 was: #34 gave `review_day` a `DayRequest` call of
+# its own, three ladder tests went red, and the ladder was untouched. The
+# `ladder_seam` fixture runs each of them a second time with a provider call
+# added elsewhere in the graph, so that cannot come back.
 
 
-async def test_a_transient_failure_retries_twice_about_one_second_and_then_three(seam):
-    seam.provider.fail(ResourceExhausted("429"), ResourceExhausted("429")).script(SURE)
+class Interloper(BaseModel):
+    """A schema no node asks for, until the test double asks for it."""
 
-    events = await seam.turn("how did my day go?")
+    noted: bool = True
 
-    assert seam.provider.slept == [1.0, 3.0] == list(BACKOFF_SECONDS)
-    assert [c.model for c in seam.provider.seen] == [SCHEMA_MODEL] * 3
+
+@pytest.fixture(params=["as the graph is", "with a new call elsewhere in the graph"])
+def ladder_seam(request, seam, monkeypatch):
+    """The regression guard for issue #54, as a fixture.
+
+    The second parameter patches one node — `load_profile`, which every Turn
+    runs and no ladder test is about — to make one extra provider call before
+    doing its own work. A ladder test that reads the whole of `seen` fails
+    under it; one that reads only its own call's attempts does not notice.
+
+    A node cannot be added to a compiled graph, so the patch is on the module
+    global `build_graph` resolves, and the seam is rebuilt after it.
+    """
+    # Which half of the guard this run is, for the one test that asserts both.
+    seam.noisy = request.param != "as the graph is"
+    if not seam.noisy:
+        return seam
+
+    unpatched = graph.load_profile
+
+    async def also_calls_the_provider(state, config):
+        loaded = await unpatched(state, config)
+        ctx = graph.turn_context(config)
+        await ctx.models.fill(Interloper, system="unrelated", user="unrelated")
+        return loaded
+
+    monkeypatch.setattr(graph, "load_profile", also_calls_the_provider)
+    seam.reconnect()
+    # First in the script, because the patched node runs before every other.
+    seam.provider.script(Interloper())
+    return seam
+
+
+async def test_a_call_added_elsewhere_does_not_move_one_call_s_attempts(ladder_seam):
+    """The guard's own guard, and the defect issue #54 named, in one test.
+
+    Under the second parameter the Turn makes a provider call the graph does not
+    make. That is what `#34` did to these tests when they read the whole of
+    `seen`. Read one call's attempts instead and the two runs are identical.
+    """
+    ladder_seam.provider.fail_on(RouterDecision, ResourceExhausted("429"))
+    ladder_seam.provider.script(SURE, DayRequest(days_ago=0))
+
+    await ladder_seam.turn("how did my day go?")
+
+    # The double really does reach the provider — a fixture that quietly
+    # stopped would make every ladder test below pass for the wrong reason.
+    assert ladder_seam.provider.attempts_on(Interloper) == (
+        [SCHEMA_MODEL] if ladder_seam.noisy else []
+    )
+    # And the router's own rungs read the same either way.
+    assert ladder_seam.provider.attempts_on(RouterDecision) == [SCHEMA_MODEL] * 2
+
+
+async def test_a_transient_failure_retries_twice_about_one_second_and_then_three(ladder_seam):
+    ladder_seam.provider.fail_on(
+        RouterDecision, ResourceExhausted("429"), ResourceExhausted("429")
+    ).script(SURE, DayRequest(days_ago=0))
+
+    events = await ladder_seam.turn("how did my day go?")
+
+    assert ladder_seam.provider.slept == [1.0, 3.0] == list(BACKOFF_SECONDS)
+    # Three rungs for the router: the call and its two retries, all on the tier
+    # it started on, because the schema tier is already the weaker one.
+    assert ladder_seam.provider.attempts_on(RouterDecision) == [SCHEMA_MODEL] * 3
     # The Turn answered. A rate-limit stop is normal traffic on a free tier.
     assert answer(events).reply.parts[0].intent == "review_day"
 
 
-async def test_two_failures_on_flash_fall_back_to_flash_lite_for_the_same_call(seam):
-    # The router answers, then the prose tier stops three times over.
-    stops = [ResourceExhausted("429")] * 3
-    seam.provider.fail(None, *stops).script(UNSURE)
+async def test_two_failures_on_flash_fall_back_to_flash_lite_for_the_same_call(ladder_seam):
+    """The prose call `clarify` makes, which asks for no schema and so starts
+    on Flash — the tier that has a rung below it."""
+    ladder_seam.provider.fail_on(WRITE, *[ResourceExhausted("429")] * 3).script(UNSURE)
 
-    events = await seam.turn("hmm")
+    events = await ladder_seam.turn("hmm")
 
-    models = [c.model for c in seam.provider.seen]
-    assert models == [SCHEMA_MODEL, PROSE_MODEL, PROSE_MODEL, PROSE_MODEL, SCHEMA_MODEL]
+    assert ladder_seam.provider.attempts_on(WRITE) == [
+        PROSE_MODEL, PROSE_MODEL, PROSE_MODEL, SCHEMA_MODEL
+    ]
     # The same call, not a different one: one prompt across all four rungs.
-    assert len({c.sent for c in seam.provider.seen[1:]}) == 1
+    written = [c for c in ladder_seam.provider.seen if c.asked_for == WRITE]
+    assert len({c.sent for c in written}) == 1
     assert answer(events).reply.text.endswith("?")
 
 
-async def test_a_failure_at_every_step_ends_the_turn_with_the_fallback_and_an_error(seam):
-    seam.provider.fail(None, *[ResourceExhausted("429")] * MAX_ATTEMPTS).script(UNSURE)
+async def test_a_failure_at_every_step_ends_the_turn_with_the_fallback_and_an_error(
+    ladder_seam,
+):
+    ladder_seam.provider.fail_on(
+        WRITE, *[ResourceExhausted("429")] * MAX_ATTEMPTS
+    ).script(UNSURE)
 
-    events = await seam.turn("hmm")
+    events = await ladder_seam.turn("hmm")
 
     assert events[-1].code == "provider_unavailable"
     assert events[-1].message == FALLBACK_ERROR
     assert not any(type(e).__name__ == "AnswerEvent" for e in events)
 
 
-async def test_no_turn_exceeds_four_attempts(seam):
-    seam.provider.fail(None, *[ResourceExhausted("429")] * 9).script(UNSURE)
+async def test_no_turn_exceeds_four_attempts(ladder_seam):
+    ladder_seam.provider.fail_on(WRITE, *[ResourceExhausted("429")] * 9).script(UNSURE)
 
-    await seam.turn("hmm")
+    await ladder_seam.turn("hmm")
 
-    # One router call, then the ladder, and the ladder stops at four.
-    assert len(seam.provider.seen) - 1 == MAX_ATTEMPTS == 4
-    assert len(seam.provider.slept) == len(BACKOFF_SECONDS)
+    # Nine stops were queued and the ladder took four of them, because there is
+    # no fifth attempt to make.
+    assert len(ladder_seam.provider.attempts_on(WRITE)) == MAX_ATTEMPTS == 4
+    assert len(ladder_seam.provider.slept) == len(BACKOFF_SECONDS)
 
 
-async def test_a_stop_that_is_not_transient_is_raised_at_once(seam):
+async def test_a_stop_that_is_not_transient_is_raised_at_once(ladder_seam):
     """Three more attempts at a bad key change nothing, and cost three seconds
     of a User's time to find that out."""
-    seam.provider.fail(BadApiKey("401"))
+    ladder_seam.provider.fail_on(RouterDecision, BadApiKey("401"))
 
-    events = await seam.turn("hello")
+    events = await ladder_seam.turn("hello")
 
-    assert len(seam.provider.seen) == 1
-    assert seam.provider.slept == []
+    assert ladder_seam.provider.attempts_on(RouterDecision) == [SCHEMA_MODEL]
+    assert ladder_seam.provider.slept == []
     assert events[-1].code == "turn_failed"
     assert events[-1].message == FALLBACK_ERROR
 
 
-async def test_the_composer_climbs_the_same_ladder_as_every_other_call(seam):
+async def test_the_composer_climbs_the_same_ladder_as_every_other_call(ladder_seam):
     """`compose` is a provider call, so it is on the ladder — and it starts on
     Flash, so unlike the schema tier it has a rung below it to fall to."""
-    seam.provider.script(TWO_STUBS, COMPOSED)
-    seam.provider.fail(None, *[ResourceExhausted("429")] * 3)
+    ladder_seam.provider.script(TWO_STUBS, DayRequest(days_ago=0), COMPOSED)
+    ladder_seam.provider.fail_on(ComposedReply, *[ResourceExhausted("429")] * 3)
 
-    events = await seam.turn("how did my day go, and what should I eat tonight?")
+    events = await ladder_seam.turn("how did my day go, and what should I eat tonight?")
 
-    assert [c.model for c in seam.provider.seen] == [
-        SCHEMA_MODEL, PROSE_MODEL, PROSE_MODEL, PROSE_MODEL, SCHEMA_MODEL
+    assert ladder_seam.provider.attempts_on(ComposedReply) == [
+        PROSE_MODEL, PROSE_MODEL, PROSE_MODEL, SCHEMA_MODEL
     ]
-    assert seam.provider.slept == list(BACKOFF_SECONDS)
+    assert ladder_seam.provider.slept == list(BACKOFF_SECONDS)
     # And the words arrived, with the User's name put back into them.
     assert answer(events).reply.text.startswith("Lou,")
 
 
-async def test_a_composer_the_provider_never_answers_ends_the_turn_with_the_fallback(seam):
+async def test_a_composer_the_provider_never_answers_ends_the_turn_with_the_fallback(
+    ladder_seam,
+):
     """Not `COULD_NOT_COMPOSE`, which is what a schema the model could not fill
     twice ends on. A provider that stopped at every rung is the ladder running
     out, and that ends the Turn on the fixed message with an `error` event."""
-    seam.provider.script(TWO_STUBS, COMPOSED)
-    seam.provider.fail(None, *[ResourceExhausted("429")] * MAX_ATTEMPTS)
+    ladder_seam.provider.script(TWO_STUBS, DayRequest(days_ago=0), COMPOSED)
+    ladder_seam.provider.fail_on(ComposedReply, *[ResourceExhausted("429")] * MAX_ATTEMPTS)
 
-    events = await seam.turn("how did my day go, and what should I eat tonight?")
+    events = await ladder_seam.turn("how did my day go, and what should I eat tonight?")
 
     assert events[-1].code == "provider_unavailable"
     assert events[-1].message == FALLBACK_ERROR
-    assert len(seam.provider.seen) - 1 == MAX_ATTEMPTS
+    assert len(ladder_seam.provider.attempts_on(ComposedReply)) == MAX_ATTEMPTS
 
 
 async def test_the_composers_prompt_is_never_trimmed_and_the_overrun_is_recorded(seam):
