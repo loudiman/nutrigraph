@@ -8,13 +8,15 @@ reach an Intent path — including the Corpus, which an out-of-scope question is
 never allowed to search. `refuse` is the only node that writes a Refusal, and
 both detectors — the rule list and the router's `out_of_scope` flag — end there.
 
-Three Intent paths are built, all after both detectors, and `INTENT_PATHS` names
+Four Intent paths are built, all after both detectors, and `INTENT_PATHS` names
 the node each starts at. `update_profile` writes the change to PostgreSQL and to
 nothing else, so the Profile the next Turn reads is the changed one.
 `ask_question` is `retrieve` then `answer_question`: a question the guardrail
 permits, a general chronic-disease question among them, passes through `guard`
 untouched and is answered from the Corpus with a Citation on every claim.
 `log_meal` writes the Meal and then reads the day it counts against.
+`review_day` sums the day out of PostgreSQL and states the gap against the
+targets the Goal produces, naming whatever the sum could not include.
 
 **The multi-Intent Turn, and it costs one loop edge.** The router returns an
 ordered list of at most two Intents. Each Intent path appends one `IntentResult`
@@ -67,6 +69,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from pydantic import ValidationError
 
+from .budget import fit, render_history
 from .db import InteractionEvent, RetrievedChunk
 from .deps import Deps
 from .guardrail import OUT_OF_SCOPE, Subject, match_rule, refusal
@@ -86,6 +89,7 @@ from .models import (
     RouterDecision,
 )
 from .providers import ModelCall, SchemaFailure, TurnModels
+from .review import review_day as run_review_day
 
 # The key is underscore-prefixed so LangGraph keeps it out of checkpoint metadata.
 TURN_CONTEXT_KEY = "__turn"
@@ -103,6 +107,7 @@ INTENT_PATHS = {
     "update_profile": "update_profile",
     "ask_question": "retrieve",
     "log_meal": "log_meal",
+    "review_day": "review_day",
 }
 
 # The Intents whose answer is scanned against the Profile's allergies.
@@ -296,6 +301,9 @@ class TurnContext:
     # What the node currently running has to report on its metric row.
     call: ModelCall | None = None
     intent: str | None = None
+    # The node's prompt was still over the token budget after trimming. It ran
+    # anyway; the row says so.
+    over_budget: bool = False
 
     def record(self, call: ModelCall) -> None:
         self.call = call
@@ -348,8 +356,23 @@ async def route(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     ctx = turn_context(config)
     pending = state.get("pending_clarification")
     asked = f"\n\nYou last asked the User: {pending}" if pending else ""
+    # The Thread, because a message that only makes sense after the last one
+    # cannot be classified without it. The current message is already the last
+    # entry, so the history is everything before it — trimmed to the last six
+    # turns when the Turn is over budget, and never summarised.
+    fitted = fit(
+        keep=[ROUTER_SYSTEM, asked, ctx.raw_message],
+        history=state.get("messages", [])[:-1],
+    )
+    ctx.over_budget = fitted.over_budget
+    user = ctx.raw_message
+    if fitted.history:
+        user = (
+            f"Earlier in this Thread:\n{render_history(fitted.history)}\n\n"
+            f"The message to classify: {ctx.raw_message}"
+        )
     decision, call = await models(ctx).fill(
-        RouterDecision, system=ROUTER_SYSTEM + asked, user=ctx.raw_message
+        RouterDecision, system=ROUTER_SYSTEM + asked, user=user
     )
     ctx.decision = decision
     ctx.record(call)
@@ -432,12 +455,25 @@ async def clarify(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
 
 async def retrieve(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     """The question becomes a vector and the Corpus answers with passages. One
-    embedding call, through the same wrapper every other provider call uses."""
+    embedding call, through the same wrapper every other provider call uses.
+
+    The lookup cache sits between the vector and the Corpus. It holds the
+    passages a near-enough question already found — public guidance, keyed on
+    the embedding of the question and on nothing this User has — so a repeat
+    skips the search entirely. It never holds the answer written from them: the
+    Profile is what makes an answer this User's, and nothing that read the
+    Profile is ever cached.
+    """
     ctx = turn_context(config)
     ctx.intent = "ask_question"
-    vector, call = await models(ctx).embed_query(ctx.raw_message)
+    vector, key_text, call = await models(ctx).embed_query(ctx.raw_message)
     ctx.record(call)
-    found = await ctx.deps.db.search_corpus(vector, limit=PASSAGES)
+    found = await ctx.deps.db.cached_retrieval(vector)
+    if found is None:
+        found = await ctx.deps.db.search_corpus(vector, limit=PASSAGES)
+        await ctx.deps.db.store_cached_retrieval(
+            key_text=key_text, embedding=vector, chunks=found
+        )
     ctx.passages = [chunk for chunk in found if chunk.score >= RELEVANCE_FLOOR]
     return {}
 
@@ -454,6 +490,11 @@ async def answer_question(state: TurnState, config: RunnableConfig) -> dict[str,
     provider call is made — there is nowhere for an invented claim to come from."""
     ctx = turn_context(config)
     ctx.intent = "ask_question"
+    # The passages are what the budget trims here; the question is not, and
+    # neither is the instruction that every claim carries a Citation.
+    fitted = fit(keep=[ANSWER_SYSTEM, ctx.raw_message], passages=ctx.passages)
+    ctx.over_budget = fitted.over_budget
+    ctx.passages = fitted.passages
     if not ctx.passages:
         answer = Answer(text=NOT_IN_THE_CORPUS, makes_a_nutrition_claim=False)
     else:
@@ -626,6 +667,44 @@ async def log_meal(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     return {}
 
 
+async def review_day(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
+    """How the day went: the totals, the targets the Goal produces, and the gap.
+
+    The Meals are read from PostgreSQL, not from the checkpoint, so a question
+    about an earlier day is answered from the same place as today's — the Thread
+    never restarts, and it is not where a Meal lives.
+
+    What the sum could not include travels as disclaimers, not as prose the
+    composer may shorten. A food that contributed nothing, a total that is short
+    by an unknown amount, a nutrient nothing carried, and a day with nothing
+    logged at all are each a marking the composer puts back if the words drop
+    it, because each of them is what stops a number being read as complete.
+    """
+    ctx = turn_context(config)
+    ctx.intent = "review_day"
+    profile = ctx.profile
+    assert profile is not None
+    review = await run_review_day(
+        db=ctx.deps.db,
+        turn=models(ctx),
+        profile=profile,
+        message=ctx.raw_message,
+        # The same clock the Meal was stamped with, so "today" means the day the
+        # User is living in and not the day the container thinks it is.
+        now=datetime.now(MANILA),
+    )
+    ctx.record(review.call)
+    ctx.intent_results.append(
+        IntentResult(
+            intent="review_day",
+            text=review.text,
+            facts=review.facts,
+            disclaimers=review.disclaimers,
+        )
+    )
+    return {}
+
+
 async def dispatch(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     """The stub each remaining Intent path replaces. It reports what the router
     decided for one Intent, like any other path, and the composer says it.
@@ -656,7 +735,13 @@ def _for_composer(ctx: TurnContext) -> str:
 
 async def composed(ctx: TurnContext) -> CoachReply:
     """The reply, from what the paths reported. Called by the node below, and
-    once more by the allergy check when it strikes a food out."""
+    once more by the allergy check when it strikes a food out.
+
+    Nothing in this prompt may be trimmed, and the budget is told so rather than
+    left to infer it: one of the parts carries the day's totals, which is
+    today's Meals. A Turn over budget here runs anyway and records the overrun,
+    like every other node.
+    """
     results = ctx.intent_results
     disclaimers = list(dict.fromkeys(d for r in results for d in r.disclaimers))
 
@@ -664,9 +749,18 @@ async def composed(ctx: TurnContext) -> CoachReply:
         text = results[0].text if results else COULD_NOT_COMPOSE
     else:
         turn = models(ctx)
+        prompt = _for_composer(ctx)
+        # Every part of this prompt is a `keep`. The sentences a path assembled
+        # are facts it already holds, and the facts behind them are the day's
+        # totals — which is today's Meals. There is nothing here the budget may
+        # trim, so all it can do is say the Turn went over, and the row carries
+        # it. This is the node that would otherwise be the hole in the rule: it
+        # assembles a prompt out of parts, and one of those parts is exactly
+        # what may never be dropped.
+        ctx.over_budget = fit(keep=[COMPOSE_SYSTEM, prompt]).over_budget
         try:
             reply, call = await turn.compose(
-                ComposedReply, system=COMPOSE_SYSTEM, user=_for_composer(ctx)
+                ComposedReply, system=COMPOSE_SYSTEM, user=prompt
             )
             ctx.record(call)
             # The provider wrote the placeholders back; the User reads the name.
@@ -722,9 +816,10 @@ async def compose_reply(state: TurnState, config: RunnableConfig) -> dict[str, A
     `compose`, so both attempts are two calls in the trace, and a second failure
     ends the Turn on the fixed message rather than on a half-written answer.
 
-    Whichever way the words arrive, `parts` and `disclaimers` are built here from
-    what the paths reported. So `parts` holds one entry for every Intent that
-    ran, and a marking raised on any path survives even if the words dropped it.
+    Whichever way the words arrive, `parts` and `disclaimers` are built in
+    `composed` from what the paths reported. So `parts` holds one entry for every
+    Intent that ran, and a marking raised on any path survives even if the words
+    dropped it.
     """
     ctx = turn_context(config)
     ctx.intent = ctx.intent_results[-1].intent if ctx.intent_results else None
@@ -747,7 +842,7 @@ def measured(name: str, node: Any) -> Any:
 
     async def run(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
         ctx = turn_context(config)
-        ctx.call, ctx.intent = None, None
+        ctx.call, ctx.intent, ctx.over_budget = None, None, False
         started = perf_counter()
         try:
             return await node(state, config)
@@ -763,6 +858,7 @@ def measured(name: str, node: Any) -> Any:
                 input_tokens=ctx.call.input_tokens if ctx.call else 0,
                 output_tokens=ctx.call.output_tokens if ctx.call else 0,
                 cost_usd=ctx.call.cost_usd if ctx.call else 0.0,
+                over_budget=ctx.over_budget,
             )
             try:
                 await ctx.deps.db.store_interaction_event(event)
@@ -783,6 +879,7 @@ def build_graph(checkpointer: Any):
         ("clarify", clarify),
         ("update_profile", update_profile),
         ("log_meal", log_meal),
+        ("review_day", review_day),
         ("retrieve", retrieve),
         ("answer_question", answer_question),
         ("dispatch", dispatch),
@@ -796,14 +893,22 @@ def build_graph(checkpointer: Any):
     builder.add_conditional_edges(
         "route",
         next_node,
-        ["clarify", "update_profile", "log_meal", "retrieve", "dispatch", "refuse"],
+        [
+            "clarify", "update_profile", "log_meal", "review_day", "retrieve",
+            "dispatch", "refuse",
+        ],
     )
     # Where every Intent path ends: back for the second Intent, or on to the one
     # composer. The loop edge is these lists naming each other's entry nodes.
-    onwards = ["update_profile", "log_meal", "retrieve", "dispatch", "compose_reply"]
+    onwards = [
+        "update_profile", "log_meal", "review_day", "retrieve", "dispatch",
+        "compose_reply",
+    ]
     builder.add_conditional_edges("update_profile", after_update, [*onwards, "clarify"])
     # Logging a Meal never interrupts the Turn, so `clarify` is not among these.
     builder.add_conditional_edges("log_meal", after_intent, onwards)
+    # Nor does reviewing a day: a day the Coach cannot total is answered, not asked about.
+    builder.add_conditional_edges("review_day", after_intent, onwards)
     builder.add_edge("retrieve", "answer_question")
     builder.add_conditional_edges("answer_question", after_intent, onwards)
     builder.add_conditional_edges("dispatch", after_intent, onwards)

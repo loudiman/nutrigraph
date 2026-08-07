@@ -4,7 +4,7 @@ PostgreSQL; the turn seam swaps a fake in for it."""
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any, Protocol
 from uuid import UUID
@@ -36,6 +36,70 @@ order by c.embedding <=> %(query)s::vector
 limit %(limit)s
 """
 
+
+# --- the lookup cache ---------------------------------------------------------
+#
+# Two kinds, and both are independent of the User: a Corpus retrieval keyed on
+# the question's embedding, and the food a parsed name matched. Nothing that
+# read the Profile or today's Meals is written here, and no whole answer is
+# either. These four statements are the only writers and readers there are.
+
+# A hit needs this much cosine similarity. Below it the questions are two
+# questions, and the second one searches the Corpus for itself.
+RETRIEVAL_SIMILARITY = 0.95
+
+# pgvector stores a `float4`, so a vector written at exactly the floor reads
+# back a fraction of a millionth either side of it and an exact `>= 0.95` would
+# turn away a question that is, to every digit anyone means by it, at the floor.
+# The comparison allows the rounding and nothing more.
+FLOAT4_TOLERANCE = 1e-6
+
+# How long a food match stands. The FoodData Central catalogue moves slowly,
+# and a month-old choice of `fdcId` for 'pandesal' is still the right choice.
+FOOD_MATCH_DAYS = 30
+
+# What the Corpus looks like now. A retrieval entry written against an older
+# Corpus is not read, so a re-ingest invalidates every one of them without a
+# row having to be found first — the ingest deletes them too, but this is what
+# makes the invalidation true even between the two statements.
+CORPUS_VERSION = "select coalesce(max(ingested_at)::text, '') from corpus_document"
+
+# `update ... returning` rather than a select and then an update: one round
+# trip, and `hits` cannot drift from the number of times the entry was served.
+READ_RETRIEVAL = f"""
+update lookup_cache set hits = hits + 1
+where lookup_cache_id = (
+    select lookup_cache_id
+      from lookup_cache
+     where kind = 'retrieval'
+       and corpus_version = ({CORPUS_VERSION})
+       and 1 - (key_embedding <=> %(query)s::vector) >= %(floor)s
+     order by key_embedding <=> %(query)s::vector
+     limit 1
+)
+returning value
+"""
+
+WRITE_RETRIEVAL = f"""
+insert into lookup_cache (kind, key_text, key_embedding, value, corpus_version)
+values ('retrieval', %(key_text)s, %(embedding)s::vector, %(value)s, ({CORPUS_VERSION}))
+"""
+
+READ_FOOD_MATCH = """
+update lookup_cache set hits = hits + 1
+where kind = 'food_match'
+  and key_text = %(name)s
+  and created_at > now() - make_interval(days => %(days)s)
+returning value
+"""
+
+# An expired row is replaced rather than left to block the key, so a food whose
+# entry has aged out is looked up again and written back under the same key.
+WRITE_FOOD_MATCH = """
+insert into lookup_cache (kind, key_text, value) values ('food_match', %(name)s, %(value)s)
+on conflict (key_text) where kind = 'food_match'
+do update set value = excluded.value, created_at = now(), hits = 0
+"""
 
 LOCAL_FOOD_COLUMNS = f"""
     f.local_food_id, f.name, f.value_kind, f.source_note, f.source,
@@ -91,6 +155,8 @@ order by mi.created_at
 DAY_TOTAL = f"""
 select count(*) filter (where mi.status = 'matched') as counted,
        count(*) filter (where mi.status = 'unmatched') as not_counted,
+       array_agg(mi.said_as order by m.eaten_at, mi.ordinal)
+           filter (where mi.status = 'unmatched') as unmatched,
        {", ".join(f"sum(mi.{c}) as {c}" for c in COLUMNS)},
        {", ".join(
            f"count(*) filter (where mi.status = 'matched' and mi.{c} is null) "
@@ -201,6 +267,10 @@ class DayTotal:
     not_counted: int = 0
     values: dict[str, float] = field(default_factory=dict)
     missing: dict[str, int] = field(default_factory=dict)
+    # The foods that contributed nothing at all, by the words the User used. An
+    # unmatched Item is not in the sum, so the review names these and says the
+    # total is short by an unknown amount rather than presenting it as complete.
+    unmatched: list[str] = field(default_factory=list)
 
     def complete(self, column: str) -> bool:
         return self.missing.get(column, 0) == 0
@@ -224,6 +294,18 @@ class Database(Protocol):
     async def search_corpus(
         self, embedding: Sequence[float], *, limit: int = 5
     ) -> list[RetrievedChunk]: ...
+
+    async def cached_retrieval(
+        self, embedding: Sequence[float]
+    ) -> list[RetrievedChunk] | None: ...
+
+    async def store_cached_retrieval(
+        self, *, key_text: str, embedding: Sequence[float], chunks: Sequence[RetrievedChunk]
+    ) -> None: ...
+
+    async def cached_food_match(self, name: str) -> dict[str, Any] | None: ...
+
+    async def store_cached_food_match(self, name: str, value: dict[str, Any]) -> None: ...
 
     async def match_local_food(self, name: str) -> LocalFood | None: ...
 
@@ -262,6 +344,9 @@ class InteractionEvent:
     input_tokens: int = 0
     output_tokens: int = 0
     cost_usd: float = 0.0
+    # The Turn was still over the token budget after trimming, ran anyway, and
+    # said so here — so the eval reads the overrun rather than inferring it.
+    over_budget: bool = False
 
 
 class PostgresDatabase:
@@ -310,12 +395,12 @@ class PostgresDatabase:
         async with self._pool.connection() as conn:
             await conn.execute(
                 "insert into interaction_event (turn_id, user_id, node, intent, model, "
-                "latency_ms, input_tokens, output_tokens, cost_usd) "
-                "values (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "latency_ms, input_tokens, output_tokens, cost_usd, over_budget) "
+                "values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     str(event.turn_id), event.user_id, event.node, event.intent,
                     event.model, event.latency_ms, event.input_tokens,
-                    event.output_tokens, event.cost_usd,
+                    event.output_tokens, event.cost_usd, event.over_budget,
                 ),
             )
 
@@ -343,6 +428,54 @@ class PostgresDatabase:
             )
             rows = await cur.fetchall()
         return [RetrievedChunk(**row) for row in rows]
+
+    # --- the lookup cache -----------------------------------------------------
+
+    async def cached_retrieval(
+        self, embedding: Sequence[float]
+    ) -> list[RetrievedChunk] | None:
+        """The passages a near-enough question already found, or nothing.
+
+        The scores come back as the first question measured them. They are the
+        scores of a question 0.95 or more similar, which is what the threshold
+        is for, and `RELEVANCE_FLOOR` still reads them.
+        """
+        async with self._pool.connection() as conn:
+            cur = await conn.execute(
+                READ_RETRIEVAL,
+                {
+                    "query": vector_literal(embedding),
+                    "floor": RETRIEVAL_SIMILARITY - FLOAT4_TOLERANCE,
+                },
+            )
+            row = await cur.fetchone()
+        return [RetrievedChunk(**chunk) for chunk in row[0]] if row else None
+
+    async def store_cached_retrieval(
+        self, *, key_text: str, embedding: Sequence[float], chunks: Sequence[RetrievedChunk]
+    ) -> None:
+        async with self._pool.connection() as conn:
+            await conn.execute(
+                WRITE_RETRIEVAL,
+                {
+                    "key_text": key_text,
+                    "embedding": vector_literal(embedding),
+                    "value": Jsonb([asdict(chunk) for chunk in chunks]),
+                },
+            )
+
+    async def cached_food_match(self, name: str) -> dict[str, Any] | None:
+        """The food a name matched last time, if the entry has not expired."""
+        async with self._pool.connection() as conn:
+            cur = await conn.execute(
+                READ_FOOD_MATCH, {"name": name, "days": FOOD_MATCH_DAYS}
+            )
+            row = await cur.fetchone()
+        return row[0] if row else None
+
+    async def store_cached_food_match(self, name: str, value: dict[str, Any]) -> None:
+        async with self._pool.connection() as conn:
+            await conn.execute(WRITE_FOOD_MATCH, {"name": name, "value": Jsonb(value)})
 
     # --- the food log ---------------------------------------------------------
 
@@ -416,6 +549,8 @@ class PostgresDatabase:
             not_counted=row["not_counted"],
             values=_floats(row),
             missing={c: row[f"{c}_missing"] for c in COLUMNS},
+            # `array_agg` over no rows is null, not an empty array.
+            unmatched=list(row["unmatched"] or []),
         )
 
 

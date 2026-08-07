@@ -19,7 +19,15 @@ from psycopg_pool import AsyncConnectionPool
 from nutrigraph_agent.app import open_checkpointer
 from nutrigraph_agent.config import CHECKPOINT_TABLES
 from nutrigraph_agent.corpus import CorpusEntry
-from nutrigraph_agent.db import COMMERCIAL_ONLY, MealItemRow, PostgresDatabase
+from nutrigraph_agent.db import (
+    COMMERCIAL_ONLY,
+    FOOD_MATCH_DAYS,
+    RETRIEVAL_SIMILARITY,
+    InteractionEvent,
+    MealItemRow,
+    PostgresDatabase,
+    RetrievedChunk,
+)
 from nutrigraph_agent.graph import build_graph
 from nutrigraph_agent.ingest import ingest
 from nutrigraph_agent.meal import MANILA, day_bounds
@@ -43,6 +51,7 @@ TABLES = (
     "local_food_alias",
     "meal",
     "meal_item",
+    "lookup_cache",
 )
 OUR_TABLES = set(TABLES)
 
@@ -50,7 +59,8 @@ OUR_TABLES = set(TABLES)
 # never reused: the runner records the file name, so a reused number would
 # silently skip a file that had already been applied under it.
 MIGRATION_FILES = [
-    "001_init.sql", "002_router.sql", "003_corpus.sql", "007_meal.sql"
+    "001_init.sql", "002_router.sql", "003_corpus.sql", "007_meal.sql",
+    "011_lookup_cache.sql",
 ]
 
 # Two documents on different licences, so one predicate has something to exclude.
@@ -366,6 +376,149 @@ async def test_a_value_the_source_does_not_print_comes_back_absent_never_zero(fo
     assert dinuguan.per_100g["kcal"] > 0
 
 
+# --- the lookup cache -----------------------------------------------------------
+
+
+CHUNK = RetrievedChunk(
+    document="Dietary Guidelines for Americans, 2025-2030",
+    source_url="https://cdn.realfood.gov/DGA_508.pdf",
+    locator="page 3",
+    text="Eat a variety of protein foods.",
+    licence_id="us-gov-public-domain",
+    attribution="A work of the United States federal government.",
+    commercial_use=True,
+    score=0.81,
+)
+
+
+def near(similarity: float) -> list[float]:
+    """A unit vector whose cosine against `[1, 0, 0, ...]` is `similarity`."""
+    return [similarity, (1 - similarity**2) ** 0.5] + [0.0] * (EMBEDDING_DIMENSIONS - 2)
+
+
+@pytest.fixture
+async def cache(corpus):
+    """The cache over an ingested Corpus, so `corpus_version` has a value."""
+    pool = AsyncConnectionPool(corpus, open=False)
+    await pool.open()
+    try:
+        yield PostgresDatabase(pool)
+    finally:
+        await pool.close()
+
+
+def test_the_cache_key_is_vector_768_with_an_hnsw_cosine_index(corpus):
+    with psycopg.connect(corpus) as conn:
+        column = conn.execute(
+            "select format_type(atttypid, atttypmod) from pg_attribute "
+            "where attrelid = 'lookup_cache'::regclass and attname = 'key_embedding'"
+        ).fetchone()[0]
+        index = conn.execute(
+            "select indexdef from pg_indexes where indexname = 'lookup_cache_embedding_idx'"
+        ).fetchone()[0].lower()
+
+    assert column == f"vector({EMBEDDING_DIMENSIONS})"
+    assert "using hnsw" in index and "vector_cosine_ops" in index
+
+
+def test_a_food_match_may_not_carry_a_vector_and_a_retrieval_must(corpus):
+    """The rule is in the table, not only in the two writers: a food match is
+    keyed on the exact name and holds no embedding at all."""
+    with psycopg.connect(corpus) as conn:
+        for kind, embedding in (("food_match", near(1.0)), ("retrieval", None)):
+            with pytest.raises(psycopg.errors.CheckViolation):
+                with conn.transaction():
+                    conn.execute(
+                        "insert into lookup_cache (kind, key_text, key_embedding, value) "
+                        "values (%s, %s, %s::vector, '{}'::jsonb)",
+                        (kind, "pandesal", None if embedding is None else str(embedding)),
+                    )
+
+
+async def test_a_repeated_question_at_0_95_is_served_and_one_below_it_is_not(cache):
+    await cache.store_cached_retrieval(
+        key_text="how much protein do I need?", embedding=near(1.0), chunks=[CHUNK]
+    )
+
+    assert await cache.cached_retrieval(near(1.0)) == [CHUNK]
+    assert await cache.cached_retrieval(near(RETRIEVAL_SIMILARITY)) == [CHUNK]
+    assert await cache.cached_retrieval(near(RETRIEVAL_SIMILARITY - 0.01)) is None
+
+
+async def test_every_hit_is_counted_on_the_row(cache, corpus):
+    await cache.store_cached_retrieval(key_text="q", embedding=near(1.0), chunks=[CHUNK])
+
+    await cache.cached_retrieval(near(1.0))
+    await cache.cached_retrieval(near(0.99))
+
+    with psycopg.connect(corpus) as conn:
+        assert conn.execute("select hits from lookup_cache").fetchone()[0] == 2
+
+
+async def test_re_ingesting_the_corpus_invalidates_every_retrieval_entry(cache, corpus):
+    await cache.store_cached_retrieval(key_text="q", embedding=near(1.0), chunks=[CHUNK])
+    assert await cache.cached_retrieval(near(1.0)) is not None
+
+    await ingest(corpus, fake_models(), ENTRIES, fetcher=stub_fetcher, force=True)
+
+    assert await cache.cached_retrieval(near(1.0)) is None
+    with psycopg.connect(corpus) as conn:
+        left = conn.execute(
+            "select count(*) from lookup_cache where kind = 'retrieval'"
+        ).fetchone()[0]
+    assert left == 0
+
+
+async def test_a_food_match_is_served_from_the_cache_and_expires_after_thirty_days(
+    cache, corpus
+):
+    await cache.store_cached_food_match("pandesal", {"source": "fdc", "fdc_id": "1"})
+
+    assert await cache.cached_food_match("pandesal") == {"source": "fdc", "fdc_id": "1"}
+
+    with psycopg.connect(corpus, autocommit=True) as conn:
+        conn.execute(
+            "update lookup_cache set created_at = now() - make_interval(days => %s) "
+            "where kind = 'food_match'",
+            (FOOD_MATCH_DAYS + 1,),
+        )
+    assert await cache.cached_food_match("pandesal") is None
+
+    # And the expired row does not block the key: the food is looked up again
+    # and written back under the same name.
+    await cache.store_cached_food_match("pandesal", {"source": "fdc", "fdc_id": "2"})
+    assert await cache.cached_food_match("pandesal") == {"source": "fdc", "fdc_id": "2"}
+    with psycopg.connect(corpus) as conn:
+        rows = conn.execute(
+            "select count(*) from lookup_cache where kind = 'food_match'"
+        ).fetchone()[0]
+    assert rows == 1
+
+
+async def test_the_tokens_and_the_overrun_are_readable_without_the_tracing_tool(seeded):
+    turn_id = uuid4()
+    pool = AsyncConnectionPool(seeded, open=False)
+    await pool.open()
+    try:
+        db = PostgresDatabase(pool)
+        await db.store_interaction_event(
+            InteractionEvent(
+                turn_id=turn_id, user_id="demo-user-1", node="route", latency_ms=12,
+                input_tokens=11_998, output_tokens=7, over_budget=True,
+            )
+        )
+    finally:
+        await pool.close()
+
+    with psycopg.connect(seeded) as conn:
+        row = conn.execute(
+            "select sum(input_tokens), bool_or(over_budget) from interaction_event "
+            "where turn_id = %s",
+            (str(turn_id),),
+        ).fetchone()
+    assert row == (11_998, True)
+
+
 async def test_a_meal_is_written_with_its_items_and_a_day_total_is_one_sum(food_log):
     now = datetime.now(MANILA)
     await food_log.store_meal(
@@ -394,6 +547,9 @@ async def test_a_meal_is_written_with_its_items_and_a_day_total_is_one_sum(food_
     # not, so the total says it is short rather than reading as complete.
     assert total.missing["fibre_g"] == 1
     assert total.complete("kcal") and not total.complete("fibre_g")
+    # An unmatched Item added nothing to that sum, so the same query names it
+    # and the review can say the total is short by an unknown amount.
+    assert total.unmatched == ["kwek kwek"]
 
 
 async def test_the_whole_source_response_is_kept_as_jsonb(seeded, food_log):
@@ -445,6 +601,8 @@ async def test_a_correction_fills_in_the_item_that_was_already_written(food_log)
     total = await food_log.day_total("demo-user-1", start=start, end=end)
     assert (total.counted, total.not_counted) == (1, 0)
     assert total.values["kcal"] == 158.0
+    # `array_agg` over no unmatched rows is null, and that is an empty list here.
+    assert total.unmatched == []
     assert await food_log.open_unmatched_items("demo-user-1", since=start) == []
 
 
@@ -458,7 +616,7 @@ async def test_retrieval_finds_the_nearest_chunk_and_names_its_document(corpus):
         schema_model=SCHEMA_MODEL, prose_model=PROSE_MODEL
     ).for_turn(known_names=[])
     # The same text that was ingested, so the nearest chunk is a known one.
-    query, _ = await turn.embed_query(stub_fetcher(ENTRIES[0])[0][1])
+    query, _key, _call = await turn.embed_query(stub_fetcher(ENTRIES[0])[0][1])
 
     pool = AsyncConnectionPool(corpus, open=False)
     await pool.open()

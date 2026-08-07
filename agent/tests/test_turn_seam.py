@@ -10,6 +10,7 @@ from nutrigraph_agent.models import (
     AnswerEvent,
     CoachReply,
     ComposedReply,
+    DayRequest,
     ErrorEvent,
     NodeEvent,
     RouterDecision,
@@ -20,12 +21,13 @@ from .conftest import PROSE_MODEL, SCHEMA_MODEL, answer
 UNSURE = RouterDecision(intents=[], confidence=0.2)
 # An Intent whose path is not built yet, so this file reads the stub and the
 # seam rather than an Intent's own behaviour, which its own file tests.
-SURE = RouterDecision(intents=["review_day"], confidence=0.95)
+SURE = RouterDecision(intents=["recommend"], confidence=0.95)
 
 
 async def test_a_turn_calls_the_router_once_and_dispatches_what_it_decided(seam):
     seam.provider.script(
         RouterDecision(intents=["review_day", "recommend"], confidence=0.9),
+        DayRequest(days_ago=0),
         ComposedReply(text="Lou, your day and what to eat next."),
     )
 
@@ -34,9 +36,12 @@ async def test_a_turn_calls_the_router_once_and_dispatches_what_it_decided(seam)
     reply = answer(events).reply
     assert isinstance(reply, CoachReply)
     assert [p.intent for p in reply.parts] == ["review_day", "recommend"]
-    # One router call on the schema tier, and one composer call on the prose
-    # tier. Neither stub asked a model anything of its own.
-    assert [c.model for c in seam.provider.seen] == [SCHEMA_MODEL, PROSE_MODEL]
+    # The router and the review path's own day question on the schema tier, and
+    # one composer call on the prose tier. `recommend` is the one Intent still
+    # standing on the stub, so it asked a model nothing of its own.
+    assert [c.model for c in seam.provider.seen] == [
+        SCHEMA_MODEL, SCHEMA_MODEL, PROSE_MODEL,
+    ]
 
 
 async def test_the_intent_list_is_never_longer_than_two_and_holds_only_the_five(seam):
@@ -198,7 +203,7 @@ async def test_every_node_writes_an_interaction_event_row(seam):
 
     router = next(r for r in rows if r.node == "route")
     assert router.model == SCHEMA_MODEL
-    assert router.intent == "review_day"
+    assert router.intent == "recommend"
     assert (router.input_tokens, router.output_tokens) == (11, 7)
     assert router.cost_usd > 0
 
