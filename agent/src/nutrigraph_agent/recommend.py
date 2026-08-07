@@ -158,16 +158,11 @@ class Recommendation:
     text: str
     call: ModelCall | None
     foods: list[str]
-    gap: Gap
-    candidates: list[Candidate]
     disclaimers: list[str] = field(default_factory=list)
     recommendation_id: UUID | None = None
     # How these sentences read again without a food the prose scan struck out.
     # The composer asks for it exactly once.
     again: Callable[[Sequence[str]], tuple[str, list[str]]] | None = None
-    # True when the model's answer was thrown away and the sentences below were
-    # assembled from the rows instead.
-    from_rows: bool = False
     # The prompt was still over the token budget after trimming. It ran anyway;
     # the `interaction_event` row says so.
     over_budget: bool = False
@@ -356,7 +351,6 @@ async def recommend(
     )
 
     call: ModelCall | None = None
-    rejected = False
     over_budget = False
     reason = gap_sentence(gap)
     if candidates:
@@ -388,12 +382,10 @@ async def recommend(
                 "was rejected",
                 extra={"turn_id": str(turn_id), "food": str(exc)},
             )
-            rejected = True
             text, foods = from_rows(profile, gap, candidates)
         except SchemaFailure:
             log.warning("the ranker did not fill the schema twice",
                         extra={"turn_id": str(turn_id)})
-            rejected = True
             text, foods = from_rows(profile, gap, candidates)
     else:
         text, foods = from_rows(profile, gap, candidates)
@@ -432,11 +424,8 @@ async def recommend(
         text=" ".join([text, *(m for m in markings if m not in text)]),
         call=call,
         foods=foods,
-        gap=gap,
-        candidates=candidates,
         disclaimers=markings,
         recommendation_id=recommendation_id,
         again=again,
-        from_rows=rejected or not candidates,
         over_budget=over_budget,
     )
