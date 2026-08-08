@@ -645,7 +645,9 @@ def modules_that_trim() -> list[Any]:
     import importlib
     from pathlib import Path
 
-    source = Path(graph.__file__).parent
+    import nutrigraph_agent
+
+    source = Path(nutrigraph_agent.__file__).parent
     found = []
     for path in sorted(source.glob("*.py")):
         if path.stem == "budget":
