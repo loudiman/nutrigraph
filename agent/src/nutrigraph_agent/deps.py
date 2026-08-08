@@ -6,11 +6,18 @@ below it is real.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from .db import Database
 from .food import FoodSearch
+from .meal import MANILA
 from .providers import Models
+
+
+def manila_now() -> datetime:
+    return datetime.now(MANILA)
 
 
 class NotWired:
@@ -36,3 +43,9 @@ class Deps:
     food: FoodSearch | NotWired = field(
         default_factory=lambda: NotWired("FoodData Central")
     )
+    # The clock, in Manila. Every node that needs to know which day it is reads
+    # it from here rather than calling `datetime.now` itself, so a test can pin
+    # "today" the way it pins the database: a Meal stored on a fixed day and a
+    # review of "today" would otherwise disagree the moment the wall clock moved
+    # past midnight, and the test would go red having changed nothing.
+    now: Callable[[], datetime] = manila_now

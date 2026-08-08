@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 import pytest
+from langgraph.checkpoint.memory import InMemorySaver
 
 from nutrigraph_agent.db import DAY_TOTAL, MealItemRow
 from nutrigraph_agent.food import COLUMNS
@@ -25,11 +26,19 @@ from nutrigraph_agent.models import (
 )
 from nutrigraph_agent.review import DAILY_SHIFT, review_day, targets_for
 
-from .conftest import PROSE_MODEL, SCHEMA_MODEL, answer
+from .conftest import (
+    PROSE_MODEL,
+    SCHEMA_MODEL,
+    TurnSeam,
+    also_calls_the_provider,
+    answer,
+)
 from .fakes import DEMO_PROFILE, SUGGESTED, FakeDatabase, FakeProvider
 
 # A fixed clock, so "today" is the same day every time this file runs and a
-# test can put a Meal on the day before it.
+# test can put a Meal on the day before it. The seam fixture below hands this
+# same clock to the Turn: a Meal on a fixed day and a Turn reading the wall
+# clock agree about "today" on exactly one date, and go red on every other.
 NOW = datetime(2026, 8, 8, 19, 30, tzinfo=MANILA)
 YESTERDAY = NOW - timedelta(days=1)
 
@@ -88,6 +97,27 @@ async def review(
 @pytest.fixture
 def db() -> FakeDatabase:
     return FakeDatabase()
+
+
+@pytest.fixture(params=["as the graph is", "with a new call elsewhere in the graph"])
+def seam(request, monkeypatch) -> TurnSeam:
+    """This file's seam: the clock pinned to `NOW`, so a Meal put on that day is
+    on the day the Turn calls today.
+
+    Parametrized, so every seam test below also runs against a Turn that makes a
+    provider call the graph does not make. That is what #38 did to this file's
+    script, and what #34 did to the ladder tests in #54: a scripted answer read
+    by position lands on the next node along. Read by schema it does not move.
+    """
+    seam = TurnSeam(
+        db=FakeDatabase(),
+        provider=FakeProvider(),
+        checkpointer=InMemorySaver(),
+        now=lambda: NOW,
+    )
+    if request.param == "as the graph is":
+        return seam
+    return also_calls_the_provider(seam, monkeypatch)
 
 
 # --- the targets ------------------------------------------------------------

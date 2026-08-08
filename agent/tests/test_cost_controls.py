@@ -16,9 +16,7 @@ from dataclasses import replace
 from datetime import timedelta
 
 import pytest
-from pydantic import BaseModel
 
-from nutrigraph_agent import graph
 from nutrigraph_agent.budget import (
     BUDGET_TOKENS,
     HISTORY_TURNS,
@@ -48,7 +46,13 @@ from nutrigraph_agent.providers import (
 )
 from nutrigraph_agent.turn import FALLBACK_ERROR
 
-from .conftest import PROSE_MODEL, SCHEMA_MODEL, answer
+from .conftest import (
+    PROSE_MODEL,
+    SCHEMA_MODEL,
+    Interloper,
+    also_calls_the_provider,
+    answer,
+)
 from .fakes import (
     EGG,
     EGGS_CHUNK,
@@ -283,42 +287,18 @@ async def test_a_refused_turn_and_a_clarified_turn_cache_nothing(seam):
 # added elsewhere in the graph, so that cannot come back.
 
 
-class Interloper(BaseModel):
-    """A schema no node asks for, until the test double asks for it."""
-
-    noted: bool = True
-
-
 @pytest.fixture(params=["as the graph is", "with a new call elsewhere in the graph"])
 def ladder_seam(request, seam, monkeypatch):
     """The regression guard for issue #54, as a fixture.
 
-    The second parameter patches one node — `load_profile`, which every Turn
-    runs and no ladder test is about — to make one extra provider call before
-    doing its own work. A ladder test that reads the whole of `seen` fails
-    under it; one that reads only its own call's attempts does not notice.
-
-    A node cannot be added to a compiled graph, so the patch is on the module
-    global `build_graph` resolves, and the seam is rebuilt after it.
+    The second parameter makes the Turn call the provider once more than the
+    graph does. A ladder test that reads the whole of `seen` fails under it; one
+    that reads only its own call's attempts does not notice. The double itself
+    is in `conftest`, because `test_review_day` guards its script with it too.
     """
     # Which half of the guard this run is, for the one test that asserts both.
     seam.noisy = request.param != "as the graph is"
-    if not seam.noisy:
-        return seam
-
-    unpatched = graph.load_profile
-
-    async def also_calls_the_provider(state, config):
-        loaded = await unpatched(state, config)
-        ctx = graph.turn_context(config)
-        await ctx.models.fill(Interloper, system="unrelated", user="unrelated")
-        return loaded
-
-    monkeypatch.setattr(graph, "load_profile", also_calls_the_provider)
-    seam.reconnect()
-    # First in the script, because the patched node runs before every other.
-    seam.provider.script(Interloper())
-    return seam
+    return seam if not seam.noisy else also_calls_the_provider(seam, monkeypatch)
 
 
 async def test_a_call_added_elsewhere_does_not_move_one_call_s_attempts(ladder_seam):
