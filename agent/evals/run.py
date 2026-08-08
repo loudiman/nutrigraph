@@ -28,6 +28,14 @@ same database re-embeds nothing.
 Only the retrieval group leaves rows behind for the judge, which is why a whole
 run costs a few cents: the safety and behaviour groups are plain assertions, and
 a rule-list Refusal does not reach a provider at all.
+
+**What a run costs in time is set by the key, not by the cases.** The Gemini free
+tier allows fifteen `generateContent` calls a minute per model; sixty-four cases
+make about a hundred and fifty. That is ten minutes of quota however the cases
+are arranged, so the run paces itself under the limit rather than spending two
+calls in three on 429s. On a key with billing on it the quota is thousands a
+minute, `--requests-per-minute 0` turns the pacing off, and the same run takes
+about as long as its slowest few cases.
 """
 
 from __future__ import annotations
@@ -77,19 +85,37 @@ def _settings():
     return Settings.from_env()
 
 
-def _models(settings):
+def _models(
+    settings,
+    *,
+    requests_per_minute: float = 0.0,
+    attempt_seconds: float | None = None,
+):
+    """The provider seam, with the run's own patience rather than a Turn's.
+
+    A User sends one message and waits on it; this sends sixty-four Turns back
+    to back on one key. The ladder a User gets is right for a User and is not
+    changed here — what changes is how fast the calls leave and how long one
+    attempt may take, which are the harness's numbers and only the harness's.
+    Left unsaid, they are a Turn's, which is what `prepare` wants: the Corpus
+    load is embeddings, and the vector tier has a quota of its own.
+    """
     from nutrigraph_agent.providers import (
         Models,
         langchain_embedding_factory,
         langchain_factory,
     )
 
+    patience = {} if attempt_seconds is None else {"attempt_seconds": attempt_seconds}
     return Models(
-        factory=langchain_factory(settings.model_provider),
+        factory=langchain_factory(
+            settings.model_provider, requests_per_minute=requests_per_minute
+        ),
         schema_model=settings.schema_model,
         prose_model=settings.prose_model,
         embedding_factory=langchain_embedding_factory(settings.model_provider),
         embedding_model=settings.embedding_model,
+        **patience,
     )
 
 
@@ -299,15 +325,40 @@ async def run_case(case: Case, deps_for, graph_for) -> dict[str, Any]:
     return outcome
 
 
+# The run's own patience, and it is the run's alone: none of these three changes
+# what a Turn does for a User.
+#
+# **The quota is the constraint, not the provider's speed.** The Gemini free tier
+# allows fifteen `generateContent` calls a minute per model. Sixty-four cases
+# make about a hundred and fifty, six at a time, so an unpaced run spends most
+# of its calls on 429s — 278 of the 416 the first build in CI made — and a Turn
+# whose ladder runs out of rungs on 429s reports `provider_unavailable`, which
+# reads like a broken Turn and is not one. So the calls are paced below the
+# quota, and nothing is spent being refused.
+REQUESTS_PER_MINUTE = 14.0
+
+# How long one attempt may take here. A paced call waits its turn in the bucket
+# before it reaches the provider, and that wait is inside the attempt: a Turn's
+# thirty seconds would time out on the queue rather than on the provider.
+ATTEMPT_SECONDS = 120.0
+
 # How long one case may take before the run gives up on it. The retry ladder
 # bounds the number of attempts a Turn makes, not the wall-clock of a provider
 # call that never answers, and a build that hangs is worse than one that fails:
 # a case that ran out of time is a schema failure like any other Turn that did
-# not finish, and it says so with the case's name beside it.
-CASE_SECONDS = 120.0
+# not finish, and it says so with the case's name beside it. A case makes about
+# five calls and each one queues, so the bound is minutes rather than seconds.
+CASE_SECONDS = 600.0
 
 
-async def run_all(cases: list[Case], *, concurrency: int, timeout: float) -> list[dict[str, Any]]:
+async def run_all(
+    cases: list[Case],
+    *,
+    concurrency: int,
+    timeout: float,
+    requests_per_minute: float,
+    attempt_seconds: float,
+) -> list[dict[str, Any]]:
     from langgraph.checkpoint.memory import InMemorySaver
     from psycopg_pool import AsyncConnectionPool
 
@@ -315,7 +366,12 @@ async def run_all(cases: list[Case], *, concurrency: int, timeout: float) -> lis
     from nutrigraph_agent.deps import Deps
     from nutrigraph_agent.graph import build_graph
 
-    settings, models = _settings(), _models(_settings())
+    settings = _settings()
+    models = _models(
+        settings,
+        requests_per_minute=requests_per_minute,
+        attempt_seconds=attempt_seconds,
+    )
     turns = [case for case in cases if case.draft is None]
     drafts = [gate_a_draft(case) for case in cases if case.draft is not None]
 
@@ -391,6 +447,15 @@ def report(cases: list[Case], outcomes: list[dict], failures: list[Failure]) -> 
         f"{len({f.case_id for f in failures})} failed",
     ]
     lines += [f"  {failure}" for failure in failures]
+    # The nodes a failing case ran, because the build keeps its log and not the
+    # outcomes file. `intents: []` is two different failures — a router that
+    # named no Intent, and one that was not sure enough and asked instead — and
+    # the path it took is what tells them apart.
+    by_id = {o["id"]: o for o in outcomes}
+    for case_id in dict.fromkeys(f.case_id for f in failures):
+        outcome = by_id.get(case_id, {})
+        if outcome.get("nodes"):
+            lines.append(f"  {case_id} ran: {' '.join(outcome['nodes'])}")
     slow = sorted(outcomes, key=lambda o: -o.get("seconds", 0))[:3]
     lines.append("slowest: " + ", ".join(f"{o['id']} {o.get('seconds', 0)}s" for o in slow))
     return "\n".join(lines)
@@ -408,6 +473,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--concurrency", type=int, default=6)
     parser.add_argument("--case-timeout", type=float, default=CASE_SECONDS)
+    parser.add_argument(
+        "--attempt-timeout", type=float, default=ATTEMPT_SECONDS,
+        help="how long one provider attempt may take in this run, which is not "
+        "how long one may take for a User",
+    )
+    parser.add_argument(
+        "--requests-per-minute", type=float, default=REQUESTS_PER_MINUTE,
+        help="how fast provider calls may leave, per model. The default sits "
+        "under the Gemini free tier's fifteen. 0 paces nothing, which is what "
+        "a key with billing on it wants",
+    )
     parser.add_argument(
         "--no-prepare", action="store_true",
         help="the database already holds the schema, the dishes and the Corpus",
@@ -429,7 +505,13 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_prepare:
         prepare(settings.database_url, _models(settings), cases)
     outcomes = asyncio.run(
-        run_all(cases, concurrency=args.concurrency, timeout=args.case_timeout)
+        run_all(
+            cases,
+            concurrency=args.concurrency,
+            timeout=args.case_timeout,
+            requests_per_minute=args.requests_per_minute,
+            attempt_seconds=args.attempt_timeout,
+        )
     )
     by_id = {o["id"]: o for o in outcomes}
 

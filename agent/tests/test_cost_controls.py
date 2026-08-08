@@ -449,7 +449,7 @@ async def test_the_composers_prompt_is_never_trimmed_and_the_overrun_is_recorded
     assert row.over_budget is True
 
 
-async def test_a_provider_that_accepts_and_never_answers_climbs_the_ladder(monkeypatch):
+async def test_a_provider_that_accepts_and_never_answers_climbs_the_ladder():
     """Counting attempts is not by itself a bound on time.
 
     A provider that takes the connection and then says nothing would hold a Turn
@@ -459,10 +459,8 @@ async def test_a_provider_that_accepts_and_never_answers_climbs_the_ladder(monke
     """
     import asyncio
 
-    from nutrigraph_agent import providers
     from nutrigraph_agent.providers import Models, ProviderUnavailable
 
-    monkeypatch.setattr(providers, "ATTEMPT_SECONDS", 0.01)
     tried: list[str] = []
 
     class Hanging:
@@ -480,6 +478,7 @@ async def test_a_provider_that_accepts_and_never_answers_climbs_the_ladder(monke
         factory=Hanging,
         schema_model=SCHEMA_MODEL,
         prose_model=PROSE_MODEL,
+        attempt_seconds=0.01,
         sleep=lambda _seconds: asyncio.sleep(0),
     )
 
@@ -503,6 +502,60 @@ def test_the_ladder_has_four_rungs_and_the_last_one_is_the_weaker_model():
         ("gemini-3.5-flash-lite", 0.0),
     ]
     assert len(plan) == MAX_ATTEMPTS
+
+
+def test_a_turn_keeps_its_thirty_seconds_whatever_the_harness_asks_for():
+    """The one thing the eval gate's patience may not do is become the Coach's.
+
+    A User waiting on a Turn gets the bound issue #37 decided; the harness hands
+    in its own, and the default is what everything that does not is left with.
+    """
+    from nutrigraph_agent.providers import ATTEMPT_SECONDS, Models
+
+    default = Models(factory=lambda _m: None, schema_model="s", prose_model="p")
+    patient = Models(
+        factory=lambda _m: None, schema_model="s", prose_model="p", attempt_seconds=600.0
+    )
+
+    assert default.attempt_seconds == ATTEMPT_SECONDS == 30.0
+    assert patient.attempt_seconds == 600.0
+
+
+def test_the_rate_limiter_is_the_harness_and_production_builds_what_it_built(monkeypatch):
+    """Pacing is what beats a quota, and a User is not what spends one.
+
+    `langchain_factory` is asked for a model twice: once the way the process
+    asks, and once the way the eval run does. Only the second carries a limiter,
+    and the two models it hands back for the two tiers carry different ones,
+    because the quota is counted per model.
+    """
+    import langchain.chat_models
+
+    from nutrigraph_agent import providers
+
+    built: list[dict] = []
+
+    def fake_init_chat_model(model, **kwargs):
+        built.append({"model": model, **kwargs})
+        return kwargs
+
+    monkeypatch.setattr(langchain.chat_models, "init_chat_model", fake_init_chat_model)
+
+    plain = providers.langchain_factory("google_genai")
+    plain("gemini-3.5-flash")
+    paced = providers.langchain_factory("google_genai", requests_per_minute=14.0)
+    paced("gemini-3.5-flash")
+    paced("gemini-3.5-flash-lite")
+    paced("gemini-3.5-flash")
+
+    # The production call is the one it always was: no limiter, not even a None.
+    assert "rate_limiter" not in built[0]
+    limiters = [call["rate_limiter"] for call in built[1:]]
+    assert all(limiter is not None for limiter in limiters)
+    # One bucket per model, and the same model gets the same bucket back.
+    assert limiters[0] is limiters[2]
+    assert limiters[0] is not limiters[1]
+    assert limiters[0].requests_per_second == pytest.approx(14.0 / 60.0)
 
 
 def test_there_is_no_rung_below_the_weaker_model():

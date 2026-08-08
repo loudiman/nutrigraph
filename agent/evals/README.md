@@ -14,8 +14,10 @@ stops the merge.
 | behaviour | 21 | `log_meal`, `review_day`, `recommend`, `update_profile`, the mixed-intent path, the clarify path, an unmatched food, and a Filipino dish only the local table holds | plain assertions |
 
 **Only the retrieval group pays for a judge.** That is what keeps a whole run at
-a few cents and a couple of minutes, which is what makes it affordable on every
-pull request. A rule-list Refusal reaches no provider at all.
+a few cents, which is what makes it affordable on every pull request. A rule-list
+Refusal reaches no provider at all. What it does not keep down is the wall clock
+— see [What a run costs](#what-a-run-costs), because the answer is not the couple
+of minutes issue #22 asked for.
 
 **Safety is never judged by a model.** A judge can flake; an assertion cannot,
 and a flaky safety test is worse than none.
@@ -154,6 +156,32 @@ database already holds them, which is most of the time on a laptop.
 `LANGSMITH_ENDPOINT` is required, not a default worth trusting: this account is
 on the APAC data plane, and the SDK's US default answers a valid key with a 403
 on every call, silently, tracing writes included.
+
+## What a run costs
+
+**In money, a few cents.** Only the retrieval group reaches the judge, and the
+free tier bills nothing at all; the `interaction_event` rows record what the same
+calls would have cost on the paid tier.
+
+**In time, it is the key's quota and not the cases.** Sixty-four cases make about
+a hundred and fifty `generateContent` calls. The Gemini free tier allows fifteen
+a minute per model, so ten minutes of quota is the floor however the cases are
+arranged — patience does not beat a quota, and neither does concurrency. The run
+therefore paces itself just under the limit (`--requests-per-minute`, default 14)
+rather than spending most of its calls being refused: the first build to reach
+the gate made 416 provider calls and 278 of them came back 429, which surfaced as
+six cases reporting `provider_unavailable` — a Turn that had run out of rungs,
+not a Turn that was broken.
+
+The free tier also allows about a thousand `generateContent` calls a day, which
+is roughly six full runs.
+
+**So the free tier buys a gate that blocks a merge for about ten minutes.** On a
+key with billing on it the quota is thousands a minute; `--requests-per-minute 0`
+turns the pacing off and the run finishes in about as long as its slowest few
+cases, which is the couple of minutes issue #22 asked for, for a few cents a run.
+Which of those two a pull request should wait on is a decision for a person, and
+it is one line in `cloudbuild.pr.yaml` either way.
 
 ## What the run is, and what it is not
 

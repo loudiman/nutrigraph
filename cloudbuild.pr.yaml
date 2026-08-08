@@ -49,6 +49,13 @@ steps:
   # LANGSMITH_ENDPOINT is required, not a default worth trusting. This account
   # is on the APAC data plane, and the SDK's US default answers a valid key with
   # a 403 on every call, tracing writes included.
+  #
+  # The run paces itself to the key's quota, and the key is on the free tier:
+  # fifteen `generateContent` calls a minute per model against the hundred and
+  # fifty a full run makes. That is about ten minutes, and it is the quota's
+  # number rather than the harness's — see `agent/evals/README.md`. Putting
+  # billing on the key and adding `--requests-per-minute 0` below is what buys
+  # the couple of minutes issue #22 asked for; it is a decision for a person.
   - name: python:3.13-slim
     id: eval
     dir: agent
@@ -100,4 +107,7 @@ availableSecrets:
 serviceAccount: projects/nutrigraph-2026ldm/serviceAccounts/nutrigraph-build@nutrigraph-2026ldm.iam.gserviceaccount.com
 options:
   logging: CLOUD_LOGGING_ONLY
-timeout: 1800s
+# The two seams take about a minute between them; the eval gate takes about ten,
+# because the free tier's quota says so. Half an hour left no room for a slow
+# case, and a build that is killed mid-run reads as a broken gate.
+timeout: 3600s
