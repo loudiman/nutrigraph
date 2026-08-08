@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 from uuid import UUID, uuid4
 
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
+from pydantic import BaseModel
 
+from nutrigraph_agent import graph as graph_module
 from nutrigraph_agent._windows import selector_event_loop_policy
-from nutrigraph_agent.deps import Deps
+from nutrigraph_agent.deps import Deps, manila_now
 from nutrigraph_agent.graph import build_graph
 from nutrigraph_agent.models import AnswerEvent, TurnEvent
 from nutrigraph_agent.turn import run_turn
@@ -29,6 +33,9 @@ class TurnSeam:
     provider: FakeProvider
     checkpointer: InMemorySaver
     food: FakeFoodSearch = field(default_factory=FakeFoodSearch)
+    # The clock the Turn reads. A file that puts a Meal on a fixed day pins this
+    # to the same one, so "today" is a fact of the test and not of the wall.
+    now: Callable[[], datetime] = manila_now
 
     def reconnect(self) -> None:
         """A Session ends and a new one opens. The Thread continues."""
@@ -41,6 +48,7 @@ class TurnSeam:
                 schema_model=SCHEMA_MODEL, prose_model=PROSE_MODEL
             ),
             food=self.food,
+            now=self.now,
         )
         self.reconnect()
 
@@ -56,6 +64,39 @@ class TurnSeam:
 
     def state(self, user_id: str = "demo-user-1") -> dict:
         return self.graph.get_state({"configurable": {"thread_id": user_id}}).values
+
+
+class Interloper(BaseModel):
+    """A schema no node asks for, until a test double asks for it."""
+
+    noted: bool = True
+
+
+def also_calls_the_provider(seam: TurnSeam, monkeypatch) -> TurnSeam:
+    """Make the Turn call the provider once more than the graph does.
+
+    The patch is on `load_profile` — a node every Turn runs, and no test that
+    uses this is about. A node cannot be added to a compiled graph, so the patch
+    is on the module global `build_graph` resolves and the seam is rebuilt after
+    it.
+
+    This is the regression guard for issues #54 and #59. Anything a test binds
+    to the *call* — a scripted answer read by schema, an attempt read by
+    `attempts_on` — reads the same under it. Anything bound to a position in a
+    list moves by one and lands on the wrong node.
+    """
+    unpatched = graph_module.load_profile
+
+    async def loads_and_calls_the_provider(state, config):
+        loaded = await unpatched(state, config)
+        ctx = graph_module.turn_context(config)
+        await ctx.models.fill(Interloper, system="unrelated", user="unrelated")
+        return loaded
+
+    monkeypatch.setattr(graph_module, "load_profile", loads_and_calls_the_provider)
+    seam.reconnect()
+    seam.provider.script(Interloper())
+    return seam
 
 
 @pytest.fixture(scope="session")

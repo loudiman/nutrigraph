@@ -64,7 +64,6 @@ import logging
 import operator
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import datetime
 from time import perf_counter
 from typing import Annotated, Any, TypedDict
 from uuid import UUID
@@ -77,7 +76,7 @@ from .budget import fit, render_history
 from .db import InteractionEvent, RetrievedChunk
 from .deps import Deps
 from .guardrail import OUT_OF_SCOPE, Subject, match_rule, refusal
-from .meal import MANILA, day_bounds, day_line
+from .meal import day_bounds, day_line
 from .meal import log_meal as run_log_meal
 from .models import (
     INTENTS,
@@ -651,7 +650,7 @@ async def log_meal(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
     assert profile is not None
     # One clock for the Meal Type, the `eaten_at` stamp and the day it counts
     # against, so the three cannot disagree about which day it was.
-    now = datetime.now(MANILA)
+    now = ctx.deps.now()
     logged = await run_log_meal(
         db=ctx.deps.db,
         food=ctx.deps.food,
@@ -707,7 +706,7 @@ async def review_day(state: TurnState, config: RunnableConfig) -> dict[str, Any]
         message=ctx.raw_message,
         # The same clock the Meal was stamped with, so "today" means the day the
         # User is living in and not the day the container thinks it is.
-        now=datetime.now(MANILA),
+        now=ctx.deps.now(),
     )
     ctx.record(review.call)
     ctx.intent_results.append(
@@ -746,7 +745,7 @@ async def recommend(state: TurnState, config: RunnableConfig) -> dict[str, Any]:
         turn_id=ctx.turn_id,
         # The same Manila clock the Meal was stamped with, so "today" is the day
         # the User is living in and not the day the container thinks it is.
-        now=datetime.now(MANILA),
+        now=ctx.deps.now(),
     )
     if suggested.call is not None:
         ctx.record(suggested.call)

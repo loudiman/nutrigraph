@@ -650,8 +650,11 @@ class FakeProvider:
     """Records every prompt that reached the provider, and answers from a
     script. A `str` in the script is a schema failure, which forces the retry.
 
-    The script is in call order, and a Turn may now make more than one schema
-    call: the router first, then the Intent path's own."""
+    The script is written in call order, but it is *read* by what each call
+    asked for: a call is answered with the first entry left that its schema can
+    hold. So a provider call added somewhere else in the graph cannot shift the
+    rest of a script onto the wrong node — issue #59 is what happens without it,
+    and issue #54 is the same defect on `seen`."""
 
     decisions: deque[BaseModel | str] = field(default_factory=deque)
     # What the next calls raise before answering, keyed on which call they are
@@ -729,8 +732,18 @@ class FakeProvider:
         rng = random.Random(text)
         return [rng.uniform(-1.0, 1.0) * 7.0 for _ in range(PROVIDER_DIMENSIONS)]
 
-    def _next(self) -> BaseModel | str:
-        return self.decisions.popleft() if self.decisions else self.default
+    def _next(self, schema: Any) -> BaseModel | str:
+        """The next scripted answer *for this call*: the first entry left that
+        the asking schema can hold, and not simply the first entry left.
+
+        A schema failure — a `str` — is aimed at whichever call reaches it next,
+        which is how a retry test writes one.
+        """
+        for position, answer in enumerate(self.decisions):
+            if isinstance(answer, (str, schema)):
+                del self.decisions[position]
+                return answer
+        return self.default
 
 
 @dataclass
@@ -785,14 +798,15 @@ class _FakeStructured:
         # The stop happens before the script is read, so a failed rung does not
         # consume the answer the next rung is supposed to give.
         self.chat.provider._stop(self.schema)
-        answer = self.chat.provider._next()
+        answer = self.chat.provider._next(self.schema)
         if isinstance(answer, str):
             return {"raw": _message(""), "parsed": None, "parsing_error": ValueError(answer)}
-        # A real provider cannot answer with the wrong schema, so a script that
-        # does says the test is out of step with the calls the Turn makes.
+        # Nothing left in the script fits, so the default answered. A real
+        # provider cannot answer with the wrong schema, so this says the script
+        # is out of step with the calls the Turn makes.
         assert isinstance(answer, self.schema), (
-            f"the script's next answer is a {type(answer).__name__}, but the Turn "
-            f"asked for a {self.schema.__name__}"
+            f"the script has nothing left for a {self.schema.__name__}, and the "
+            f"default is a {type(answer).__name__}"
         )
         return {
             "raw": _message(answer.model_dump_json()),
