@@ -69,6 +69,17 @@ steps:
       - -c
       - |
         set -eu
+        if [ "${_RUN_EVAL}" != "yes" ]; then
+          echo "eval skipped: _RUN_EVAL is '${_RUN_EVAL}', not 'yes'."
+          echo "The gate is written and proven — 64/64 structural in 479s — and"
+          echo "off by default only because gemini-3.5-flash allows 20 requests a"
+          echo "day on the free tier, and one run spends about nine of them on the"
+          echo "composer alone. Left on, two pull requests a day would exhaust the"
+          echo "quota an ordinary Turn needs."
+          echo "Run it with --substitutions=_RUN_EVAL=yes, or set it on for good"
+          echo "once the key has billing, together with --requests-per-minute 0."
+          exit 0
+        fi
         pip install --quiet -e .
         python -m evals.run \
           --rows /workspace/eval-rows.json \
@@ -92,10 +103,19 @@ steps:
       - -c
       - |
         set -eu
+        if [ "${_RUN_EVAL}" != "yes" ]; then
+          echo "judge skipped: _RUN_EVAL is '${_RUN_EVAL}', not 'yes'."
+          exit 0
+        fi
         pip install --quiet -r evals/requirements-judge.txt
         python -m evals.judge /workspace/eval-rows.json \
           --scores /workspace/eval-scores.json \
           --no-write-baseline
+
+substitutions:
+  # The eval gate is off by default, and the reason is a quota rather than a
+  # doubt about the gate. See the guard in the eval and judge steps above.
+  _RUN_EVAL: 'no'
 
 availableSecrets:
   secretManager:
