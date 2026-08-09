@@ -12,8 +12,10 @@ row the cache holds.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import replace
 from datetime import timedelta
+from typing import Any
 
 import pytest
 
@@ -24,6 +26,7 @@ from nutrigraph_agent.budget import (
     estimate_tokens,
     fit,
     last_turns,
+    render_history,
 )
 from nutrigraph_agent.db import FOOD_MATCH_DAYS, RETRIEVAL_SIMILARITY
 from nutrigraph_agent.meal import normalize
@@ -446,6 +449,49 @@ async def test_the_composers_prompt_is_never_trimmed_and_the_overrun_is_recorded
     assert row.over_budget is True
 
 
+async def test_a_provider_that_accepts_and_never_answers_climbs_the_ladder():
+    """Counting attempts is not by itself a bound on time.
+
+    A provider that takes the connection and then says nothing would hold a Turn
+    open for ever, which is the one thing the four-attempt bound exists to
+    prevent. The eval gate found it: two cases in sixty-four hung on a call that
+    never answered. A timed-out attempt is transient, so it climbs.
+    """
+    import asyncio
+
+    from nutrigraph_agent.providers import Models, ProviderUnavailable
+
+    tried: list[str] = []
+
+    class Hanging:
+        def __init__(self, model: str) -> None:
+            self.model = model
+
+        def with_structured_output(self, schema, *, include_raw: bool = False):
+            return self
+
+        async def ainvoke(self, messages):
+            tried.append(self.model)
+            await asyncio.sleep(10)
+
+    models = Models(
+        factory=Hanging,
+        schema_model=SCHEMA_MODEL,
+        prose_model=PROSE_MODEL,
+        attempt_seconds=0.01,
+        sleep=lambda _seconds: asyncio.sleep(0),
+    )
+
+    with pytest.raises(ProviderUnavailable):
+        await models.for_turn(known_names=[]).fill(
+            RouterDecision, system="classify", user="anything"
+        )
+
+    # Three rungs, because the schema tier is already the weaker one and has
+    # nothing below it to fall to — the ladder's own rule, not a fourth number.
+    assert tried == [SCHEMA_MODEL] * len(ladder(SCHEMA_MODEL, SCHEMA_MODEL))
+
+
 def test_the_ladder_has_four_rungs_and_the_last_one_is_the_weaker_model():
     plan = ladder("gemini-3.5-flash", "gemini-3.5-flash-lite")
 
@@ -456,6 +502,60 @@ def test_the_ladder_has_four_rungs_and_the_last_one_is_the_weaker_model():
         ("gemini-3.5-flash-lite", 0.0),
     ]
     assert len(plan) == MAX_ATTEMPTS
+
+
+def test_a_turn_keeps_its_thirty_seconds_whatever_the_harness_asks_for():
+    """The one thing the eval gate's patience may not do is become the Coach's.
+
+    A User waiting on a Turn gets the bound issue #37 decided; the harness hands
+    in its own, and the default is what everything that does not is left with.
+    """
+    from nutrigraph_agent.providers import ATTEMPT_SECONDS, Models
+
+    default = Models(factory=lambda _m: None, schema_model="s", prose_model="p")
+    patient = Models(
+        factory=lambda _m: None, schema_model="s", prose_model="p", attempt_seconds=600.0
+    )
+
+    assert default.attempt_seconds == ATTEMPT_SECONDS == 30.0
+    assert patient.attempt_seconds == 600.0
+
+
+def test_the_rate_limiter_is_the_harness_and_production_builds_what_it_built(monkeypatch):
+    """Pacing is what beats a quota, and a User is not what spends one.
+
+    `langchain_factory` is asked for a model twice: once the way the process
+    asks, and once the way the eval run does. Only the second carries a limiter,
+    and the two models it hands back for the two tiers carry different ones,
+    because the quota is counted per model.
+    """
+    import langchain.chat_models
+
+    from nutrigraph_agent import providers
+
+    built: list[dict] = []
+
+    def fake_init_chat_model(model, **kwargs):
+        built.append({"model": model, **kwargs})
+        return kwargs
+
+    monkeypatch.setattr(langchain.chat_models, "init_chat_model", fake_init_chat_model)
+
+    plain = providers.langchain_factory("google_genai")
+    plain("gemini-3.5-flash")
+    paced = providers.langchain_factory("google_genai", requests_per_minute=14.0)
+    paced("gemini-3.5-flash")
+    paced("gemini-3.5-flash-lite")
+    paced("gemini-3.5-flash")
+
+    # The production call is the one it always was: no limiter, not even a None.
+    assert "rate_limiter" not in built[0]
+    limiters = [call["rate_limiter"] for call in built[1:]]
+    assert all(limiter is not None for limiter in limiters)
+    # One bucket per model, and the same model gets the same bucket back.
+    assert limiters[0] is limiters[2]
+    assert limiters[0] is not limiters[1]
+    assert limiters[0].requests_per_second == pytest.approx(14.0 / 60.0)
 
 
 def test_there_is_no_rung_below_the_weaker_model():
@@ -573,6 +673,105 @@ async def test_a_turn_over_budget_trims_the_history_and_records_the_overrun(seam
     # Still over after the trimming, so the Turn ran anyway and said so.
     row = next(r for r in seam.db.events if r.node == "route" and r.turn_id == seam.db.events[-1].turn_id)
     assert row.over_budget is True
+
+
+# What the Profile row and today's Meals look like once a node has rendered them
+# for a prompt. `graph._held` writes the Profile as `field: value` lines, and
+# `meal.day_line` opens with this sentence, so these strings appear where a node
+# built one and nowhere else — the Thread's own history is the User's prose.
+PROFILE_AND_TODAYS_MEALS = ("weight_kg:", "allergies:", "The day so far, this Meal included")
+
+
+def modules_that_trim() -> list[Any]:
+    """Every module holding a `fit`, found rather than listed.
+
+    A node that assembles a prompt calls `fit`, and `from .budget import fit`
+    binds a name in that module. Discovering them is what makes the test below a
+    guard rather than a description: a node added next year is covered without
+    anyone remembering this file exists.
+
+    The source tree is read rather than every module imported, because importing
+    `main` starts the process's configuration check, and `budget` is skipped
+    because patching `fit` where it is defined would not reach the name a node
+    already bound.
+    """
+    import importlib
+    from pathlib import Path
+
+    import nutrigraph_agent
+
+    source = Path(nutrigraph_agent.__file__).parent
+    found = []
+    for path in sorted(source.glob("*.py")):
+        if path.stem == "budget":
+            continue
+        if re.search(r"^from \.budget import .*\bfit\b", path.read_text("utf-8"), re.M):
+            found.append(importlib.import_module(f"nutrigraph_agent.{path.stem}"))
+    return found
+
+
+@pytest.fixture
+def trimmer(monkeypatch):
+    """Every `fit` call any node makes, as it was made."""
+    from nutrigraph_agent import budget
+
+    calls: list[dict] = []
+    real = budget.fit
+
+    def recording(**kwargs):
+        calls.append(kwargs)
+        return real(**kwargs)
+
+    patched = modules_that_trim()
+    assert patched, "no module assembles a prompt, which cannot be right"
+    for module in patched:
+        monkeypatch.setattr(module, "fit", recording)
+    return calls
+
+
+async def test_no_node_hands_the_profile_or_todays_meals_to_the_trimmer(seam, trimmer):
+    """The guard the cost-controls slice could not give itself.
+
+    It reported that "the Profile and today's Meals survive trimming" was true
+    *by construction*: only some nodes assemble a multi-part prompt, and none of
+    those held the Profile. That is a property of today's call sites, not a rule,
+    and a node written next year could hand the Profile to `history=` and nothing
+    would notice. This notices.
+
+    Every `fit` call the graph makes is recorded, across every shape of Turn
+    there is, and what may be cut — the history and the passages — is read for
+    the Profile row and for the day's totals. `keep` is not read: `keep` is
+    measured and never cut, which is the whole distinction.
+    """
+    seam.food.results = {"egg": [EGG]}
+    seam.provider.script(
+        RouterDecision(intents=["update_profile"], confidence=0.95),
+        ProfileUpdate(field="weight_kg", new_value="80", old_value="78"),
+        BOTH, ATE_EGGS, CHOSE_EGG, CITED, COMPOSED,
+        TWO_INTENTS, DayRequest(days_ago=0), SUGGESTED, COMPOSED,
+        ASKED, CITED,
+    )
+    # Far over budget, so every trimming branch runs rather than the early one.
+    long = " " + "eaten rice " * 3_000
+    await seam.turn("I weigh 80 kg now" + long)
+    await seam.turn("I ate two eggs, is that enough protein?" + long)
+    await seam.turn("how did my day go, and what should I eat tonight?" + long)
+    await seam.turn(QUESTION + long)
+
+    assert trimmer, "no node trimmed at all, so this proves nothing"
+    for call in trimmer:
+        trimmable = render_history(call.get("history") or []) + " ".join(
+            getattr(passage, "text", "") for passage in call.get("passages") or ()
+        )
+        for rendered in PROFILE_AND_TODAYS_MEALS:
+            assert rendered not in trimmable, (
+                f"{rendered!r} was handed to the trimmer; the Profile and today's "
+                f"Meals belong in `keep`, which is measured and never cut"
+            )
+    # And the battery really did put them in front of `fit`, in `keep`, rather
+    # than passing because no node ever held them.
+    kept = " ".join(text for call in trimmer for text in call["keep"])
+    assert any(rendered in kept for rendered in PROFILE_AND_TODAYS_MEALS)
 
 
 async def test_the_profile_and_todays_meals_reach_the_provider_on_an_over_budget_turn(seam):

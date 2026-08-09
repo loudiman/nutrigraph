@@ -172,7 +172,12 @@ old_value is what the Profile holds now, which you are given.
 
 Name no field when the message does not clearly change exactly one of them —
 when it is vague, when it changes two, or when the value is missing. The Coach
-then asks the User rather than guessing a field."""
+then asks the User rather than guessing a field.
+
+One message may do more than one thing: state a fact about themselves and also
+say what they ate, or ask a question. Read only the part that states a stable
+fact. A Meal, a question, or a request for a suggestion is another Intent's
+work, and it is not a second Profile change."""
 
 CLARIFY_SYSTEM = """You are a nutrition Coach who did not understand one message.
 

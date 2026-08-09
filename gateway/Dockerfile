@@ -9,4 +9,10 @@ RUN npm ci --omit=dev
 
 COPY src ./src
 
+# The minimal test client, and with it the demo-data warning issue #30 requires
+# a User to see before they type. Without this line `express.static` serves a
+# directory that is not in the image, and every path 404s on the deployed
+# service while working perfectly on a laptop.
+COPY public ./public
+
 CMD ["node", "src/index.ts"]

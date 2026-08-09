@@ -1,0 +1,153 @@
+[
+  {
+    "id": "behaviour-log-one-local-dish",
+    "why": "The plainest log_meal there is.",
+    "message": "I had adobo for lunch",
+    "intents": ["log_meal"],
+    "items": [{"said_as": "adobo", "status": "matched", "source": "local"}]
+  },
+  {
+    "id": "behaviour-log-two-foods-in-one-message",
+    "why": "One message is one Meal, however many foods it names.",
+    "message": "I had sinangag and tinola for dinner",
+    "intents": ["log_meal"],
+    "items": [
+      {"said_as": "sinangag", "status": "matched"},
+      {"said_as": "tinola", "status": "matched"}
+    ]
+  },
+  {
+    "id": "behaviour-log-a-counted-quantity",
+    "why": "A count is not a weight, so the portion is assumed and the answer has to say so.",
+    "message": "I ate 2 pieces of pandesal this morning",
+    "intents": ["log_meal"],
+    "items": [{"said_as": "pandesal", "quantity": 2, "status": "matched"}],
+    "disclaimers": ["my assumption and not a measurement"]
+  },
+  {
+    "id": "behaviour-log-a-stated-weight",
+    "why": "A weight the User stated is used as it stands, and nothing is assumed.",
+    "message": "I had 150 g of sinangag",
+    "intents": ["log_meal"],
+    "items": [{"said_as": "sinangag", "quantity": 150, "unit": "g", "status": "matched"}]
+  },
+  {
+    "id": "behaviour-log-an-unmatched-food",
+    "why": "A food the Coach cannot match is kept anyway and named as uncounted. It never sends the Turn to clarify: clarify is the graph's one interrupt, and meal logging is not it.",
+    "message": "I ate a bowl of zzzfoodzzz",
+    "intents": ["log_meal"],
+    "items": [{"said_as": "zzzfoodzzz", "status": "unmatched"}]
+  },
+  {
+    "id": "behaviour-log-a-dish-only-the-local-table-holds",
+    "why": "Dinuguan is in no external food catalogue this system reaches. The local Filipino dish table is the only thing that can count it, and it is consulted before any external call.",
+    "message": "I had dinuguan for lunch",
+    "intents": ["log_meal"],
+    "items": [{"said_as": "dinuguan", "status": "matched", "source": "local"}]
+  },
+  {
+    "id": "behaviour-log-a-proxy-valued-dish",
+    "why": "A proxy row is a canned product standing in for a home-cooked dish. That is a marking the User depends on, so it may not be lost to a Coach being brief.",
+    "message": "I had caldereta for dinner",
+    "intents": ["log_meal"],
+    "items": [{"said_as": "caldereta", "status": "matched"}],
+    "disclaimers": ["stand-in"]
+  },
+  {
+    "id": "behaviour-correct-an-unmatched-food",
+    "why": "The correction the previous answer invited. The Item is corrected in place, so the day it counts against does not move.",
+    "given": ["I ate a bowl of zzzfoodzzz"],
+    "message": "sorry, that zzzfoodzzz was actually pinakbet",
+    "intents": ["log_meal"],
+    "items": [{"said_as": "pinakbet", "status": "matched"}]
+  },
+  {
+    "id": "behaviour-review-a-day-with-nothing-logged",
+    "why": "A day with nothing counted says so rather than reporting zeros.",
+    "message": "how did my day go?",
+    "intents": ["review_day"]
+  },
+  {
+    "id": "behaviour-review-a-day-that-holds-a-meal",
+    "why": "The review is summed out of PostgreSQL, not out of the checkpoint.",
+    "given": ["I had adobo for lunch"],
+    "message": "how did my day go?",
+    "intents": ["review_day"]
+  },
+  {
+    "id": "behaviour-review-an-earlier-day",
+    "why": "The Thread never restarts and it is not where a Meal lives, so an earlier day is answered from the same place as today.",
+    "message": "how did I do yesterday?",
+    "intents": ["review_day"]
+  },
+  {
+    "id": "behaviour-recommend-what-to-eat-next",
+    "why": "The gap is computed in SQL, the filters run in SQL, and only then does a model rank what survived. The Recommendation is written down so it can be accepted later.",
+    "given": ["I had sinangag for breakfast"],
+    "message": "what should I eat tonight?",
+    "intents": ["recommend"],
+    "recommendation_written": true
+  },
+  {
+    "id": "behaviour-recommend-never-names-a-disliked-food",
+    "why": "A disliked food is struck out in SQL before a model sees a candidate, so it cannot be ranked back in.",
+    "message": "what should I eat next to hit my goal?",
+    "intents": ["recommend"],
+    "absent": ["bitter gourd"],
+    "recommendation_written": true
+  },
+  {
+    "id": "behaviour-update-profile-weight",
+    "why": "The User changes a stable fact by saying it, and the write goes to PostgreSQL and nowhere else.",
+    "message": "I weigh 80 kg now",
+    "intents": ["update_profile"],
+    "profile_after": {"field": "weight_kg", "equals": 80.0}
+  },
+  {
+    "id": "behaviour-update-profile-target-weight",
+    "why": "The Goal is a body-weight target, and this is the number it is measured against.",
+    "message": "my target weight is 70 kg",
+    "intents": ["update_profile"],
+    "profile_after": {"field": "target_weight_kg", "equals": 70.0}
+  },
+  {
+    "id": "behaviour-update-profile-adds-an-allergy",
+    "why": "An allergy statement adds to the list rather than replacing it, and the next Turn reads the changed Profile.",
+    "message": "I am allergic to shrimp",
+    "intents": ["update_profile"],
+    "profile_after": {"field": "allergies", "contains": "shrimp"}
+  },
+  {
+    "id": "behaviour-update-profile-diet-pattern",
+    "why": "A diet pattern is what the candidate filter reads to strike conflicting foods out.",
+    "message": "I am pescatarian now",
+    "intents": ["update_profile"],
+    "profile_after": {"field": "diet_pattern", "equals": "pescatarian"}
+  },
+  {
+    "id": "behaviour-mixed-intent-log-then-ask",
+    "why": "The mixed-intent path. The Meal is written first and the question is answered from a day total that already holds it — which is the whole reason the order matters.",
+    "message": "I had tinola for dinner, is that enough protein for one meal?",
+    "intents": ["log_meal", "ask_question"],
+    "items": [{"said_as": "tinola", "status": "matched"}]
+  },
+  {
+    "id": "behaviour-mixed-intent-update-then-recommend",
+    "why": "The second Intent reads what the first produced: the Profile the recommender filters on is the one this Turn just changed, not the one it was a moment ago. No allergen-absence assertion belongs here — the update_profile confirmation names the allergen on purpose, which is why that Intent is not allergy-checked at all. The absence claim is the draft Recommendation case in the safety group.",
+    "message": "add shrimp to my allergies, and then tell me what to eat tonight",
+    "intents": ["update_profile", "recommend"],
+    "profile_after": {"field": "allergies", "contains": "shrimp"}
+  },
+  {
+    "id": "behaviour-clarify-an-unclassifiable-message",
+    "why": "The clarify path, reached the way it usually is: the router is not confident enough to classify the message at all, so the Coach asks rather than guessing.",
+    "message": "and the other thing?",
+    "clarification": true
+  },
+  {
+    "id": "behaviour-clarify-a-vague-profile-statement",
+    "why": "A Profile statement the extractor cannot pin to one field is a question to the User, not a guessed field.",
+    "message": "I think I am a bit heavier than I was",
+    "clarification": true
+  }
+]

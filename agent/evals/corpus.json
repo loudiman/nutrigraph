@@ -1,0 +1,238 @@
+[
+  {
+    "slug": "dga-2025-2030",
+    "title": "Dietary Guidelines for Americans, 2025-2030",
+    "source_url": "https://cdn.realfood.gov/DGA_508.pdf",
+    "publisher": "U.S. Department of Agriculture and U.S. Department of Health and Human Services",
+    "published_on": "2025-12-01",
+    "licence_id": "us-gov-public-domain",
+    "passages": [
+      {
+        "locator": "page 3",
+        "text": "Eat a variety of protein foods, including eggs, seafood, lean meats and poultry, beans, peas, lentils, nuts, seeds, and soy products. Protein foods supply the amino acids the body cannot make for itself, along with iron, zinc, and B vitamins. Vary the choices across the week rather than eating the same protein food every day, and include seafood at least twice a week for the long-chain omega-3 fatty acids it carries."
+      },
+      {
+        "locator": "page 4",
+        "text": "Limit added sugars to less than 10 percent of calories per day, starting at age 2. Limit saturated fat to less than 10 percent of calories per day, replacing it with unsaturated fat rather than with refined starch. Limit sodium to less than 2,300 mg per day for adults. These three limits are the shortfalls most often exceeded in the United States, and most of the sodium comes from packaged and restaurant foods rather than from the salt shaker."
+      },
+      {
+        "locator": "page 5",
+        "text": "Make half the plate fruits and vegetables. For an adult eating about 2,000 calories a day, that is about 2 cup-equivalents of fruit and about 2.5 cup-equivalents of vegetables each day. Choose whole fruit more often than juice, because whole fruit carries the fibre that juice has lost, and vary vegetables across the subgroups: dark green, red and orange, beans and peas, starchy, and other."
+      },
+      {
+        "locator": "page 6",
+        "text": "Include fat-free or low-fat dairy, or fortified soy alternatives, at about 3 cup-equivalents a day for adults. Dairy is the main source of calcium, vitamin D, and potassium in many eating patterns, and these are among the nutrients most often under-consumed. People who avoid dairy can meet calcium needs from fortified soy beverages, fortified juices, canned fish with soft bones, and some leafy greens."
+      },
+      {
+        "locator": "page 7",
+        "text": "Adults who do not drink alcohol should not start. Adults of legal drinking age who choose to drink should limit intake to 2 drinks or less a day for men and 1 drink or less a day for women, on days when alcohol is consumed. Drinking less is better for health than drinking more. Some people should not drink at all, including anyone who is pregnant."
+      }
+    ]
+  },
+  {
+    "slug": "nutrition-gov-salt-and-sodium",
+    "title": "Salt and Sodium",
+    "source_url": "https://www.nutrition.gov/topics/whats-food/salt-and-sodium",
+    "publisher": "National Agricultural Library, U.S. Department of Agriculture",
+    "published_on": "2025-06-01",
+    "licence_id": "us-gov-public-domain",
+    "passages": [
+      {
+        "locator": "How much sodium",
+        "text": "Adults should keep sodium to less than 2,300 mg per day, which is about one teaspoon of table salt. More than 70 percent of the sodium people eat comes from packaged, processed, and restaurant foods, not from salt added at the table. Reading the Nutrition Facts label and comparing similar products is the fastest way to bring the number down, because two versions of the same food can differ several-fold in sodium."
+      },
+      {
+        "locator": "Cutting back",
+        "text": "Cutting back on sodium works best gradually: the taste for salt adjusts over a few weeks. Rinse canned beans and vegetables, choose fresh or frozen plain vegetables over sauced ones, and season with herbs, citrus, vinegar, garlic, and spices instead of salt. Potassium-rich foods such as bananas, potatoes, beans, and leafy greens help offset the effect of sodium on blood pressure in most healthy adults."
+      }
+    ]
+  },
+  {
+    "slug": "nutrition-gov-fiber",
+    "title": "Fiber",
+    "source_url": "https://www.nutrition.gov/topics/whats-food/fiber",
+    "publisher": "National Agricultural Library, U.S. Department of Agriculture",
+    "published_on": "2025-06-01",
+    "licence_id": "us-gov-public-domain",
+    "passages": [
+      {
+        "locator": "How much fiber",
+        "text": "Adults need about 25 to 34 grams of dietary fibre a day, depending on age and sex, and most people in the United States eat about half that. Fibre comes only from plant foods: whole grains, beans, peas and lentils, vegetables, fruit, nuts, and seeds. Increase it gradually and drink more water alongside, because a sudden jump in fibre without fluid is what causes the discomfort people blame on the fibre itself."
+      },
+      {
+        "locator": "Where fiber comes from",
+        "text": "The richest ordinary sources are beans and lentils, which carry roughly 6 to 8 grams of fibre per half cup cooked; whole grains such as oats, barley, and brown rice; and fruit and vegetables eaten with the skin on. Refined grains have had the bran removed and carry very little. Fibre supplements do not replace the wider set of nutrients that fibre-rich foods bring with them."
+      }
+    ]
+  },
+  {
+    "slug": "nutrition-gov-proteins",
+    "title": "Protein",
+    "source_url": "https://www.nutrition.gov/topics/whats-food/protein",
+    "publisher": "National Agricultural Library, U.S. Department of Agriculture",
+    "published_on": "2025-06-01",
+    "licence_id": "us-gov-public-domain",
+    "passages": [
+      {
+        "locator": "How much protein",
+        "text": "The Recommended Dietary Allowance for protein is 0.8 grams per kilogram of body weight a day for adults, which is about 46 grams a day for an average woman and about 56 grams a day for an average man. Most adults in the United States already meet this. Spreading protein across the day's meals, rather than eating almost all of it at dinner, is the change that matters more than the total for most people."
+      },
+      {
+        "locator": "Protein foods",
+        "text": "One egg carries about 6 grams of protein, a half cup of cooked beans about 7 grams, 3 ounces of cooked chicken or fish about 21 grams, and a cup of milk about 8 grams. Plant and animal sources both count. A varied set of plant proteins across the day supplies every amino acid without any need to combine particular foods within a single meal."
+      }
+    ]
+  },
+  {
+    "slug": "nutrition-gov-carbohydrates",
+    "title": "Carbohydrates",
+    "source_url": "https://www.nutrition.gov/topics/whats-food/carbohydrates",
+    "publisher": "National Agricultural Library, U.S. Department of Agriculture",
+    "published_on": "2025-06-01",
+    "licence_id": "us-gov-public-domain",
+    "passages": [
+      {
+        "locator": "Whole grains",
+        "text": "Make at least half of the grains eaten each day whole grains. A whole grain keeps all three parts of the kernel: the bran, the germ, and the endosperm. Refined grains have had the bran and germ milled out, which removes most of the fibre, and enrichment puts back some B vitamins and iron but not the fibre. On an ingredient list, look for the word whole as the first word: whole wheat, whole oats, brown rice, quinoa, barley."
+      },
+      {
+        "locator": "Sugars and starches",
+        "text": "Carbohydrates come as sugars, starches, and fibre. Naturally occurring sugars in fruit and milk arrive with water, fibre, and micronutrients; added sugars arrive with none of those and are what the guidance limits. Starch from whole grains, beans, and starchy vegetables is the body's ordinary fuel, and there is no need to avoid it in order to lose weight."
+      }
+    ]
+  },
+  {
+    "slug": "nutrition-gov-fats",
+    "title": "Fats",
+    "source_url": "https://www.nutrition.gov/topics/whats-food/fats",
+    "publisher": "National Agricultural Library, U.S. Department of Agriculture",
+    "published_on": "2025-06-01",
+    "licence_id": "us-gov-public-domain",
+    "passages": [
+      {
+        "locator": "Kinds of fat",
+        "text": "Unsaturated fats — the monounsaturated and polyunsaturated fats in olive and canola oil, nuts, seeds, avocado, and fatty fish — are the ones to favour. Saturated fat, found mostly in fatty meat, butter, coconut oil, and full-fat dairy, should stay under 10 percent of daily calories. Replacing saturated fat with unsaturated fat lowers cardiovascular risk; replacing it with refined starch or sugar does not."
+      }
+    ]
+  },
+  {
+    "slug": "nutrition-gov-water-hydration",
+    "title": "Water, Hydration and Health",
+    "source_url": "https://www.nutrition.gov/topics/healthy-living-and-weight/water-hydration-and-health",
+    "publisher": "National Agricultural Library, U.S. Department of Agriculture",
+    "published_on": "2025-06-01",
+    "licence_id": "us-gov-public-domain",
+    "passages": [
+      {
+        "locator": "How much water",
+        "text": "There is no single required number of glasses a day. Total water comes from drinks and from food, and about 20 percent of it typically comes from food. Thirst and the colour of urine are the practical guides for a healthy adult: pale yellow suggests enough. Needs rise with heat, altitude, illness, and physical activity. Plain water is the best ordinary choice because it carries no added sugars and no calories."
+      }
+    ]
+  },
+  {
+    "slug": "nutrition-gov-vitamins-and-minerals",
+    "title": "Vitamins and Minerals",
+    "source_url": "https://www.nutrition.gov/topics/whats-food/vitamins-and-minerals",
+    "publisher": "National Agricultural Library, U.S. Department of Agriculture",
+    "published_on": "2025-06-01",
+    "licence_id": "us-gov-public-domain",
+    "passages": [
+      {
+        "locator": "Nutrients of public health concern",
+        "text": "Calcium, potassium, dietary fibre, and vitamin D are under-consumed by enough of the population to be named nutrients of public health concern. Potassium is carried by potatoes, beans, lentils, bananas, tomatoes, oranges, leafy greens, and dairy. Vitamin D is scarce in food and comes mostly from fortified milk and soy beverages, fatty fish, and egg yolk. Food first is the ordinary route; a supplement fills a gap rather than replacing a pattern."
+      },
+      {
+        "locator": "Vitamins and minerals compared",
+        "text": "Vitamins are organic compounds made by living things, and they break down with heat, air, and light. Minerals are elements from soil and water, and they keep their form through cooking. Fat-soluble vitamins — A, D, E, and K — are stored in body fat and can build up to harmful amounts from supplements. Water-soluble vitamins, the B group and vitamin C, are not stored in any quantity and are needed regularly."
+      }
+    ]
+  },
+  {
+    "slug": "nutrition-gov-eating-vegetarian",
+    "title": "Eating Vegetarian",
+    "source_url": "https://www.nutrition.gov/topics/healthy-living-and-weight/eating-vegetarian",
+    "publisher": "National Agricultural Library, U.S. Department of Agriculture",
+    "published_on": "2025-06-01",
+    "licence_id": "us-gov-public-domain",
+    "passages": [
+      {
+        "locator": "Nutrients to watch",
+        "text": "A well-planned vegetarian or vegan pattern meets needs at every stage of life. The nutrients that need attention are vitamin B12, iron, zinc, calcium, iodine, and long-chain omega-3 fatty acids. Vitamin B12 occurs naturally only in animal foods, so a vegan pattern needs a fortified food or a supplement — this is the one nutrient that planning alone cannot supply. Pair iron-rich plant foods with a source of vitamin C to improve absorption."
+      },
+      {
+        "locator": "Plant protein",
+        "text": "Beans, lentils, peas, tofu, tempeh, soy milk, nuts, seeds, and whole grains all carry protein. Eating a variety of them across the day supplies all the essential amino acids; the older advice to combine complementary proteins within a single meal is not necessary. Soy foods in particular carry protein comparable in quality to animal sources."
+      }
+    ]
+  },
+  {
+    "slug": "nutrition-gov-eating-exercise-and-sports",
+    "title": "Eating, Exercise, and Sports",
+    "source_url": "https://www.nutrition.gov/topics/healthy-living-and-weight/eating-exercise-and-sports",
+    "publisher": "National Agricultural Library, U.S. Department of Agriculture",
+    "published_on": "2025-06-01",
+    "licence_id": "us-gov-public-domain",
+    "passages": [
+      {
+        "locator": "Eating around exercise",
+        "text": "For ordinary exercise lasting under an hour, no special eating is needed beyond a normal balanced pattern and water. Before a longer or harder session, a carbohydrate-based snack one to three hours ahead is easier to digest than a high-fat or very high-fibre meal. Afterwards, a meal or snack carrying both carbohydrate and protein within a few hours supports recovery. Sports drinks are useful mainly beyond about an hour of sustained hard effort."
+      }
+    ]
+  },
+  {
+    "slug": "nutrition-gov-healthy-living-and-weight",
+    "title": "Healthy Living and Weight",
+    "source_url": "https://www.nutrition.gov/topics/healthy-living-and-weight",
+    "publisher": "National Agricultural Library, U.S. Department of Agriculture",
+    "published_on": "2025-06-01",
+    "licence_id": "us-gov-public-domain",
+    "passages": [
+      {
+        "locator": "Energy balance",
+        "text": "Body weight over time reflects the balance between the calories eaten and the calories used. A deficit of roughly 500 calories a day tends to produce about half a kilogram of weight loss a week for most adults, and slower loss is more often kept off than fast loss. Physical activity matters for health at any weight, and it protects lean mass while weight comes down, but eating pattern is what moves the number on the scale."
+      }
+    ]
+  },
+  {
+    "slug": "nutrition-gov-phytonutrients",
+    "title": "Phytonutrients and Antioxidants",
+    "source_url": "https://www.nutrition.gov/topics/whats-food/phytonutrients",
+    "publisher": "National Agricultural Library, U.S. Department of Agriculture",
+    "published_on": "2025-06-01",
+    "licence_id": "us-gov-public-domain",
+    "passages": [
+      {
+        "locator": "What phytonutrients are",
+        "text": "Phytonutrients are compounds plants make that are not essential nutrients but are associated with health benefits in whole foods: carotenoids in orange and dark green vegetables, flavonoids in berries, tea, and cocoa, glucosinolates in cabbage and broccoli, and lycopene in cooked tomato. Eating a range of colours across the week is the practical way to get a range of them. Isolated antioxidant supplements have not shown the same benefit as the foods."
+      }
+    ]
+  },
+  {
+    "slug": "nutrition-gov-food-additives",
+    "title": "Food Additives and Compounds",
+    "source_url": "https://www.nutrition.gov/topics/whats-food/food-additives",
+    "publisher": "National Agricultural Library, U.S. Department of Agriculture",
+    "published_on": "2025-06-01",
+    "licence_id": "us-gov-public-domain",
+    "passages": [
+      {
+        "locator": "Reading the label",
+        "text": "The Nutrition Facts label gives the serving size first, and every number below it applies to that serving rather than to the package. The percent Daily Value column tells whether a serving is high or low in a nutrient: 5 percent or less is low, 20 percent or more is high. The ingredient list runs in descending order by weight, so the first few ingredients are most of what the food is."
+      }
+    ]
+  },
+  {
+    "slug": "nutrition-gov-strategies-for-success",
+    "title": "Strategies for Success",
+    "source_url": "https://www.nutrition.gov/topics/healthy-living-and-weight/strategies-success",
+    "publisher": "National Agricultural Library, U.S. Department of Agriculture",
+    "published_on": "2025-06-01",
+    "licence_id": "us-gov-public-domain",
+    "passages": [
+      {
+        "locator": "Portions and servings",
+        "text": "A serving is a measured amount used on a label or in guidance; a portion is what a person actually puts on the plate, and the two are often very different. Restaurant and packaged portions have grown, so a single item can hold two or three servings. Checking the serving size on the label, using a smaller plate, and putting the rest away before eating are the changes that hold up over time."
+      }
+    ]
+  }
+]

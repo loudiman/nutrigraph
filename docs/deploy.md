@@ -61,8 +61,15 @@ Each runtime service account may read only its own secrets:
 ## The pipeline
 
 `cloudbuild.pr.yaml` on every pull request: a throwaway PostgreSQL, the agent's
-tests against it, then the gateway's tests and type check. The eval gate has a
-place reserved in that file and lands in a later slice.
+tests against it, the gateway's tests and type check, then the eval gate — the
+real graph against the golden dataset, and ragas over the retrieval group in a
+container of its own. See [`agent/evals/README.md`](../agent/evals/README.md);
+the two halves are two steps because ragas 0.4 needs a `langchain-community`
+that the agent's `langchain` 1.x cannot sit beside.
+
+The eval step sets `LANGSMITH_ENDPOINT` to the APAC data plane for the same
+reason the deployed service does: this account is not on the SDK's US default,
+which answers a valid key with a 403 on every call, silently.
 
 `cloudbuild.yaml` on every merge to `main`, in this order: build the two images,
 apply the migrations, deploy the agent, deploy the gateway. A service directory
@@ -71,8 +78,11 @@ registry is retagged with the new commit, so the deployment is uniform and the
 work is skipped.
 
 Both run as `nutrigraph-build@`, which may write to Artifact Registry, deploy to
-Cloud Run, act as the two runtime service accounts, and read exactly one secret:
-the Neon connection string, for the migration step.
+Cloud Run, act as the two runtime service accounts, and read three secrets:
+`neon-connection-string` for the migration step on `main`, and
+`gemini-api-key` and `langsmith-api-key` for the eval gate on a pull request.
+The eval gate calls a real model against a throwaway database, so it needs the
+key the agent itself runs on; it never touches Neon.
 
 ## Rolling back
 

@@ -74,6 +74,20 @@ BACKOFF_SECONDS = (1.0, 3.0)
 # never hang, because there is no fifth attempt to make.
 MAX_ATTEMPTS = 4
 
+# How long one attempt may take, for a User waiting on a Turn. The count of
+# attempts is not by itself a bound on time: a provider that accepts the
+# connection and then says nothing would hold a Turn open for ever, which is
+# exactly what the bound above exists to prevent. A timed-out attempt is
+# transient, so it climbs to the next rung like any other stop, and the fourth
+# one ends the Turn on the fallback message.
+#
+# The eval gate found this: two cases in sixty-four hung on a provider call that
+# never answered, and a build that hangs is worse than one that fails.
+#
+# It is the default of a `Models` field rather than the value read at the call
+# site, because the eval harness needs its own — see `Models.attempt_seconds`.
+ATTEMPT_SECONDS = 30.0
+
 # What is worth retrying, read off the exception rather than off an imported
 # vendor type: the provider is a configuration string, and importing
 # `google.api_core.exceptions` here would be the code path per vendor that this
@@ -180,19 +194,55 @@ def truncate_and_normalize(
     return [value / norm for value in head]
 
 
-def langchain_factory(provider: str, *, temperature: float = 0.0) -> ModelFactory:
+def langchain_factory(
+    provider: str, *, temperature: float = 0.0, requests_per_minute: float | None = None
+) -> ModelFactory:
     """The provider is a configuration string, not a code path.
 
     Temperature 0: the router classifies, it does not invent. Some Gemini models
     have fixed sampling and warn that they ignore it, which is the provider's
     business — the request still asks for the deterministic setting, so the same
     line is correct after a provider swap.
+
+    **`requests_per_minute` is the harness's, and production leaves it unset.** A
+    User sends one message and waits, and a Coach that paced itself would make
+    them wait for a quota nobody else is spending. The eval gate is the other
+    shape: sixty-four Turns back to back on one free-tier key, where the quota
+    is fifteen `generateContent` calls a minute *per model* and everything past
+    it comes back 429. Pacing the calls before they leave is the only thing that
+    helps — no amount of patience beats a quota — so the limiter is here, one
+    bucket for each model because that is how the quota is counted, and the
+    production path builds the same model it built before.
     """
     from langchain.chat_models import init_chat_model
 
-    return lambda model: init_chat_model(
-        model, model_provider=provider, temperature=temperature
-    )
+    buckets: dict[str, Any] = {}
+
+    def bucket(model: str) -> Any | None:
+        if not requests_per_minute:
+            return None
+        from langchain_core.rate_limiters import InMemoryRateLimiter
+
+        return buckets.setdefault(
+            model,
+            InMemoryRateLimiter(
+                requests_per_second=requests_per_minute / 60.0,
+                check_every_n_seconds=0.5,
+                # No burst. A bucket that saved up its tokens would spend them
+                # all in one second on the first case and be rate-limited for
+                # the next minute, which is the run we already have.
+                max_bucket_size=1,
+            ),
+        )
+
+    def build(model: str) -> ChatModel:
+        paced = bucket(model)
+        extra = {"rate_limiter": paced} if paced is not None else {}
+        return init_chat_model(
+            model, model_provider=provider, temperature=temperature, **extra
+        )
+
+    return build
 
 
 def langchain_embedding_factory(provider: str) -> EmbeddingFactory:
@@ -223,6 +273,14 @@ class Models:
     # so an embedding call redacts exactly like a chat call does.
     embedding_factory: EmbeddingFactory | None = None
     embedding_model: str = "gemini-embedding-001"
+    # How long one attempt may take. The default is what a User waiting on a
+    # Turn should wait for, and the running system never changes it: the ladder's
+    # bounds are why a Turn can never hang (issue #37).
+    #
+    # The eval harness hands in a longer one, because its calls queue behind a
+    # rate limiter before they leave — a wait that is inside the attempt, not
+    # the provider being slow, and a Turn's thirty seconds would read it as one.
+    attempt_seconds: float = ATTEMPT_SECONDS
     # What the ladder waits with. A test hands in a recorder, so the two waits
     # are asserted rather than sat through.
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
@@ -278,7 +336,10 @@ class TurnModels:
             if wait:
                 await self.models.sleep(wait)
             try:
-                return await run(model), model
+                return (
+                    await asyncio.wait_for(run(model), self.models.attempt_seconds),
+                    model,
+                )
             except Exception as exc:
                 if not is_transient(exc):
                     # A schema the provider could not fill, or a bad key. Three

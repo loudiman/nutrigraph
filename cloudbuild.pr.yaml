@@ -37,10 +37,97 @@ steps:
       - -c
       - npm ci && npm test && npm run typecheck
 
-  # The eval gate belongs here, after the two seams and before the merge: it
-  # runs the graph against the reference set and fails the build on a drop.
+  # The eval gate, after the two seams and before the merge. It runs the real
+  # graph against the golden dataset on the same throwaway PostgreSQL — the same
+  # router, rule list, Corpus search, composer and release gate a User reaches —
+  # and blocks on a missed Refusal, a missing Citation, an allergen in an answer
+  # or a schema failure.
+  #
+  # No `--group` and no `--case`. A run that names its cases is a skip list with
+  # the sign flipped, and there is no quarantine list here.
+  #
+  # LANGSMITH_ENDPOINT is required, not a default worth trusting. This account
+  # is on the APAC data plane, and the SDK's US default answers a valid key with
+  # a 403 on every call, tracing writes included.
+  #
+  # The run paces itself to the key's quota, and the key is on the free tier:
+  # fifteen `generateContent` calls a minute per model against the hundred and
+  # fifty a full run makes. That is about ten minutes, and it is the quota's
+  # number rather than the harness's — see `agent/evals/README.md`. Putting
+  # billing on the key and adding `--requests-per-minute 0` below is what buys
+  # the couple of minutes issue #22 asked for; it is a decision for a person.
+  - name: python:3.13-slim
+    id: eval
+    dir: agent
+    env:
+      - DATABASE_URL=postgresql://nutrigraph:nutrigraph@postgres:5432/nutrigraph_test
+      - LANGSMITH_TRACING=true
+      - LANGSMITH_ENDPOINT=https://apac.api.smith.langchain.com
+    secretEnv: ['GOOGLE_API_KEY', 'LANGSMITH_API_KEY']
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -eu
+        if [ "${_RUN_EVAL}" != "yes" ]; then
+          echo "eval skipped: _RUN_EVAL is '${_RUN_EVAL}', not 'yes'."
+          echo "The gate is written and proven — 64/64 structural in 479s — and"
+          echo "off by default only because gemini-3.5-flash allows 20 requests a"
+          echo "day on the free tier, and one run spends about nine of them on the"
+          echo "composer alone. Left on, two pull requests a day would exhaust the"
+          echo "quota an ordinary Turn needs."
+          echo "Run it with --substitutions=_RUN_EVAL=yes, or set it on for good"
+          echo "once the key has billing, together with --requests-per-minute 0."
+          exit 0
+        fi
+        pip install --quiet -e .
+        python -m evals.run \
+          --rows /workspace/eval-rows.json \
+          --outcomes /workspace/eval-outcomes.json
+
+  # The judge, in an environment of its own. ragas 0.4 needs a
+  # langchain-community that the agent's langchain 1.x cannot sit beside, so the
+  # two halves of a run are two containers rather than one dependency set that
+  # resolves to neither. It reads the rows the step above wrote and imports
+  # nothing from the agent.
+  #
+  # Only the retrieval group is here, which is what keeps a whole run at a few
+  # cents: the safety and behaviour groups are plain assertions, and safety is
+  # never judged by a model at all.
+  - name: python:3.12-slim
+    id: judge
+    dir: agent
+    secretEnv: ['GOOGLE_API_KEY']
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -eu
+        if [ "${_RUN_EVAL}" != "yes" ]; then
+          echo "judge skipped: _RUN_EVAL is '${_RUN_EVAL}', not 'yes'."
+          exit 0
+        fi
+        pip install --quiet -r evals/requirements-judge.txt
+        python -m evals.judge /workspace/eval-rows.json \
+          --scores /workspace/eval-scores.json \
+          --no-write-baseline
+
+substitutions:
+  # The eval gate is off by default, and the reason is a quota rather than a
+  # doubt about the gate. See the guard in the eval and judge steps above.
+  _RUN_EVAL: 'no'
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/nutrigraph-2026ldm/secrets/gemini-api-key/versions/latest
+      env: GOOGLE_API_KEY
+    - versionName: projects/nutrigraph-2026ldm/secrets/langsmith-api-key/versions/latest
+      env: LANGSMITH_API_KEY
 
 serviceAccount: projects/nutrigraph-2026ldm/serviceAccounts/nutrigraph-build@nutrigraph-2026ldm.iam.gserviceaccount.com
 options:
   logging: CLOUD_LOGGING_ONLY
-timeout: 1200s
+# The two seams take about a minute between them; the eval gate takes about ten,
+# because the free tier's quota says so. Half an hour left no room for a slow
+# case, and a build that is killed mid-run reads as a broken gate.
+timeout: 3600s
