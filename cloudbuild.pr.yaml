@@ -37,6 +37,16 @@ steps:
       - -c
       - npm ci && npm test && npm run typecheck
 
+  # The Terraform under infra/: formatted and valid. No credentials and no
+  # state, so this checks the code, not the cloud (ADR 0006).
+  - name: hashicorp/terraform:1.9.8
+    id: infra
+    dir: infra
+    entrypoint: sh
+    args:
+      - -c
+      - terraform fmt -check -recursive && terraform init -backend=false -input=false && terraform validate
+
   # The eval gate, after the two seams and before the merge. It runs the real
   # graph against the golden dataset on the same throwaway PostgreSQL — the same
   # router, rule list, Corpus search, composer and release gate a User reaches —

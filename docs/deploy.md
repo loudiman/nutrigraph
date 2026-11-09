@@ -132,6 +132,8 @@ earlier the same day produced a revision that never passed its startup probe;
 
 ## Bootstrapping this from nothing
 
+The stack below is now described in Terraform under [`infra/`](../infra/README.md) (ADR 0006). The commands stay as the record of how it was first made.
+
 Done once, and recorded here so it can be done again:
 
 ```sh
