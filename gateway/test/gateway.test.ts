@@ -96,6 +96,54 @@ test("an unreachable agent still ends the stream with a typed error event", asyn
   assert.equal(last.turn_id, h.agent.seen[0]!.turnId);
 });
 
+const REC_ID = "1f6bff0c-9c2e-4d5a-8f2e-3a9b6c1d0e4f";
+
+test("accepting a Recommendation is relayed to the agent", async () => {
+  const h = await harness();
+
+  const response = await fetch(`${h.url}/api/recommendation/${REC_ID}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ accepted: true }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { accepted: true });
+  assert.deepEqual(h.agent.answered, [{ recommendationId: REC_ID, accepted: true }]);
+});
+
+test("a second answer to the same suggestion passes the agent's 404 through", async () => {
+  const h = await harness();
+  h.agent.recommendationStatus = 404;
+
+  const response = await fetch(`${h.url}/api/recommendation/${REC_ID}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ accepted: true }),
+  });
+
+  assert.equal(response.status, 404);
+});
+
+test("a malformed recommendation answer is refused before the agent is called", async () => {
+  const h = await harness();
+
+  const badBody = await fetch(`${h.url}/api/recommendation/${REC_ID}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ accepted: "yes" }),
+  });
+  const badId = await fetch(`${h.url}/api/recommendation/not-a-uuid`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ accepted: true }),
+  });
+
+  assert.equal(badBody.status, 400);
+  assert.equal(badId.status, 400);
+  assert.equal(h.agent.answered.length, 0);
+});
+
 test("an empty message is refused before the agent is called", async () => {
   const h = await harness();
 

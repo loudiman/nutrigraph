@@ -22,17 +22,20 @@ export async function metadataIdentityToken(audience: string): Promise<string> {
   return response.text();
 }
 
+async function authHeaders(options: HttpAgentOptions): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (options.devToken) headers["X-Dev-Auth"] = options.devToken;
+  if (options.identityToken) {
+    headers["Authorization"] = `Bearer ${await options.identityToken()}`;
+  }
+  return headers;
+}
+
 export function httpAgent(options: HttpAgentOptions): AgentClient {
   return {
     async *turn(request: TurnRequest): AsyncIterable<TurnEvent> {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        "X-Turn-Id": request.turnId,
-      };
-      if (options.devToken) headers["X-Dev-Auth"] = options.devToken;
-      if (options.identityToken) {
-        headers["Authorization"] = `Bearer ${await options.identityToken()}`;
-      }
+      const headers = await authHeaders(options);
+      headers["X-Turn-Id"] = request.turnId;
 
       const response = await fetch(`${options.baseUrl}/turn`, {
         method: "POST",
@@ -43,6 +46,18 @@ export function httpAgent(options: HttpAgentOptions): AgentClient {
         throw new Error(`agent returned ${response.status}`);
       }
       yield* ndjson(response.body);
+    },
+
+    async answerRecommendation(recommendationId: string, accepted: boolean) {
+      const response = await fetch(
+        `${options.baseUrl}/recommendation/${encodeURIComponent(recommendationId)}`,
+        {
+          method: "POST",
+          headers: await authHeaders(options),
+          body: JSON.stringify({ accepted }),
+        },
+      );
+      return { status: response.status };
     },
   };
 }

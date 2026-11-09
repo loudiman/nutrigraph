@@ -29,6 +29,31 @@ export function createApp(options: AppOptions): express.Express {
     res.json({ status: "ok" });
   });
 
+  // Answering a Recommendation is a button press, not a message, so it is a
+  // plain route and never a Turn. The gateway only relays it: the agent owns
+  // the 404 that means "already answered once".
+  app.post("/api/recommendation/:id", async (req, res) => {
+    const accepted: unknown = req.body?.accepted;
+    const { id } = req.params;
+    if (typeof accepted !== "boolean" || !/^[0-9a-f-]{36}$/.test(id)) {
+      res.status(400).json({ error: "a recommendation id and a boolean `accepted` are required" });
+      return;
+    }
+    try {
+      const { status } = await options.agent.answerRecommendation(id, accepted);
+      if (status === 200) {
+        res.json({ accepted });
+      } else {
+        res
+          .status(status === 404 ? 404 : 502)
+          .json({ error: status === 404 ? "no unanswered suggestion with that identifier" : "agent failed" });
+      }
+    } catch (cause) {
+      log({ event: "recommendation failed", recommendation_id: id, cause: String(cause) });
+      res.status(502).json({ error: "agent unreachable" });
+    }
+  });
+
   app.post("/api/turn", async (req, res) => {
     const message: unknown = req.body?.message;
     if (typeof message !== "string" || message.trim() === "") {

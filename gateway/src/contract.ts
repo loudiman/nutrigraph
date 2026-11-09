@@ -17,4 +17,7 @@ export interface TurnRequest {
 /** What the gateway knows about the agent service. The gateway seam fakes it. */
 export interface AgentClient {
   turn(request: TurnRequest): AsyncIterable<TurnEvent>;
+  /** Answers a Recommendation. Returns the agent's status so 404 — already
+   *  answered once — passes through instead of being dressed up as a failure. */
+  answerRecommendation(recommendationId: string, accepted: boolean): Promise<{ status: number }>;
 }

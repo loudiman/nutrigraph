@@ -1,0 +1,260 @@
+/* Tokens shared with the architecture map: paper/ink, one purple accent,
+   serif reserved for the Coach's own words. */
+:root {
+  --paper: #FAF9FB;
+  --paper-2: #F2F0F6;
+  --paper-3: #EAE7F0;
+  --ink: #1A1720;
+  --ink-2: #55505F;
+  --ink-3: #837E8F;
+  --rule: #DEDAE6;
+  --accent: #5B3A8C;
+  --accent-2: #EDE6F6;
+  --good: #1B6357;
+  --good-2: #DDEFEB;
+  --warn: #8E5000;
+  --warn-2: #FAEBD5;
+  --bad: #9E2A2A;
+  --bad-2: #FAE2E2;
+
+  --mono: ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  --sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #131118;
+    --paper-2: #1B1823;
+    --paper-3: #241F2F;
+    --ink: #EFECF4;
+    --ink-2: #B4AEC1;
+    --ink-3: #837E8F;
+    --rule: #2E2937;
+    --accent: #BCA2E4;
+    --accent-2: #241C33;
+    --good: #67CDB9;
+    --good-2: #122E2A;
+    --warn: #E3A759;
+    --warn-2: #322311;
+    --bad: #ED8C8C;
+    --bad-2: #331919;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.55 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- header ---- */
+header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+  border-bottom: 1px solid var(--rule);
+  flex: none;
+}
+header img { border-radius: 4px; }
+.wordmark {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+
+/* ---- the Thread ---- */
+main {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 14px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 44rem;
+  width: 100%;
+  margin: 0 auto;
+}
+
+#empty { margin: auto; text-align: center; padding: 24px 8px; }
+.hello { color: var(--ink-2); margin: 0 0 16px; }
+.examples { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.examples button {
+  font: 13px var(--mono);
+  color: var(--accent);
+  background: var(--accent-2);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.msg { max-width: 88%; }
+
+.msg.user {
+  align-self: flex-end;
+  background: var(--paper-3);
+  border-radius: 14px 14px 4px 14px;
+  padding: 9px 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The Coach speaks in serif — the one inversion. */
+.msg.coach {
+  align-self: flex-start;
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-radius: 4px 14px 14px 14px;
+  padding: 13px 16px;
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.58;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg.error {
+  align-self: flex-start;
+  background: var(--bad-2);
+  border-left: 3px solid var(--bad);
+  border-radius: 0 8px 8px 0;
+  padding: 10px 14px;
+  font-size: 14.5px;
+  color: var(--ink);
+}
+
+/* A disclaimer a path raised; the composer may not drop it, and neither may we. */
+.disclaimer {
+  font: 13.5px/1.5 var(--sans);
+  color: var(--ink);
+  background: var(--warn-2);
+  border-left: 3px solid var(--warn);
+  border-radius: 0 5px 5px 0;
+  padding: 7px 11px;
+  margin-top: 10px;
+  white-space: normal;
+}
+
+/* Citations, at the granularity the payload actually has. */
+.sources { margin-top: 10px; font-family: var(--sans); }
+.sources summary {
+  font: 600 11.5px var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  cursor: pointer;
+  list-style: none;
+}
+.sources summary::-webkit-details-marker { display: none; }
+.sources summary::before { content: "▸ "; }
+.sources[open] summary::before { content: "▾ "; }
+.citation {
+  font: 12.5px/1.5 var(--mono);
+  color: var(--ink-2);
+  margin: 6px 0 0;
+  padding-left: 14px;
+}
+.citation b { color: var(--ink); font-weight: 600; }
+
+/* Accepting a Recommendation. */
+.rec { margin-top: 10px; }
+.rec button {
+  font: 600 13px var(--mono);
+  color: var(--paper);
+  background: var(--accent);
+  border: none;
+  border-radius: 999px;
+  padding: 8px 18px;
+  cursor: pointer;
+}
+.rec .accepted {
+  font: 600 12px var(--mono);
+  letter-spacing: 0.05em;
+  color: var(--good);
+  background: var(--good-2);
+  border-radius: 999px;
+  padding: 6px 14px;
+  display: inline-block;
+}
+
+/* ---- footer ---- */
+footer {
+  flex: none;
+  border-top: 1px solid var(--rule);
+  padding: 8px 14px calc(10px + env(safe-area-inset-bottom));
+  max-width: 44rem;
+  width: 100%;
+  margin: 0 auto;
+  background: var(--paper);
+}
+
+#warning {
+  background: var(--warn-2);
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  padding: 7px 11px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--ink);
+}
+#warning summary {
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--warn);
+}
+#warning p { margin: 6px 0 0; }
+
+#status {
+  display: none;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 6px;
+  font: 12.5px var(--mono);
+  color: var(--ink-3);
+  min-height: 18px;
+}
+#status.live { display: flex; }
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
+
+form { display: flex; gap: 8px; }
+input {
+  flex: 1;
+  font: 16px var(--sans);
+  color: var(--ink);
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 10px 16px;
+  min-width: 0;
+}
+input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#send {
+  font: 600 14px var(--mono);
+  color: var(--paper);
+  background: var(--accent);
+  border: none;
+  border-radius: 999px;
+  padding: 0 20px;
+  cursor: pointer;
+}
+#send:disabled { opacity: 0.45; cursor: default; }

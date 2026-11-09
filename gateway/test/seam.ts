@@ -14,6 +14,9 @@ export interface SseEvent {
 
 export interface FakeAgent extends AgentClient {
   seen: TurnRequest[];
+  answered: { recommendationId: string; accepted: boolean }[];
+  /** What answerRecommendation reports back; a test flips it to 404. */
+  recommendationStatus: number;
 }
 
 /** An agent that emits the events it was handed, then stops. */
@@ -21,11 +24,18 @@ export function fakeAgent(
   events: (request: TurnRequest) => TurnEvent[] | Promise<TurnEvent[]>,
 ): FakeAgent {
   const seen: TurnRequest[] = [];
+  const answered: { recommendationId: string; accepted: boolean }[] = [];
   return {
     seen,
+    answered,
+    recommendationStatus: 200,
     async *turn(request: TurnRequest) {
       seen.push(request);
       for (const event of await events(request)) yield event;
+    },
+    async answerRecommendation(recommendationId: string, accepted: boolean) {
+      answered.push({ recommendationId, accepted });
+      return { status: this.recommendationStatus };
     },
   };
 }
